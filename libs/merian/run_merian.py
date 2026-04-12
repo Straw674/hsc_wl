@@ -144,7 +144,7 @@ def run_from_ini(ini_path):
     table_n.keep_columns(["z", "n"])
 
     # Assign each galaxy in the source catalog the mean redshift of the bin. This
-    # is only used to determine which lens-source pairs to  use.
+    # is only used to determine which lens-source pairs to use.
     table_s["z"] = np.sum(table_n["z"][:, np.newaxis] * table_n["n"], axis=0)[
         table_s["z_bin"]
     ]
