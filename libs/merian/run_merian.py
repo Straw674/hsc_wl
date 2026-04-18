@@ -3,12 +3,10 @@ import argparse
 import configparser
 import glob
 import os
-import re
-import sys
 
 import numpy as np
 from astropy.cosmology import Planck15
-from astropy.table import Table, vstack
+from astropy.table import Table
 from dsigma.helpers import dsigma_table
 from dsigma.jackknife import compute_jackknife_fields, jackknife_resampling
 from dsigma.precompute import precompute
