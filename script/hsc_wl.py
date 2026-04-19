@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import argparse
-import configparser
 import glob
 import os
 
 import numpy as np
+import yaml
 from astropy.cosmology import Planck15
 from astropy.table import Table
 from dsigma.helpers import dsigma_table
@@ -12,30 +12,6 @@ from dsigma.jackknife import compute_jackknife_fields, jackknife_resampling
 from dsigma.precompute import precompute
 from dsigma.stacking import excess_surface_density
 from dsigma.surveys import hsc as hsc_survey
-
-
-# ---------- small strict parsers (no defaults) ----------
-def to_bool(s: str) -> bool:
-    v = str(s).strip().lower()
-    if v in ("1", "true", "yes", "y", "t", "on"):
-        return True
-    if v in ("0", "false", "no", "n", "f", "off"):
-        return False
-    raise ValueError(f'Expected boolean-like string, got "{s}"')
-
-
-def to_floatlist(s: str):
-    try:
-        return [float(x) for x in str(s).split(",")]
-    except Exception:
-        raise ValueError(f'Expected comma-separated floats, got "{s}"')
-
-
-def to_list(s: str):
-    xs = [t.strip() for t in str(s).split(",") if t.strip()]
-    if not xs:
-        raise ValueError("Expected a non-empty comma-separated list")
-    return xs
 
 
 def find_one(path_or_pattern, description):
@@ -58,75 +34,79 @@ def pick_column(cols, candidates):
 
 
 # ---------- core ----------
-def run_from_ini(ini_path):
-    cfg = configparser.ConfigParser()
-    cfg.optionxform = str  # keep case
-    with open(ini_path, "r") as f:
-        cfg.read_file(f)
+def run_from_config(config_path):
+    """Load and parse YAML configuration file."""
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f)
 
-    # Sections must exist
-    for sec in ("misc", "lens galaxies", "source galaxies"):
+    # Validate required top-level sections
+    for sec in ("misc", "lens_galaxies", "source_galaxies"):
         if sec not in cfg:
-            raise KeyError(f"Missing required section: [{sec}]")
+            raise KeyError(f"Missing required section: {sec}")
 
     # ---- [misc] (all required, no defaults)
     misc = cfg["misc"]
-    base = misc["catalogue_path"]
     savepath = misc["savepath"]
     os.makedirs(savepath, exist_ok=True)
 
     njobs = int(misc["njobs"])
-    tomography = to_bool(misc["tomography"])
-    comoving = to_bool(misc["comoving"])
+    comoving = bool(misc["comoving"])
     lens_source_cut = float(misc["lens_source_cut"])
-    verbose = to_bool(misc["verbose"])
     n_jk = int(misc["njackknife"])
 
-    # ---- [lens galaxies]
-    lenssec = cfg["lens galaxies"]
+    # ---- [lens_galaxies]
+    lenssec = cfg["lens_galaxies"]
     lens_survey = lenssec["surveys"].strip()
-    z_bins = np.array(to_floatlist(lenssec["z_bins"]))
+    z_bins = np.array(lenssec["z_bins"])
     rpmin = float(lenssec["rpmin"])
     rpmax = float(lenssec["rpmax"])
     n_rpbins = int(lenssec["n_rpbins"])
     linlog = lenssec["linlog"].lower()
     if linlog not in ("lin", "log"):
-        raise ValueError('[lens galaxies] linlog must be "lin" or "log"')
+        raise ValueError('[lens_galaxies] linlog must be "lin" or "log"')
 
-    lens_files = [find_one(p, "lens file") for p in to_list(lenssec["lens_files"])]
-    rand_files = [find_one(p, "random file") for p in to_list(lenssec["random_files"])]
+    lens_files = [find_one(p, "lens file") for p in lenssec["lens_files"]]
+    rand_files = [find_one(p, "random file") for p in lenssec["random_files"]]
     lens_z_col = lenssec["z_col"]
     lens_ra_col = lenssec["ra_col"]
     lens_dec_col = lenssec["dec_col"]
-    # lens_wsys = float(lenssec["w_sys"])
 
-    # ---- [source galaxies]
-    srcsec = cfg["source galaxies"]
+    # ---- [source_galaxies]
+    srcsec = cfg["source_galaxies"]
     src_survey = srcsec["surveys"].strip()
     src_file = find_one(srcsec["source_file"], "source catalog")
     nz_file = find_one(srcsec["nz_file"], "n(z) file")
 
-    # ---- survey-specific flags (require section named after survey)
-    if src_survey not in cfg:
-        raise KeyError(f"Missing required section for source survey: [{src_survey}]")
-    ssec = cfg[src_survey]
+    # ---- survey-specific corrections
+    if "corrections" not in cfg:
+        raise KeyError("Missing required section: corrections")
+    corr_all = cfg["corrections"]
+    if src_survey not in corr_all:
+        raise KeyError(
+            f"Missing required correction config for source survey: {src_survey}"
+        )
+    
     corr = {
-        # "photo_z_dilution_correction": to_bool(ssec["photo_z_dilution_correction"]),
-        "boost_correction": to_bool(ssec["boost_correction"]),
-        "scalar_shear_response_correction": to_bool(
-            ssec["scalar_shear_response_correction"]
+        "boost_correction": bool(corr_all[src_survey]["boost_correction"]),
+        "scalar_shear_response_correction": bool(
+            corr_all[src_survey]["scalar_shear_response_correction"]
         ),
-        "shear_responsivity_correction": to_bool(ssec["shear_responsivity_correction"]),
-        "random_subtraction": to_bool(ssec["random_subtraction"]),
-        "selection_bias_correction": to_bool(ssec["selection_bias_correction"]),
+        "shear_responsivity_correction": bool(
+            corr_all[src_survey]["shear_responsivity_correction"]
+        ),
+        "random_subtraction": bool(corr_all[src_survey]["random_subtraction"]),
+        "selection_bias_correction": bool(
+            corr_all[src_survey]["selection_bias_correction"]
+        ),
     }
-    # selection_bias_correction: accept either name, but require one
 
     # ---------------- load catalogs ----------------
     print(f"[load] sources: {src_file}")
 
     table_s = Table.read(src_file)
-    table_s = table_s[table_s["b_mode_mask"] == 1]
+
+    # this procedure might have been done already
+    # table_s = table_s[table_s["b_mode_mask"] == 1]
     table_s = dsigma_table(table_s, "source", survey=src_survey.upper())
 
     table_s["m_sel"] = hsc_survey.multiplicative_selection_bias(table_s)
@@ -245,8 +225,8 @@ def run_from_ini(ini_path):
 # ---------- CLI ----------
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(
-        description="Run dsigma from INI config (strict indexing)."
+        description="Run dsigma from YAML config."
     )
-    ap.add_argument("ini", help="Path to INI configuration file.")
+    ap.add_argument("config", help="Path to YAML configuration file.")
     args = ap.parse_args()
-    run_from_ini(args.ini)
+    run_from_config(args.config)
