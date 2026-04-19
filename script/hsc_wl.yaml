@@ -2,8 +2,8 @@
 # YAML format provides better readability and structure for complex configurations
 
 misc:
-  njobs: 40
-  savepath: /Users/xinq/dev/repos/hsc_wl/output/
+  njobs: 4
+  savepath: /Users/xinq/dev/repos/hsc_wl/output/dsigma/s16a/
   tomography: false # gg lensing
   comoving: true # h^-1
   lens_source_cut: 0.1 # zsource > zlens + lens_source_cut, very soft
@@ -19,22 +19,22 @@ lens_galaxies:
   linlog: log
 
   # Column names in lens catalog
-  z_col: z500
-  ra_col: coord_ra_Merian
-  dec_col: coord_dec_Merian
+  z_col: z
+  ra_col: ra
+  dec_col: dec
 
   # File paths (can use glob patterns)
   lens_files:
-    - /pscratch/sd/z/zchusre/m_lensing/data/merian/sample1.fits
-    - /pscratch/sd/z/zchusre/m_lensing/data/merian/sample2.fits
-    - /pscratch/sd/z/zchusre/m_lensing/data/merian/sample3.fits
-    - /pscratch/sd/z/zchusre/m_lensing/data/merian/sample4.fits
+    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/s16a_bin1.fits
+    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/s16a_bin2.fits
+    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/s16a_bin3.fits
+    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/s16a_bin4.fits
 
   random_files:
-    - /pscratch/sd/z/zchusre/m_lensing/data/merian/sample1_randoms.fits
-    - /pscratch/sd/z/zchusre/m_lensing/data/merian/sample2_randoms.fits
-    - /pscratch/sd/z/zchusre/m_lensing/data/merian/sample3_randoms.fits
-    - /pscratch/sd/z/zchusre/m_lensing/data/merian/sample4_randoms.fits
+    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/random_bin1.fits
+    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/random_bin2.fits
+    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/random_bin3.fits
+    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/random_bin4.fits
 
 source_galaxies:
   surveys: hsc

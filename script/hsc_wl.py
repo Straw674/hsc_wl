@@ -33,6 +33,59 @@ def pick_column(cols, candidates):
     return None
 
 
+def pick_required_column(cols, candidates, description):
+    col = pick_column(cols, candidates)
+    if col is None:
+        raise KeyError(f"Could not find {description}. Tried: {', '.join(candidates)}")
+    return col
+
+
+def assign_jackknife_fields_with_fallback(table_l, table_r, n_jk_requested):
+    """Assign jackknife fields, reducing n_jk when clustering constraints fail."""
+    if len(table_l) < 2:
+        raise ValueError(
+            f"Need at least 2 lenses after precompute filtering for jackknife; got {len(table_l)}"
+        )
+
+    # Use only lenses with non-zero lens-source pair counts for clustering weights.
+    weights = np.sum(table_l["sum 1"], axis=1)
+    n_positive_weight = int(np.sum(weights > 0))
+    if n_positive_weight < 2:
+        raise ValueError(
+            "Need at least 2 lenses with positive jackknife weights after filtering; "
+            f"got {n_positive_weight}"
+        )
+
+    n_jk_start = min(int(n_jk_requested), len(table_l), n_positive_weight)
+    last_error = None
+
+    for n_jk_try in range(n_jk_start, 1, -1):
+        try:
+            centers = compute_jackknife_fields(table_l, n_jk_try, weights=weights)
+            compute_jackknife_fields(table_r, centers)
+            if n_jk_try < n_jk_requested:
+                print(
+                    "[jackknife] requested n_jk="
+                    f"{n_jk_requested}, using n_jk={n_jk_try} after filtering/clustering constraints"
+                )
+            return centers, n_jk_try
+        except ValueError as err:
+            # Triggered when one continuous field has too few objects for the
+            # current number of jackknife regions.
+            if "larger sample than population" in str(err):
+                last_error = err
+                continue
+            raise
+        except RuntimeError as err:
+            last_error = err
+            continue
+
+    raise RuntimeError(
+        "Could not assign jackknife fields with n_jk >= 2 after filtering. "
+        f"Last error: {last_error}"
+    )
+
+
 # ---------- core ----------
 def run_from_config(config_path):
     """Load and parse YAML configuration file."""
@@ -85,7 +138,7 @@ def run_from_config(config_path):
         raise KeyError(
             f"Missing required correction config for source survey: {src_survey}"
         )
-    
+
     corr = {
         "boost_correction": bool(corr_all[src_survey]["boost_correction"]),
         "scalar_shear_response_correction": bool(
@@ -105,9 +158,71 @@ def run_from_config(config_path):
 
     table_s = Table.read(src_file)
 
+    source_cols = table_s.colnames
+    source_ra_col = pick_required_column(
+        source_cols, ["i_ra", "RA", "ra"], "source right ascension column"
+    )
+    source_dec_col = pick_required_column(
+        source_cols,
+        ["i_dec", "Dec", "DEC", "dec"],
+        "source declination column",
+    )
+    source_e1_col = pick_required_column(
+        source_cols,
+        ["i_hsmshaperegauss_e1", "e_1", "e1"],
+        "source e_1 column",
+    )
+    source_e2_col = pick_required_column(
+        source_cols,
+        ["i_hsmshaperegauss_e2", "e_2", "e2"],
+        "source e_2 column",
+    )
+    source_w_col = pick_required_column(
+        source_cols,
+        ["i_hsmshaperegauss_derived_weight", "weight", "w"],
+        "source weight column",
+    )
+    source_m_col = pick_required_column(
+        source_cols,
+        ["i_hsmshaperegauss_derived_shear_bias_m", "m_corr", "m"],
+        "source shear bias column",
+    )
+    source_e_rms_col = pick_required_column(
+        source_cols,
+        ["i_hsmshaperegauss_derived_rms_e", "e_rms"],
+        "source e_rms column",
+    )
+    source_r2_col = pick_required_column(
+        source_cols,
+        ["i_hsmshaperegauss_resolution", "resolution", "R_2"],
+        "source resolution column",
+    )
+    source_zbin_col = pick_required_column(
+        source_cols, ["hsc_y3_zbin", "z_bin"], "source redshift-bin column"
+    )
+    source_mag_col = pick_required_column(
+        source_cols,
+        ["i_apertureflux_10_mag", "aperture_mag", "mag_A"],
+        "source aperture magnitude column",
+    )
+
     # this procedure might have been done already
     # table_s = table_s[table_s["b_mode_mask"] == 1]
-    table_s = dsigma_table(table_s, "source", survey=src_survey.upper())
+    table_s = dsigma_table(
+        table_s,
+        "source",
+        survey=src_survey.upper(),
+        ra=source_ra_col,
+        dec=source_dec_col,
+        e_1=source_e1_col,
+        e_2=source_e2_col,
+        w=source_w_col,
+        m=source_m_col,
+        e_rms=source_e_rms_col,
+        R_2=source_r2_col,
+        z_bin=source_zbin_col,
+        mag_A=source_mag_col,
+    )
 
     table_s["m_sel"] = hsc_survey.multiplicative_selection_bias(table_s)
     # Remove galaxies with bimodal P(z)'s.
@@ -173,10 +288,9 @@ def run_from_config(config_path):
         table_r = table_r[np.sum(table_r["sum 1"], axis=1) > 0]
 
         print("[jackknife] fields")
-        centers = compute_jackknife_fields(
-            table_l, n_jk, weights=np.sum(table_l["sum 1"], axis=1)
+        centers, n_jk_use = assign_jackknife_fields_with_fallback(
+            table_l, table_r, n_jk
         )
-        compute_jackknife_fields(table_r, centers)
 
         print("[stack] ΔΣ by lens z-bin")
 
@@ -201,8 +315,9 @@ def run_from_config(config_path):
         # )
 
         # kwargs = dict(return_table=False, table_r=table_r[mR], **corr)
-
-        print("kwargs", kwargs)
+        kwargs_summary = {k: v for k, v in kwargs.items() if k != "table_r"}
+        kwargs_summary["table_r_rows"] = len(kwargs["table_r"])
+        print("[stack] kwargs summary", kwargs_summary)
 
         result = excess_surface_density(table_l[mL], **kwargs)
         kwargs["return_table"] = False
@@ -224,9 +339,7 @@ def run_from_config(config_path):
 
 # ---------- CLI ----------
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(
-        description="Run dsigma from YAML config."
-    )
+    ap = argparse.ArgumentParser(description="Run dsigma from YAML config.")
     ap.add_argument("config", help="Path to YAML configuration file.")
     args = ap.parse_args()
     run_from_config(args.config)
