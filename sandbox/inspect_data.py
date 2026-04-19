@@ -36,6 +36,7 @@ else:
 
 data = Table.read(root_path / "data/nz.fits")
 print(data[0])
+print(len(data))
 
 
 fig, axs = plt.subplots(2, 2, figsize=(10, 6))
@@ -48,10 +49,24 @@ plt.show()
 # %%
 
 shape = Table.read(root_path / "data/hscy3_cat.fits")
-print(shape[0])
-print("HSC Y3 Catalog statistics:")
-print(f"Mean: {np.mean(shape['z_bin']):.4f}")
-print(f"Median: {np.median(shape['z_bin']):.4f}")
-print(f"Standard Deviation: {np.std(shape['z_bin']):.4f}")
-print(f"Min: {np.min(shape['z_bin']):.4f}")
-print(f"Max: {np.max(shape['z_bin']):.4f}")
+print(shape.colnames)
+
+# %%
+
+hecto = Table.read(root_path / "data/HECTOMAP.fits")
+print(hecto.colnames)
+
+# unique and numbers of hecto['hsc_y3_zbin']
+print(np.unique(hecto["hsc_y3_zbin"]))
+for zbin in np.unique(hecto["hsc_y3_zbin"]):
+    print(f"zbin {zbin}: {np.sum(hecto['hsc_y3_zbin'] == zbin)}")
+
+# %%
+
+random = Table.read(root_path / "data/random_hectomap.fits")
+print(random.colnames)
+random.remove_columns([col for col in random.colnames if col.endswith("_isnull")])
+print(random.colnames)
+
+# save to the original file
+# random.write(root_path / "data/random_hectomap.fits", overwrite=True)
