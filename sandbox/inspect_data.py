@@ -50,6 +50,7 @@ plt.show()
 
 shape = Table.read(root_path / "data/hscy3_cat.fits")
 print(shape.colnames)
+print(len(shape))
 
 # %%
 

@@ -170,7 +170,7 @@ def plot_healpix_mask_wcs(
 
     fig = plt.figure(figsize=(12, 6))
     ax = fig.add_subplot(111, projection=w)
-    im = ax.imshow(img, origin="lower", cmap=cmap, vmin=0.0, vmax=1.0)
+    _ = ax.imshow(img, origin="lower", cmap=cmap, vmin=0.0, vmax=1.0)
     ax.coords.grid(color="white", ls="--", lw=0.5, alpha=0.5)
     ax.set_xlabel("RA")
     ax.set_ylabel("Dec")
