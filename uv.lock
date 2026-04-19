@@ -556,12 +556,115 @@ wheels = [
 ]
 
 [[package]]
+name = "healpy"
+version = "1.19.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "astropy", version = "6.1.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "astropy", version = "7.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e3/4e/6f5328f375f88c8c38314f24f82b7e1486ec0358c557779500382db1503c/healpy-1.19.0.tar.gz", hash = "sha256:28e839cb885a23d36c77fc3423a3cb9271a07fda94085bd12fc329f941130ec5", size = 4075006, upload-time = "2025-12-02T08:27:19.766Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/29/a80e8fc882afc454ded79833fd0c05012a6745890ed013ac03ef0c18e8fe/healpy-1.19.0-cp310-cp310-macosx_13_0_x86_64.whl", hash = "sha256:36f85568670f36f928aba0eb73299ed70a06e58dc32360f13d0f9a443781c7bb", size = 1735790, upload-time = "2025-12-02T08:26:22.521Z" },
+    { url = "https://files.pythonhosted.org/packages/05/01/a85622682fcf4b5510f6f1f697c991fe984acd24502be5360d66562918b3/healpy-1.19.0-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:8ec4744f16f1590fe47a685258ba119c0fa49dff74fa6f970b7a16c712302b0d", size = 1868886, upload-time = "2025-12-02T08:26:24.22Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/3d/7395e6c3619eb17604f73585db4583f1eff167e94cd74b6ef58e8137f9bf/healpy-1.19.0-cp310-cp310-macosx_15_0_arm64.whl", hash = "sha256:20225e0312ea37f472a539521824001700afacf486f11a3ec905f85ec8e75f8c", size = 1865183, upload-time = "2025-12-02T08:26:25.727Z" },
+    { url = "https://files.pythonhosted.org/packages/95/f4/43aecae2b5bbb5b70792a27c3606dd9736f59d073f705822b04013143683/healpy-1.19.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:c187bdab29ba6b9c34e55907b24af6867f2b5d3cd48ba150e696dfa200827ea4", size = 8122811, upload-time = "2025-12-02T08:26:27.012Z" },
+    { url = "https://files.pythonhosted.org/packages/af/f8/6e3b21304529eb3e1fa01691da6742c30535e2dc3c96f1d740b3c6118661/healpy-1.19.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:f62bf1c078787931f226a0550138cad98cf19f2b72e89f1f0bdd4c342dbc1aa1", size = 8151594, upload-time = "2025-12-02T08:26:28.519Z" },
+    { url = "https://files.pythonhosted.org/packages/08/79/031e595d0d347c418b444043c14d7f533e3ac00c12393d1fd9853ac10663/healpy-1.19.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:f05943f632dfe0cad774227038cd4d751525ac5e7c3fb1e47afa7971680facd8", size = 8955190, upload-time = "2025-12-02T08:26:30.317Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/fb/5eb90c8a4eae1c111b57b1ebcd111b908e4763a1158d24f1c3750242c1e5/healpy-1.19.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:c5b60a21effe4af4831e0fda67e38e633ca8bf33a940581186e20654cf2d72ea", size = 9264474, upload-time = "2025-12-02T08:26:32.871Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/1b/3b83729d469af07c12518a4457975c38a90bfbb41c821c5d4efd61e56c11/healpy-1.19.0-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:bb31f28fb15aa7e99725e92d25f458f856ac16542938d8bedd797a74449540b2", size = 1732454, upload-time = "2025-12-02T08:26:34.758Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/9c/9a1a7950c7fe3f1b13c4232f3fe1cdebf3a90c235c2e6bc87f63b8aece2a/healpy-1.19.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:3262006e70fe9328f7fb6788197186e44ad70b94d2cca2cb61f828c7808e5fe4", size = 1865946, upload-time = "2025-12-02T08:26:36.187Z" },
+    { url = "https://files.pythonhosted.org/packages/32/b3/83e91d7c5a3212413bf3014e1c2bd8e9abe9a852cdcbe312a4c3573a659b/healpy-1.19.0-cp311-cp311-macosx_15_0_arm64.whl", hash = "sha256:8910dd4cd8aec740ab954af5b230d5655caae2d25f55dd8739dde9588257dc85", size = 1862044, upload-time = "2025-12-02T08:26:38.529Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/60/15e142284d0bc722e0c6469423300bd08e47984e5b7775000aad9e70b993/healpy-1.19.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:4894571e46e5604d9b7135b7c6f588b515cc7b91831c5068940d476754660f1e", size = 8190813, upload-time = "2025-12-02T08:26:39.968Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/01/43b047f05ffb822e822382b1ce9ff77f9332a4a34bdffe7d8e42f31d8511/healpy-1.19.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:66939e3d4bc436f5b6249b2356ecf6607e24d25e2de2728d26b4f62d1bdfd2c3", size = 8213044, upload-time = "2025-12-02T08:26:43.124Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/a3/95751f1138197ac1b0bb11a4069db098facb0ead5704ae75b02e46e0a1db/healpy-1.19.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:f6b654b6ea825f7fa59b607ccb513fb104976ba78a7d073b5f9db0cbdf2dae66", size = 9013731, upload-time = "2025-12-02T08:26:44.45Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/6c/647d7b2a287009ff55b1c3d3427e7d3da67deb6159d2112b8718a35465ff/healpy-1.19.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:9af09c0655c3e015d9ec55aadcf6628f95f4f534c0a6320716da8319939ee6d3", size = 9323728, upload-time = "2025-12-02T08:26:46.55Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/bf/9a19efa26b48e962bcda0f97443ab62b9a058577665780ec2ce4d78e2705/healpy-1.19.0-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:31496bc2eb9f52c1ea3ea4c7e67771e245a49f1a93937ff73f9056b666cd1f30", size = 1728152, upload-time = "2025-12-02T08:26:48.759Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/6a/b87c279184278ea75fcaa81e2f1207384b232c038a45abc4c3d6999f8f49/healpy-1.19.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:69987864e318b4e22e2407670bdb2d791fcd9c244bc6c25c7001e14fc34f15a2", size = 1864134, upload-time = "2025-12-02T08:26:50.642Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/7c/9f92228da5c03a9f3c7610210cbc57646e85ee8a8479d7bd94a6fefe736d/healpy-1.19.0-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:e8b304fced0dad0a0a41ddd33bb6b057525f9ddd4dada993bf3d6aa830a08e31", size = 1860200, upload-time = "2025-12-02T08:26:51.843Z" },
+    { url = "https://files.pythonhosted.org/packages/17/51/c07439b92bc05966006897762b7291d7d2c83fde8807b8d53a48e140a8b4/healpy-1.19.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:730095eef4bbe3c94039edb330d1800285cf43c7e16a81ce5b87edb31a8ffa42", size = 8239086, upload-time = "2025-12-02T08:26:53.076Z" },
+    { url = "https://files.pythonhosted.org/packages/61/c6/42745aeff172755e55af2487491c7a7475fe1068f152850cc14d64e04f30/healpy-1.19.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:89dbe14b270b5479a9652d1ab9f28fc7fce34253549db665f2e91e6cea588883", size = 8255685, upload-time = "2025-12-02T08:26:54.361Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/86/2a223bd92dde578de34f07095c71152c84b158644782c4057ca9b25e53b5/healpy-1.19.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:29bb5f7acde68ca5850c3a59ba33cacf4c3768c9e85f7013a99aa5fbd127ce84", size = 9042629, upload-time = "2025-12-02T08:26:55.773Z" },
+    { url = "https://files.pythonhosted.org/packages/18/6d/037a7bb889c92b3e3f792de6a692e636de0577ea62bdd0038b1eb68270af/healpy-1.19.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:126bef3ae6594f461435ac85c6bcb32e427eca43f743881d00186bc3a55da1d8", size = 9376051, upload-time = "2025-12-02T08:26:57.516Z" },
+    { url = "https://files.pythonhosted.org/packages/79/7d/769d1f59ba6491cd835ac143639fdc59e5ade735c5aa14fd4f5cd133a30f/healpy-1.19.0-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:97155fe60e8309caa610cee6a26028219f181314dc8ad33517070ec48ea316f7", size = 1724949, upload-time = "2025-12-02T08:26:59.536Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/99/5264236d706f22d24268ea55a049822870e15c52929c065556cb9e47d379/healpy-1.19.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:70171ba093c9d7740d7248560609f6d8c17e6e1b9543e7b732f092b2a03dda55", size = 2590717, upload-time = "2025-12-02T08:27:00.691Z" },
+    { url = "https://files.pythonhosted.org/packages/97/c0/d3ce7ecbb821e4d2914bf9a0dfbf79cf2fcffe02e059d88b24b54693a943/healpy-1.19.0-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:82b1f40ce8a982bf209a06e0f48b389ff1cbcd2e1524f12a2a78e92e600907b2", size = 2590479, upload-time = "2025-12-02T08:27:01.78Z" },
+    { url = "https://files.pythonhosted.org/packages/de/bb/314bf8c493701b5842cdd74a1b5b34cea1522444042efad5b7cb17b8d159/healpy-1.19.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:086bae2510ac60f7cf9bbb520e1d1b8864cc8fca74b46b16e24857e74d08f896", size = 8198878, upload-time = "2025-12-02T08:27:03.119Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/d4/a60ed9a50768ff5e896dd94d878496ae16767925ea32c49d5a4189ab818a/healpy-1.19.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:920c0a1c6749c05c8ad9522a5a2630f7bc83124c5742ef50f91b9f5e6a1bdcc7", size = 8205835, upload-time = "2025-12-02T08:27:04.416Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/fd/5f4c989b53423bbad07c91a4b9d52de5cde9f1154e3d2b145b397e1b8cd8/healpy-1.19.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:26e3e6c50f2d256c9218f0fb0624406a93c4f22bc66deebf51a0f31fd5594b89", size = 8991846, upload-time = "2025-12-02T08:27:06.123Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/df/00636a5d2f1141b1fa9646069436c4fc68b35ac2c53ef520f8812b900f05/healpy-1.19.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:bc3c243985abf1f1b5d91da12a23ceed49181dd9d0e46ed362babdc92c814aa8", size = 9325719, upload-time = "2025-12-02T08:27:08.138Z" },
+    { url = "https://files.pythonhosted.org/packages/df/14/0ef2e671f75f209d7ac813ed04ba80be82ca30cf517d7c65782a495718be/healpy-1.19.0-cp314-cp314-macosx_13_0_x86_64.whl", hash = "sha256:75179a3681d2e2bfcfe7b33171cbb520be914453062217e6beac15f3c11f9a63", size = 1723861, upload-time = "2025-12-02T08:27:09.971Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/eb/2136bbbfca816308136eefe331c346187935402d0a2f306f0e2eab9559c8/healpy-1.19.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:52cbcaacdb1ff252ce8edd39d07d44e47666cc09c471bdd8eb1ee472773bafb4", size = 2591225, upload-time = "2025-12-02T08:27:11.026Z" },
+    { url = "https://files.pythonhosted.org/packages/70/ad/e511e15fedc11f7d3529440fc90333fb03fbf93a6339b70c4b5992d849d0/healpy-1.19.0-cp314-cp314-macosx_15_0_arm64.whl", hash = "sha256:6236f8b900ae7914c8c3c04d3ddd9a01c695e001798e334d2bffb989603bc46b", size = 2591177, upload-time = "2025-12-02T08:27:12.511Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/ca/f583967e1395e41608225d0a6d29e582236f615d83023d730e63bac89baa/healpy-1.19.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:b3cf9c627af77a3fc670d6240d8a83485f373c274945ca8ad156fc2a25d6eb61", size = 8172544, upload-time = "2025-12-02T08:27:13.684Z" },
+    { url = "https://files.pythonhosted.org/packages/85/ae/80a5e0d36ee51e72b27fb8e11d0d43dfb3f8e2ccc315a38865a2ccd5ed73/healpy-1.19.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:c22360ad7ec6f16bdbb650dececf52d21f7f0e03a943eb1a1046fdb9c51a3c5e", size = 8198134, upload-time = "2025-12-02T08:27:15.156Z" },
+    { url = "https://files.pythonhosted.org/packages/36/7b/34b9954fdf76b1f5ab0a76228650c2575b189fb6f9f7865c98477a46086d/healpy-1.19.0-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:1a479826c1d6ae8312476e079a3f5c7aa3e40911d74f2d7069adcd62e98604ad", size = 8986426, upload-time = "2025-12-02T08:27:16.417Z" },
+    { url = "https://files.pythonhosted.org/packages/94/df/bb3ef51f423c62576fb0775fe72f0d2028a10e3ffb20b4fc76146ea8757b/healpy-1.19.0-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:a103e327102e124785c1b5bdd379c6e5469137633212b56a6196bf04ddd100ff", size = 9307512, upload-time = "2025-12-02T08:27:18.03Z" },
+]
+
+[[package]]
+name = "healsparse"
+version = "1.12.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "astropy", version = "6.1.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "astropy", version = "7.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "hpgeom" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/72/c1/ba1dcceb6fc7d10f2f92e0019e865fef7e11ea8bbd544b5691d94d03b41c/healsparse-1.12.2.tar.gz", hash = "sha256:364e2c9966698843139c53ad878dcc8d544658d13005545d11fbc0935bc6a4b6", size = 131452, upload-time = "2026-03-17T15:04:37.646Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/b7/e7f914200bb10dd64cec1124f18da17c289e4009a406af7c31129ce3dbf9/healsparse-1.12.2-py3-none-any.whl", hash = "sha256:5390048c6b2f411fb62ff105f72ea39697b65883490408e8f84d90d717bac94b", size = 68524, upload-time = "2026-03-17T15:04:36.438Z" },
+]
+
+[[package]]
+name = "hpgeom"
+version = "1.5.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/07/72/27640de7d85a566b8ecd27e7894f371a19669c56c268756e18111a137df8/hpgeom-1.5.4.tar.gz", hash = "sha256:85ac73e267c11f3f248920d3541a0e6ffab821cae54f0d44414d1939dfb91200", size = 153906, upload-time = "2026-02-24T19:03:01.954Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/56/e6/91b8be6b998508850b70c7f8ef59a5d2f7651f34155d57a6d9d9da9e523d/hpgeom-1.5.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:8f0aa48fb341e1b576d8c9c1e81d7d52cc256388939b3f341b3ed3ec2d34634f", size = 74596, upload-time = "2026-02-24T19:02:37.104Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/75/f52d45a203c4ca5455e003892e768a7a68d90bd8133e1bee338d2234290e/hpgeom-1.5.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2f4999582b6cf8229b10175f90018af6bf42471d49284b2b51e1c7ca8a083a95", size = 68929, upload-time = "2026-02-24T19:02:38.106Z" },
+    { url = "https://files.pythonhosted.org/packages/04/e4/1cc02a174ef86b3f716170fa957892e2bf8b1024de962beaa0c4bafed673/hpgeom-1.5.4-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:378694787e2de2ccd26b4f00db52333f8575349532366ba2ba18bedc70b8df46", size = 183824, upload-time = "2026-02-24T19:02:38.982Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/44/2bf304701c9d78ae6299bf23d0cee580477199d134631e52774549e26cd7/hpgeom-1.5.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:75121f50861e8daebb0e70a9db3c2b2d5cca743cd70f8b4f48a31d99082c09be", size = 187184, upload-time = "2026-02-24T19:02:39.969Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/a7/8afaeb66f30d5211b7dcf3c886981f780263522d15b5f2f7192985c11dfb/hpgeom-1.5.4-cp310-cp310-win_amd64.whl", hash = "sha256:c7baa2f0f60280f528d37e333c023007fd6051f58e43fd238d95b2e083f3d2b1", size = 72590, upload-time = "2026-02-24T19:02:40.861Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/5e/d3ebaa3fbff3bab3c755819914ff792b795365343ece7cbf52e913f35413/hpgeom-1.5.4-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:52f441aac1937845bd4454d67844c9c9bbbb55d801ea78cc2c39b97c794f6e09", size = 74597, upload-time = "2026-02-24T19:02:41.697Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/1f/c0c1d3cabdb92fc8355618d6d58cc1f8c6939cf96686214d71688e2ab7b1/hpgeom-1.5.4-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:6450c4cbbeb3206ea73df71a4e66d3c4b72aacf424b704e76615d7fa28ed6825", size = 68927, upload-time = "2026-02-24T19:02:42.881Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/3b/6525b1e477fd28a212aeb95635d072991e47bba33ee7446de359c644e423/hpgeom-1.5.4-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:fbb1b5ccbc2919bf2d124da14443ecb0130c98262a0f98010a7e3361c15e0a4a", size = 185573, upload-time = "2026-02-24T19:02:43.856Z" },
+    { url = "https://files.pythonhosted.org/packages/68/78/2d6e784fc65ef8c25e2ba27d6481e2a1de806713c69d3da6f25f62ad7f2d/hpgeom-1.5.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:026aefb0ee4c6a364bd62b80118cd6a54438160a7406fddd4458b1984471460d", size = 188910, upload-time = "2026-02-24T19:02:45.264Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/4d/32e724ef4083a606e8a20d798e9ad196918dc666a76fd8dd962eabf84933/hpgeom-1.5.4-cp311-cp311-win_amd64.whl", hash = "sha256:d925d569747098acf9d72c1a756b64a0a25ce712790056d945dd25d318c1d79b", size = 72580, upload-time = "2026-02-24T19:02:46.263Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/30/26739a3427cb659d71080bd25c4e1f413d7eb167fcf94adff44fbd809733/hpgeom-1.5.4-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:f073fd6c011769f6562c36c27d1bf315e63a74b17f634646551ee30b1d26f750", size = 74780, upload-time = "2026-02-24T19:02:47.15Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/7c/d1ff34ccf981d8db798fbd88341b52f8b17d6df76d3097712d2525485df2/hpgeom-1.5.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:afefda2cd8f8f1eece4dc6189dc36ab88db0d62f5636263f9a5f42ffc1f0eb06", size = 68846, upload-time = "2026-02-24T19:02:48.542Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/7f/bae5e1a44d76fa7396c4a004e2e86acb5fe70d8aaaa7f91190c65eb09e97/hpgeom-1.5.4-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d544a9834477b0aedf61ee934ce4598170cf14f16742200cd1729103edb5f506", size = 192550, upload-time = "2026-02-24T19:02:49.454Z" },
+    { url = "https://files.pythonhosted.org/packages/68/4d/8b83dcbbd08bd7e713583490c14db848515a909515644037c80d20e2b80c/hpgeom-1.5.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7af0216ff1db0a49a771356562088c49185104a10502b68ab26c8ca2816d17b0", size = 197180, upload-time = "2026-02-24T19:02:50.453Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/d3/3aeb5bb35d01f7e57ccf5f03dbc4b90804114145ab721dfd191453157594/hpgeom-1.5.4-cp312-cp312-win_amd64.whl", hash = "sha256:f8dc2a1fcf186dc67ae71bd1ed9a9dbf72eb5909775f70386e7d64f632a2bdec", size = 72773, upload-time = "2026-02-24T19:02:51.378Z" },
+    { url = "https://files.pythonhosted.org/packages/15/9d/3b1de694b1a1c2c5aa4182de63bf720c88cc0a2db946edadd7509c8cba98/hpgeom-1.5.4-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:f213a62d0688371a6023d19abbec5ba504b2806f00caac91048193022dabf336", size = 74783, upload-time = "2026-02-24T19:02:52.237Z" },
+    { url = "https://files.pythonhosted.org/packages/55/9f/558e8db5b0cbbcabf4064667ba30bb19c049ffef9cacbf3a68d267897e4a/hpgeom-1.5.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:65f32958ec93bfe7b5a8e82740f25cf60787b0831404766d02ff80c1c22171d0", size = 68843, upload-time = "2026-02-24T19:02:53.083Z" },
+    { url = "https://files.pythonhosted.org/packages/75/dc/4c0c6d7eba1d42be23794b03e6048af4de0d92c5805f4f2ed29bc1ca0f16/hpgeom-1.5.4-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d7058b3396fb7deb8b8637ac7f2861bfaa213574c50b9e771bf80f4d1e9064f3", size = 192643, upload-time = "2026-02-24T19:02:54.045Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/9a/41ba036857a5489d2c1e6f742903aae452d874a48c5b24889de79e02e668/hpgeom-1.5.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e160d40a18b8e80b7e233b4459adcbd4aea5d1fb48cefe7f07e8fc7dfbdcd9f3", size = 197257, upload-time = "2026-02-24T19:02:55.356Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/48/327d86569bc4947510ccf7689984ce47219c89d2128e5ab16fc5629ae1c8/hpgeom-1.5.4-cp313-cp313-win_amd64.whl", hash = "sha256:e296ab7f88d4796cc2d0e23202746217e0fd863a29311a53f696659e7cab4cc2", size = 72771, upload-time = "2026-02-24T19:02:56.289Z" },
+    { url = "https://files.pythonhosted.org/packages/84/0d/d9fc919a8830622d80341d4c03e749ad8898523e7346782d7ec7e48e9ee4/hpgeom-1.5.4-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:09290094b5c5a41ef529745e32df7809f1602aa3bf6e79106669f6250098472f", size = 74736, upload-time = "2026-02-24T19:02:57.139Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/b2/09672c0f5956f3fabdd5ee2eae8e3bd11a10e78601d638b0507dfb1dfbe2/hpgeom-1.5.4-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:29848f353ace002c29a697eb327bc803b8ae6b8e7b6c19114148be9fdc5b41a8", size = 68870, upload-time = "2026-02-24T19:02:58.009Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/83/45d4208eb33432195df1998d5b5d75afc52d52cdec5ccdec80fa9d3fb2cc/hpgeom-1.5.4-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:47fe1c0c334d9722110a0d6346d2e4222aaed4454138996f9b2638a78ec98b60", size = 192606, upload-time = "2026-02-24T19:02:58.915Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/67/ab80b95519d453e72cd65ccc6cd411f23a4d997f492ed9ad0dbc51bce0fa/hpgeom-1.5.4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fce969f1311a2f44c4f1c58fca1302b472ef798e702725a75bc16a342f924a66", size = 197071, upload-time = "2026-02-24T19:03:00.063Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/8b/99915a17b20d56a88e865d1b9e53ac0bb9a2e579c122dc8f3eab6f535a6b/hpgeom-1.5.4-cp314-cp314-win_amd64.whl", hash = "sha256:2e56853bbfda7df904006e4f9eda4095bf56406122155eaa1bcb379f61021eb8", size = 73943, upload-time = "2026-02-24T19:03:01.034Z" },
+]
+
+[[package]]
 name = "hsc-wl"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "dsigma" },
-    { name = "matplotlib" },
+    { name = "healpy" },
+    { name = "healsparse" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
@@ -569,17 +672,22 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "ipykernel" },
+    { name = "matplotlib" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "dsigma", specifier = ">=1.1.0" },
-    { name = "matplotlib", specifier = ">=3.10.8" },
+    { name = "healpy", specifier = ">=1.18.1" },
+    { name = "healsparse", specifier = ">=1.11.1" },
     { name = "pandas", specifier = ">=2.3.3" },
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ipykernel", specifier = ">=7.2.0" }]
+dev = [
+    { name = "ipykernel", specifier = ">=7.2.0" },
+    { name = "matplotlib", specifier = ">=3.10.8" },
+]
 
 [[package]]
 name = "ipykernel"
