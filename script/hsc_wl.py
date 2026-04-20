@@ -14,6 +14,11 @@ from dsigma.stacking import excess_surface_density
 from dsigma.surveys import hsc as hsc_survey
 
 
+# ---------- runtime settings ----------
+# Switch this label before each run when using profile-based YAML config.
+RUN_PROFILE_LABEL = "pdr3"
+
+
 def find_one(path_or_pattern, description):
     paths = (
         sorted(glob.glob(path_or_pattern))
@@ -40,8 +45,10 @@ def pick_required_column(cols, candidates, description):
     return col
 
 
-def assign_jackknife_fields_with_fallback(table_l, table_r, n_jk_requested):
-    """Assign jackknife fields, reducing n_jk when clustering constraints fail."""
+def assign_jackknife_fields_with_fallback(
+    table_l, table_r, n_jk_requested, distance_threshold=1.0
+):
+    """Assign jackknife fields, reducing n_jk or relaxing connectivity as needed."""
     if len(table_l) < 2:
         raise ValueError(
             f"Need at least 2 lenses after precompute filtering for jackknife; got {len(table_l)}"
@@ -58,27 +65,44 @@ def assign_jackknife_fields_with_fallback(table_l, table_r, n_jk_requested):
 
     n_jk_start = min(int(n_jk_requested), len(table_l), n_positive_weight)
     last_error = None
+    distance_thresholds = [float(distance_threshold)]
+    while distance_thresholds[-1] < 180.0:
+        next_threshold = min(distance_thresholds[-1] * 2.0, 180.0)
+        if next_threshold == distance_thresholds[-1]:
+            break
+        distance_thresholds.append(next_threshold)
 
     for n_jk_try in range(n_jk_start, 1, -1):
-        try:
-            centers = compute_jackknife_fields(table_l, n_jk_try, weights=weights)
-            compute_jackknife_fields(table_r, centers)
-            if n_jk_try < n_jk_requested:
-                print(
-                    "[jackknife] requested n_jk="
-                    f"{n_jk_requested}, using n_jk={n_jk_try} after filtering/clustering constraints"
+        for distance_threshold_try in distance_thresholds:
+            try:
+                centers = compute_jackknife_fields(
+                    table_l,
+                    n_jk_try,
+                    distance_threshold=distance_threshold_try,
+                    weights=weights,
                 )
-            return centers, n_jk_try
-        except ValueError as err:
-            # Triggered when one continuous field has too few objects for the
-            # current number of jackknife regions.
-            if "larger sample than population" in str(err):
+                compute_jackknife_fields(table_r, centers)
+                if n_jk_try < n_jk_requested or distance_threshold_try != float(
+                    distance_threshold
+                ):
+                    print(
+                        "[jackknife] requested n_jk="
+                        f"{n_jk_requested}, using n_jk={n_jk_try}, "
+                        f"distance_threshold={distance_threshold_try} deg"
+                    )
+                return centers, n_jk_try
+            except ValueError as err:
+                err_text = str(err)
+                last_error = err
+                if (
+                    "larger sample than population" in err_text
+                    or "0 sample(s)" in err_text
+                ):
+                    continue
+                raise
+            except RuntimeError as err:
                 last_error = err
                 continue
-            raise
-        except RuntimeError as err:
-            last_error = err
-            continue
 
     raise RuntimeError(
         "Could not assign jackknife fields with n_jk >= 2 after filtering. "
@@ -87,19 +111,39 @@ def assign_jackknife_fields_with_fallback(table_l, table_r, n_jk_requested):
 
 
 # ---------- core ----------
-def run_from_config(config_path):
+def run_from_config(config_path, run_label=RUN_PROFILE_LABEL):
     """Load and parse YAML configuration file."""
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
 
+    print(f"[config] run_label: {run_label}")
+
     # Validate required top-level sections
-    for sec in ("misc", "lens_galaxies", "source_galaxies"):
+    for sec in (
+        "misc",
+        "lens_galaxies",
+        "source_galaxies",
+        "label_paths",
+        "corrections",
+    ):
         if sec not in cfg:
             raise KeyError(f"Missing required section: {sec}")
 
+    label_paths = cfg["label_paths"]
+    if run_label not in label_paths:
+        available = ", ".join(sorted(label_paths.keys()))
+        raise KeyError(
+            f"Unknown run profile label: {run_label}. Available labels: {available}"
+        )
+    run_paths = label_paths[run_label]
+
+    for key in ("savepath", "lens_files", "random_files"):
+        if key not in run_paths:
+            raise KeyError(f"Missing required key in label_paths.{run_label}: {key}")
+
     # ---- [misc] (all required, no defaults)
     misc = cfg["misc"]
-    savepath = misc["savepath"]
+    savepath = run_paths["savepath"]
     os.makedirs(savepath, exist_ok=True)
 
     njobs = int(misc["njobs"])
@@ -118,8 +162,8 @@ def run_from_config(config_path):
     if linlog not in ("lin", "log"):
         raise ValueError('[lens_galaxies] linlog must be "lin" or "log"')
 
-    lens_files = [find_one(p, "lens file") for p in lenssec["lens_files"]]
-    rand_files = [find_one(p, "random file") for p in lenssec["random_files"]]
+    lens_files = [find_one(p, "lens file") for p in run_paths["lens_files"]]
+    rand_files = [find_one(p, "random file") for p in run_paths["random_files"]]
     lens_z_col = lenssec["z_col"]
     lens_ra_col = lenssec["ra_col"]
     lens_dec_col = lenssec["dec_col"]
@@ -206,8 +250,9 @@ def run_from_config(config_path):
         "source aperture magnitude column",
     )
 
-    # this procedure might have been done already
-    # table_s = table_s[table_s["b_mode_mask"] == 1]
+    # check whether the b-mode mask column exists, and if so, filter to only use sources that pass the mask
+    if "b_mode_mask" in source_cols:
+        table_s = table_s[table_s["b_mode_mask"] == 1]
     table_s = dsigma_table(
         table_s,
         "source",
@@ -342,4 +387,4 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Run dsigma from YAML config.")
     ap.add_argument("config", help="Path to YAML configuration file.")
     args = ap.parse_args()
-    run_from_config(args.config)
+    run_from_config(args.config, run_label=RUN_PROFILE_LABEL)

@@ -1,20 +1,23 @@
 # HSC Weak Lensing Configuration
-# YAML format provides better readability and structure for complex configurations
+#
+# Keep most stable settings at top-level sections.
+# Use label_paths.<label> for parameters that change between s16a and pdr3.
+#
+# The active label is controlled in script/hsc_wl.py via RUN_PROFILE_LABEL.
 
 misc:
-  njobs: 4
-  savepath: /Users/xinq/dev/repos/hsc_wl/output/dsigma/s16a/
-  tomography: false # gg lensing
+  njobs: 12
+  tomography: false # true when doing cosmology
   comoving: true # h^-1
   lens_source_cut: 0.1 # zsource > zlens + lens_source_cut, very soft
-  verbose: false
+  verbose: true
   njackknife: 100
 
 lens_galaxies:
-  surveys: merian
+  surveys: hsc
   z_bins: [0.10, 0.60]
-  rpmin: 0.05
-  rpmax: 10.0
+  rpmin: 0.10
+  rpmax: 20.0
   n_rpbins: 10
   linlog: log
 
@@ -23,26 +26,40 @@ lens_galaxies:
   ra_col: ra
   dec_col: dec
 
-  # File paths (can use glob patterns)
-  lens_files:
-    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/s16a_bin1.fits
-    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/s16a_bin2.fits
-    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/s16a_bin3.fits
-    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/s16a_bin4.fits
-
-  random_files:
-    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/random_bin1.fits
-    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/random_bin2.fits
-    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/random_bin3.fits
-    - /Users/xinq/dev/repos/hsc_wl/output/prepare_random_s16a/random_bin4.fits
-
 source_galaxies:
   surveys: hsc
-  source_file: /Users/xinq/dev/repos/hsc_wl/data/hscy3_cat.fits
+  source_file: /Users/xinq/dev/repos/hsc_wl/data/HECTOMAP.fits
   nz_file: /Users/xinq/dev/repos/hsc_wl/data/nz.fits
 
-# Survey-specific corrections configuration
-# These apply to the source survey specified in source_galaxies.surveys
+label_paths:
+  pdr3:
+    savepath: /Users/xinq/dev/repos/hsc_wl/output/pdr3/dsigma/
+    lens_files:
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin1.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin4.fits
+    random_files:
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin1.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin4.fits
+
+  s16a:
+    savepath: /Users/xinq/dev/repos/hsc_wl/output/s16a/dsigma/
+    lens_files:
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin1.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin4.fits
+    random_files:
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin1.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin4.fits
+
+# Survey-specific corrections configuration.
+# These apply to source_galaxies.surveys.
 corrections:
   sdss:
     photo_z_dilution_correction: true
