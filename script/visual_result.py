@@ -36,12 +36,13 @@ else:
     print("Could not proceed without finding the project root.")
 
 # %%
+result_dir = root_path / "output/pdr3/dsigma"
 
 
 def load_result_tables(base_dir):
     tables = []
     for i in range(4):
-        path = base_dir / f"hsc_merian_lens{i}_lens.csv"
+        path = base_dir / f"hsc_hsc_lens{i}_lens.csv"
         tables.append(Table.read(path, format="csv"))
     return tables
 
@@ -130,15 +131,13 @@ def plot_r_times_quantity(tables, value_column, title_label):
     axes[2].set_ylabel(r"$R \times \Delta\Sigma\ [10^6\,M_{\odot}/\mathrm{pc}]$")
     axes[2].set_xlabel(r"$R\ [\mathrm{Mpc}]$")
     axes[3].set_xlabel(r"$R\ [\mathrm{Mpc}]$")
-    fig.suptitle(rf"{title_label} $R \times \Delta\Sigma$ Profiles (s16a)", y=0.98)
+    fig.suptitle(rf"{title_label} $R \times \Delta\Sigma$ Profiles", y=0.98)
     fig.tight_layout()
 
     plt.show()
 
 
 # %%
-result_dir = root_path / "output/dsigma/s16a"
-
 tables = load_result_tables(result_dir)
 
 expected_cols = [
