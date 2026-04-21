@@ -37,7 +37,7 @@ else:
     print("Could not proceed without finding the project root.")
 
 # %%
-random = Table.read(root_path / "data/random_hectomap.fits")
+random = Table.read(root_path / "data/total_random.csv")
 print(len(random), "random sources loaded.")
 
 
@@ -87,36 +87,24 @@ def choose_nside_by_target_occupancy(
     return best_nside, diagnostics
 
 
-def _poisson_cdf_table_from_counts(counts):
-    """Build Poisson CDF lookup table up to max(counts) using lambda=mean(counts)."""
-    lam = float(np.mean(counts))
-    if lam <= 0:
-        raise ValueError("Poisson lambda must be positive.")
-
-    max_k = int(np.max(counts))
-    cdf_table = np.empty(max_k + 1, dtype=np.float64)
-    pmf = np.exp(-lam)
-    cdf_table[0] = pmf
-    for k in range(1, max_k + 1):
-        pmf *= lam / k
-        cdf_table[k] = cdf_table[k - 1] + pmf
-
-    return cdf_table, lam
-
-
 def compute_mask_values(ra, dec, nside, nest=True):
-    """Compute the valid pixels, their mask format probability (1 - CDF), and the sentinel empty value."""
+    """Compute the valid pixels, their mask format probability, and the sentinel empty value."""
     theta = np.radians(90.0 - np.asarray(dec))
     phi = np.radians(np.asarray(ra))
     ipix = hp.ang2pix(nside, theta, phi, nest=nest)
     uniq_pix, counts = np.unique(ipix, return_counts=True)
-    cdf_table, _ = _poisson_cdf_table_from_counts(counts)
 
-    # Use 1 - x as requested, indicating map mask probability
-    prob_table = 1.0 - cdf_table
+    lam = float(np.mean(counts))
+    if lam <= 0:
+        raise ValueError("Mean count must be positive.")
 
-    sentinel_value = np.float32(prob_table[0])
-    valid_values = prob_table[counts].astype(np.float32)
+    # For counts x, calculate p = x / lambda, capped at 1
+    p = np.minimum(counts / lam, 1.0)
+    # Use 1 - p as the mask probability
+    valid_values = (1.0 - p).astype(np.float32)
+
+    # Sentinel value is for unobserved pixels (x = 0) -> p = 0 -> mask = 1.0
+    sentinel_value = np.float32(1.0)
 
     return uniq_pix, valid_values, sentinel_value
 
@@ -124,7 +112,7 @@ def compute_mask_values(ra, dec, nside, nest=True):
 def make_healpix_mask(ra, dec, nside, nest=True):
     """Create a HEALPix fraction-of-good map from RA/Dec points.
 
-    Each pixel value is a Poisson score: 1 - P(X <= k | lambda)
+    Each pixel value is 1 - p(x), where p(x) = min(x / lambda, 1).
     """
     uniq_pix, valid_values, sentinel_value = compute_mask_values(ra, dec, nside, nest)
     npix = hp.nside2npix(nside)
@@ -147,8 +135,8 @@ def _choose_coverage_nside(nside_sparse, max_coverage=64):
 def make_healsparse_mask(ra, dec, nside_sparse, nside_coverage=None, nest=True):
     """Create a HealSparse fraction-of-good map from RA/Dec points.
 
-    For observed pixels, write 1 - P(X<=k|lambda); for unobserved pixels,
-    the map sentinel is set to 1 - P(X<=0|lambda) = 1 - exp(-lambda).
+    For observed pixels, write 1 - min(x/lambda, 1); for unobserved pixels,
+    the map sentinel is set to 1.0.
     """
     if nside_coverage is None:
         nside_coverage = _choose_coverage_nside(nside_sparse)
@@ -236,7 +224,7 @@ def plot_healpix_mask_wcs(
 best_nside, diag = choose_nside_by_target_occupancy(
     random["ra"],
     random["dec"],
-    target_per_pixel=8.0,
+    target_per_pixel=20.0,
 )
 print(f"Auto-selected nside: {best_nside}")
 
@@ -266,22 +254,25 @@ hsp_mask.write(hsp_out, clobber=True)
 print(f"Saved HealSparse mask to: {hsp_out}")
 
 # %%
+CAMP = "cividis_r"
+
+
 plt.figure(figsize=(12, 7))
 hp.gnomview(
     hp_mask,
     rot=(230, 44, 0),
-    xsize=140,
-    ysize=30,
+    xsize=140 * 2,
+    ysize=30 * 2,
     nest=True,
     title=f"HEALPix Mask (nside={best_nside})",
-    cmap="coolwarm_r",
+    cmap=CAMP,
 )
 # reverse x-axis
 plt.gca().invert_xaxis()
 plt.show()
 
 plot_healpix_mask_wcs(
-    hsp_mask, nside=best_nside, nest=True, projection="HPX", cmap="coolwarm_r"
+    hsp_mask, nside=best_nside, nest=True, projection="HPX", cmap=CAMP
 )
 plt.gca().invert_xaxis()
 plt.show()
