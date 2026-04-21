@@ -38,11 +38,11 @@ else:
 
 # %%
 random = Table.read(root_path / "data/random_hectomap.fits")
+print(len(random), "random sources loaded.")
 
 
-# %%
 def choose_nside_by_target_occupancy(
-    ra, dec, target_per_pixel=8.0, min_nside=32, max_nside=4096
+    ra, dec, target_per_pixel=8.0, min_nside=32, max_nside=32768
 ):
     """
     Pick an nside from powers of two based on median source occupancy per occupied pixel.
@@ -74,21 +74,64 @@ def choose_nside_by_target_occupancy(
         # Log-distance to target gives scale-invariant selection.
         score = np.abs(np.log(median_occ / target_per_pixel))
         diagnostics.append((nside, float(median_occ), float(score), int(len(counts))))
+        print(
+            f"Order {order}: nside={nside}, median_occ={median_occ:.2f}, score={score:.4f}, occupied_pixels={len(counts)}"
+        )
         if score < best_score:
             best_score = score
             best_nside = nside
+            print(f"  -> New best nside: {best_nside} (score={best_score:.4f})")
+        else:
+            break
 
     return best_nside, diagnostics
 
 
-def make_healpix_mask(ra, dec, nside, nest=True):
-    """Create a boolean HEALPix footprint mask from RA/Dec points."""
+def _poisson_cdf_table_from_counts(counts):
+    """Build Poisson CDF lookup table up to max(counts) using lambda=mean(counts)."""
+    lam = float(np.mean(counts))
+    if lam <= 0:
+        raise ValueError("Poisson lambda must be positive.")
+
+    max_k = int(np.max(counts))
+    cdf_table = np.empty(max_k + 1, dtype=np.float64)
+    pmf = np.exp(-lam)
+    cdf_table[0] = pmf
+    for k in range(1, max_k + 1):
+        pmf *= lam / k
+        cdf_table[k] = cdf_table[k - 1] + pmf
+
+    return cdf_table, lam
+
+
+def compute_mask_values(ra, dec, nside, nest=True):
+    """Compute the valid pixels, their mask format probability (1 - CDF), and the sentinel empty value."""
     theta = np.radians(90.0 - np.asarray(dec))
     phi = np.radians(np.asarray(ra))
     ipix = hp.ang2pix(nside, theta, phi, nest=nest)
-    mask = np.zeros(hp.nside2npix(nside), dtype=bool)
-    mask[np.unique(ipix)] = True
-    return mask
+    uniq_pix, counts = np.unique(ipix, return_counts=True)
+    cdf_table, _ = _poisson_cdf_table_from_counts(counts)
+
+    # Use 1 - x as requested, indicating map mask probability
+    prob_table = 1.0 - cdf_table
+
+    sentinel_value = np.float32(prob_table[0])
+    valid_values = prob_table[counts].astype(np.float32)
+
+    return uniq_pix, valid_values, sentinel_value
+
+
+def make_healpix_mask(ra, dec, nside, nest=True):
+    """Create a HEALPix fraction-of-good map from RA/Dec points.
+
+    Each pixel value is a Poisson score: 1 - P(X <= k | lambda)
+    """
+    uniq_pix, valid_values, sentinel_value = compute_mask_values(ra, dec, nside, nest)
+    npix = hp.nside2npix(nside)
+
+    frac_good = np.full(npix, sentinel_value, dtype=np.float32)
+    frac_good[uniq_pix] = valid_values
+    return frac_good
 
 
 def _choose_coverage_nside(nside_sparse, max_coverage=64):
@@ -102,25 +145,28 @@ def _choose_coverage_nside(nside_sparse, max_coverage=64):
 
 
 def make_healsparse_mask(ra, dec, nside_sparse, nside_coverage=None, nest=True):
-    """Create a HealSparseMap float mask footprint from RA/Dec points."""
+    """Create a HealSparse fraction-of-good map from RA/Dec points.
+
+    For observed pixels, write 1 - P(X<=k|lambda); for unobserved pixels,
+    the map sentinel is set to 1 - P(X<=0|lambda) = 1 - exp(-lambda).
+    """
     if nside_coverage is None:
         nside_coverage = _choose_coverage_nside(nside_sparse)
 
     if nside_coverage >= nside_sparse:
         raise ValueError("nside_coverage must be smaller than nside_sparse.")
 
-    theta = np.radians(90.0 - np.asarray(dec))
-    phi = np.radians(np.asarray(ra))
-    ipix = hp.ang2pix(nside_sparse, theta, phi, nest=nest)
-    valid_pix = np.unique(ipix)
+    uniq_pix, valid_values, sentinel_value = compute_mask_values(
+        ra, dec, nside_sparse, nest
+    )
 
     hsp_map = hsp.HealSparseMap.make_empty(
         nside_coverage=nside_coverage,
         nside_sparse=nside_sparse,
         dtype=np.float32,
-        sentinel=hp.UNSEEN,
+        sentinel=sentinel_value,
     )
-    hsp_map.update_values_pix(valid_pix, np.ones(valid_pix.size, dtype=np.float32))
+    hsp_map.update_values_pix(uniq_pix, valid_values)
     return hsp_map
 
 
@@ -191,21 +237,32 @@ best_nside, diag = choose_nside_by_target_occupancy(
     random["ra"],
     random["dec"],
     target_per_pixel=8.0,
-    min_nside=32,
-    max_nside=4096,
 )
 print(f"Auto-selected nside: {best_nside}")
 
 hp_mask = make_healpix_mask(random["ra"], random["dec"], nside=best_nside)
 hsp_mask = make_healsparse_mask(random["ra"], random["dec"], nside_sparse=best_nside)
 
+print(
+    "HEALPix fraction-of-good stats: "
+    f"min={np.nanmin(hp_mask):.3e}, median={np.nanmedian(hp_mask):.3e}, max={np.nanmax(hp_mask):.3e}"
+)
+print(
+    "HealSparse fraction-of-good stats (valid pixels): "
+    f"min={np.nanmin(hsp_mask[hsp_mask.valid_pixels]):.3e}, "
+    f"median={np.nanmedian(hsp_mask[hsp_mask.valid_pixels]):.3e}, "
+    f"max={np.nanmax(hsp_mask[hsp_mask.valid_pixels]):.3e}"
+)
+
 output_dir = root_path / "output"
 output_dir.mkdir(parents=True, exist_ok=True)
 hsp_out = output_dir / f"healsparse_mask_nside{best_nside}.fits"
-hsp_mask.write(hsp_out, clobber=True)
 
-print(f"HEALPix occupied pixels: {np.count_nonzero(hp_mask)}")
-print(f"HealSparse valid pixels: {hsp_mask.valid_pixels.size}")
+hp_mask_path = output_dir / f"healpix_mask_nside{best_nside}.fits"
+hp.write_map(hp_mask_path, hp_mask, nest=True, overwrite=True)
+print(f"Saved HEALPix mask to: {hp_mask_path}")
+
+hsp_mask.write(hsp_out, clobber=True)
 print(f"Saved HealSparse mask to: {hsp_out}")
 
 # %%
@@ -213,18 +270,18 @@ plt.figure(figsize=(12, 7))
 hp.gnomview(
     hp_mask,
     rot=(230, 44, 0),
-    xsize=1400,
-    ysize=300,
+    xsize=140,
+    ysize=30,
     nest=True,
     title=f"HEALPix Mask (nside={best_nside})",
-    cmap="cividis",
+    cmap="coolwarm_r",
 )
 # reverse x-axis
 plt.gca().invert_xaxis()
 plt.show()
-# %%
+
 plot_healpix_mask_wcs(
-    hsp_mask, nside=best_nside, nest=True, projection="HPX", cmap="cividis"
+    hsp_mask, nside=best_nside, nest=True, projection="HPX", cmap="coolwarm_r"
 )
 plt.gca().invert_xaxis()
 plt.show()

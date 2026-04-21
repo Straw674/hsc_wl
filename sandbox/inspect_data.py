@@ -73,3 +73,9 @@ print(random.colnames)
 
 # save to the original file
 # random.write(root_path / "data/random_hectomap.fits", overwrite=True)
+
+# %%
+
+# read the hsp mask from "output/healsparse_mask_nside4096.fits"
+hsp_mask = hsp.HealSparseMap.read(root_path / "output/healsparse_mask_nside4096.fits")
+print(hsp_mask)
