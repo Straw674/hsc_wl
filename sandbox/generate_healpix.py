@@ -1,7 +1,6 @@
 # %%
 import sys
 import logging
-import matplotlib as mpl
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -16,8 +15,6 @@ while True:
     # Check if current_dir is valid and hasn't gone above the filesystem root
     if not current_dir or current_dir == current_dir.parent:
         logger.error("Error: pyproject.toml not found in parent directories.")
-        # Handle the error appropriately, maybe raise an exception or exit
-        # For now, just break to avoid infinite loop if marker is truly missing
         break
 
     if (current_dir / marker).exists():

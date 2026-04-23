@@ -11,15 +11,16 @@ from itertools import combinations
 
 import healpy as hp
 import healsparse as hsp
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from astropy import units as u
-from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Planck18
 from astropy.io import fits
 from astropy.table import Row, Table
+from astropy.wcs import WCS
 
 # matplotlib settings
 plt.rcParams["figure.dpi"] = 300
