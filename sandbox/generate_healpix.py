@@ -151,6 +151,8 @@ def make_healsparse_mask(
     """Create a HealSparse mask from precomputed pixel/value arrays.
 
     Unobserved pixels use HealSparse/HEALPix unseen sentinel by default.
+    Occupied pixels are written as 1 so the output mask uses the expected
+    binary convention: observed=1, unobserved=unseen.
     """
     if nside_coverage is None:
         nside_coverage = _choose_coverage_nside(nside_sparse)
@@ -164,7 +166,7 @@ def make_healsparse_mask(
         dtype=np.float32,
         sentinel=sentinel_value,
     )
-    hsp_map.update_values_pix(uniq_pix, valid_values)
+    hsp_map.update_values_pix(uniq_pix, np.ones_like(valid_values, dtype=np.float32))
     return hsp_map
 
 
@@ -274,6 +276,9 @@ print(f"Saved HealSparse mask to: {hsp_out}")
 
 # %%
 CAMP = "cividis"
+LON_RANGE = [200.0, 250.0]
+LAT_RANGE = [41.0, 45.0]
+XSIZE = 1200
 
 
 def _resample_mask(mask, nside_out, order_in="NEST", order_out="NEST"):
@@ -300,9 +305,9 @@ def compare_three_masks(mask_triplet, nside_compare, cmap="cividis_r"):
             cmap=cmap,
             min=0.0,
             max=1.0,
-            lonra=[200.0, 250.0],
-            latra=[41, 45],
-            xsize=900,
+            lonra=LON_RANGE,
+            latra=LAT_RANGE,
+            xsize=XSIZE,
             title=f"{title} (Cartesian zoom)",
             cbar=False,
         )
@@ -339,6 +344,53 @@ compare_three_masks(
         ("Ref mask 1: fdfc_hp_window", mask1_cmp),
         ("Ref mask 2: s19a_contarea", mask2_cmp),
     ],
+    nside_compare=best_nside,
+    cmap=CAMP,
+)
+
+
+# %%
+def compare_two_masks(mask_top, mask_bottom, nside_compare, cmap="cividis_r"):
+    """Compare two masks in stacked Cartesian views with one shared colorbar."""
+    fig = plt.figure(figsize=(12, 5))
+    for i, (title, mask) in enumerate(mask_top + mask_bottom, start=1):
+        mask = _resample_mask(
+            mask, nside_out=nside_compare, order_in="NEST", order_out="NEST"
+        )
+        hp.cartview(
+            mask,
+            fig=fig.number,
+            sub=(2, 1, i),
+            nest=True,
+            cmap=cmap,
+            min=0.0,
+            max=1.0,
+            lonra=LON_RANGE,
+            latra=LAT_RANGE,
+            xsize=XSIZE,
+            title=title,
+            cbar=False,
+        )
+
+    norm = mpl.colors.Normalize(vmin=0.0, vmax=1.0)
+    sm = mpl.cm.ScalarMappable(norm=norm, cmap=plt.get_cmap(cmap))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=fig.axes, location="right", fraction=0.025, pad=0.02)
+    cbar.set_label("Mask Value")
+    fig.subplots_adjust(left=0.03, right=0.92, bottom=0.08, top=0.90, hspace=0.18)
+
+    plt.show()
+
+
+# Final verification view: both masks should encode the same meaning.
+hp_mask_vis = (1.0 - hp_mask).astype(np.float32)
+hsp_mask_vis = hsp_mask.generate_healpix_map(nside=best_nside, nest=True).astype(
+    np.float32
+)
+
+compare_two_masks(
+    [("HEALPix mask (1 = masked)", hp_mask_vis)],
+    [("HealSparse mask (1 = masked)", hsp_mask_vis)],
     nside_compare=best_nside,
     cmap=CAMP,
 )
