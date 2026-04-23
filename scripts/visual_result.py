@@ -36,10 +36,11 @@ else:
     print("Could not proceed without finding the project root.")
 
 # %%
-result_dir = root_path / "output/pdr3/dsigma"
+
+label = "s16a_mass"
 
 # Select which plot function to use for main visualization
-MULTIPLY_BY_RADIUS = False
+MULTIPLY_BY_RADIUS = True
 
 
 def load_result_tables(base_dir):
@@ -258,6 +259,7 @@ def plot_correction_factors_radial(tables):
 
 
 # %%
+result_dir = root_path / f"output/{label}/dsigma"
 tables = load_result_tables(result_dir)
 
 expected_cols = [
@@ -305,24 +307,24 @@ for k in expected_cols:
 basic_fig = plot_radial_profile(
     tables,
     value_column="ds",
-    title_label="corrected (main)",
-    show_pair_sizes=True,
+    title_label=f"{label} - corrected (main)",
+    show_pair_sizes=False,
     multiply_by_radius=MULTIPLY_BY_RADIUS,
 )
 raw_fig = plot_radial_profile(
     tables,
     value_column="ds_raw",
-    title_label="raw",
+    title_label=f"{label} - raw",
     multiply_by_radius=MULTIPLY_BY_RADIUS,
 )
 rds_fig = plot_radial_profile(
     tables,
     value_column="ds_r",
-    title_label="random",
+    title_label=f"{label} - random",
     multiply_by_radius=MULTIPLY_BY_RADIUS,
 )
-pair_fig = plot_pair_counts_vs_rp(tables)
-factor_fig = plot_correction_factors_radial(tables)
+# pair_fig = plot_pair_counts_vs_rp(tables)
+# factor_fig = plot_correction_factors_radial(tables)
 
 summary = pd.DataFrame(
     [summarize_result_table(tables[i], f"lens{i}") for i in range(len(tables))]
