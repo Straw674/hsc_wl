@@ -18,7 +18,7 @@ lens_galaxies:
   z_bins: [0.10, 0.60]
   rpmin: 0.10
   rpmax: 20.0
-  n_rpbins: 10
+  n_rpbins: 13
   linlog: log
 
   # Column names in lens catalog
@@ -28,35 +28,47 @@ lens_galaxies:
 
 source_galaxies:
   surveys: hsc
-  source_file: /Users/xinq/dev/repos/hsc_wl/data/hscy3_cat.fits
+  source_file: /Users/xinq/dev/repos/hsc_wl/data/hscy3_cat_flipped_e2.fits
   nz_file: /Users/xinq/dev/repos/hsc_wl/data/nz.fits
 
 label_paths:
   pdr3:
     savepath: /Users/xinq/dev/repos/hsc_wl/output/pdr3/dsigma/
     lens_files:
-      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin1.fits
-      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin2.fits
-      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin3.fits
       - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin4.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin1.fits
     random_files:
-      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin1.fits
-      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin2.fits
-      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin3.fits
       - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin4.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin1.fits
 
   s16a:
     savepath: /Users/xinq/dev/repos/hsc_wl/output/s16a/dsigma/
     lens_files:
-      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin1.fits
-      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin2.fits
-      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin3.fits
       - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin4.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin1.fits
     random_files:
-      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin1.fits
-      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin2.fits
-      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin3.fits
       - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin4.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin1.fits
+  s16a_mass:
+    savepath: /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/dsigma/
+    lens_files:
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin4.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin1.fits
+    random_files:
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin4.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin1.fits
 
 # Survey-specific corrections configuration.
 # These apply to source_galaxies.surveys.
