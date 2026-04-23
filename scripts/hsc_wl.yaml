@@ -28,7 +28,7 @@ lens_galaxies:
 
 source_galaxies:
   surveys: hsc
-  source_file: /Users/xinq/dev/repos/hsc_wl/data/HECTOMAP.fits
+  source_file: /Users/xinq/dev/repos/hsc_wl/data/hscy3_cat.fits
   nz_file: /Users/xinq/dev/repos/hsc_wl/data/nz.fits
 
 label_paths:
