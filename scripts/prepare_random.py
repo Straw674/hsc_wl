@@ -40,17 +40,17 @@ else:
 # User-editable parameters
 # =========================
 
-SOURCE = "s16a"  # Supported: "pdr3", "s16a"
+SOURCE = "s16a"  # Choose from CATALOG_SOURCES keys
 
 # Path can be absolute or relative to the project root.
 CATALOG_SOURCES = {
     "pdr3": {
         "label": "pdr3",
-        "lens_path": "/Users/xinq/redmapper_HSC/output/redmapper_run/add_geo_mask/run/hsc_run_redmapper_v0.9.1.dev2+g030802198_lgt05_catalog.fit",
+        "lens_path": "/Users/xinq/redmapper_HSC/output/redmapper_run/rich_thre_10_15/run/hsc_run_redmapper_v0.9.1.dev2+g030802198_lgt05_catalog.fit",
         "random_path": "data/random_hectomap.fits",
         "random_multiplier": 1000,
         "columns": {
-            "lambda": "lambda",
+            "rank_col": "lambda",
             "ra": "ra",
             "dec": "dec",
             "z": "z",
@@ -62,18 +62,35 @@ CATALOG_SOURCES = {
         "random_path": "data/random_hectomap.fits",
         "random_multiplier": 10,
         "columns": {
-            "lambda": "lambda",
+            "rank_col": "lambda",
             "ra": "ra",
             "dec": "dec",
             "z": "z",
         },
     },
+    "s16a_mass": {
+        "label": "s16a_mass",
+        "lens_path": "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits",
+        "random_path": "data/random_hectomap.fits",
+        "random_multiplier": 10,
+        "columns": {
+            "rank_col": "logm_50_100",
+            "ra": "ra",
+            "dec": "dec",
+            "z": "z_best",
+        },
+    },
 }
 
 # Shared bin definition: left-closed right-open.
-LAMBDA_EDGES = [6.0, 10.0, 20.0, 35.0]
 
-# Sky region limits.
+# richness
+RANK_COL_EDGES = [6.0, 10.0, 20.0, 35.0, 120.0]
+
+# log10 outer stellar mass
+# RANK_COL_EDGES = [10.63, 10.8, 11.0, 11.2, 11.6]
+
+# Sky region limits (only for plotting and diagnostics, no effect on data)
 RA_MIN, RA_MAX = 235, 250.0
 DEC_MIN, DEC_MAX = 42.0, 44.5
 
@@ -247,7 +264,7 @@ def run_pipeline(source_name):
     lens = Table.read(lens_path)
     random = Table.read(random_path)
 
-    col_lambda = cfg["columns"]["lambda"]
+    col_rank = cfg["columns"]["rank_col"]
     col_ra = cfg["columns"]["ra"]
     col_dec = cfg["columns"]["dec"]
     col_z = cfg["columns"]["z"]
@@ -279,14 +296,14 @@ def run_pipeline(source_name):
         raise ValueError("No random points found in the target RA/Dec region.")
 
     bin_definitions = [
-        ("bin1", LAMBDA_EDGES[0], LAMBDA_EDGES[1]),
-        ("bin2", LAMBDA_EDGES[1], LAMBDA_EDGES[2]),
-        ("bin3", LAMBDA_EDGES[2], LAMBDA_EDGES[3]),
-        ("bin4", LAMBDA_EDGES[3], np.inf),
+        ("bin1", RANK_COL_EDGES[0], RANK_COL_EDGES[1]),
+        ("bin2", RANK_COL_EDGES[1], RANK_COL_EDGES[2]),
+        ("bin3", RANK_COL_EDGES[2], RANK_COL_EDGES[3]),
+        ("bin4", RANK_COL_EDGES[3], RANK_COL_EDGES[4]),
     ]
 
     for bin_name, low_edge, high_edge in bin_definitions:
-        lens_mask = (lens[col_lambda] >= low_edge) & (lens[col_lambda] < high_edge)
+        lens_mask = (lens[col_rank] >= low_edge) & (lens[col_rank] < high_edge)
         lens_bin = lens[lens_mask]
 
         n_bin = len(lens_bin)
