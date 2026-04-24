@@ -46,18 +46,15 @@ for i in range(4):
     axs.flatten()[i].set_xlim(0, 2)
 plt.show()
 
-# %%
-
-shape = Table.read(root_path / "data/HECTOMAP.fits")
-print(shape.colnames)
-print(len(shape))
-# number of entries with b_mode_mask
-print(np.sum(shape["b_mode_mask"] == 1))
 
 # %%
 
 hecto = Table.read(root_path / "data/HECTOMAP.fits")
 print(hecto.colnames)
+print(len(hecto))
+
+# number of entries with b_mode_mask
+print(np.sum(hecto["b_mode_mask"] == 1))
 
 # unique and numbers of hecto['hsc_y3_zbin']
 print(np.unique(hecto["hsc_y3_zbin"]))
@@ -79,3 +76,35 @@ print(random.colnames)
 # read the hsp mask from "output/healsparse_mask_nside4096.fits"
 hsp_mask = hsp.HealSparseMap.read(root_path / "output/healsparse_mask_nside4096.fits")
 print(hsp_mask)
+
+# %%
+shape1 = Table.read(root_path / "data/hsc_y3.fits")
+print(shape1.colnames, len(shape1))
+
+# check 'b_mode_mask' column
+print("shape1 b_mode_mask counts:", np.bincount(shape1["b_mode_mask"]))
+
+
+# %%
+
+s16a_mass = Table.read(
+    root_path / "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits"
+)
+
+print(s16a_mass.colnames, len(s16a_mass))
+# check "bsm_s18a" column
+print("s16a_mass bsm_s18a counts:", np.bincount(s16a_mass["bsm_s18a"]))
+
+# %%
+
+data = Table.read(
+    "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits"
+)
+print(data.colnames, len(data))
+data = data[data["logm_cmod"] >= 11.2]
+data = data[data["bsm_s18a"] > 0]
+print(len(data))
+
+# sort by "logm" column
+data.sort("logm_50_100", reverse=True)
+print(data["logm_50_100"][2074])
