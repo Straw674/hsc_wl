@@ -15,10 +15,10 @@ misc:
 
 lens_galaxies:
   surveys: hsc
-  z_bins: [0.10, 0.60]
+  z_bins: [0.19, 0.52]
   rpmin: 0.10
   rpmax: 20.0
-  n_rpbins: 13
+  n_rpbins: 11
   linlog: log
 
   # Column names in lens catalog
@@ -28,7 +28,7 @@ lens_galaxies:
 
 source_galaxies:
   surveys: hsc
-  source_file: /Users/xinq/dev/repos/hsc_wl/data/hscy3_cat_flipped_e2.fits
+  source_file: /Users/xinq/dev/repos/hsc_wl/data/hsc_y3.fits
   nz_file: /Users/xinq/dev/repos/hsc_wl/data/nz.fits
 
 label_paths:
@@ -57,6 +57,7 @@ label_paths:
       - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin3.fits
       - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin2.fits
       - /Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin1.fits
+
   s16a_mass:
     savepath: /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/dsigma/
     lens_files:
@@ -104,5 +105,5 @@ corrections:
     scalar_shear_response_correction: true
     shear_responsivity_correction: true
     selection_bias_correction: true
-    random_subtraction: true
+    random_subtraction: false
     boost_correction: false
