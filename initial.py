@@ -21,6 +21,7 @@ from astropy.cosmology import Planck18
 from astropy.io import fits
 from astropy.table import Row, Table
 from astropy.wcs import WCS
+from selasviz import launch_explorer
 
 # matplotlib settings
 plt.rcParams["figure.dpi"] = 300

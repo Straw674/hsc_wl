@@ -9,6 +9,7 @@ dependencies = [
 	"pandas>=2.3.3",
 	"healpy>=1.18.1",
 	"healsparse>=1.11.1",
+	"selasviz>=0.1.12",
 ]
 
 [dependency-groups]
