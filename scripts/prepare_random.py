@@ -48,31 +48,31 @@ CATALOG_SOURCES = {
         "label": "pdr3",
         "lens_path": "/Users/xinq/redmapper_HSC/output/redmapper_run/rich_thre_10_15/run/hsc_run_redmapper_v0.9.1.dev2+g030802198_lgt05_catalog.fit",
         "random_path": "data/random_hectomap.fits",
-        "random_multiplier": 1000,
+        "random_multiplier": 50,
         "columns": {
             "rank_col": "lambda",
             "ra": "ra",
             "dec": "dec",
-            "z": "z",
+            "z": "z_lambda",
         },
     },
     "s16a": {
         "label": "s16a",
         "lens_path": "/Users/xinq/cluster_finder/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
         "random_path": "data/random_hectomap.fits",
-        "random_multiplier": 10,
+        "random_multiplier": 1,
         "columns": {
             "rank_col": "lambda",
             "ra": "ra",
             "dec": "dec",
-            "z": "z",
+            "z": "z_lambda",
         },
     },
     "s16a_mass": {
         "label": "s16a_mass",
         "lens_path": "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits",
         "random_path": "data/random_hectomap.fits",
-        "random_multiplier": 10,
+        "random_multiplier": 1,
         "columns": {
             "rank_col": "logm_50_100",
             "ra": "ra",
@@ -82,13 +82,29 @@ CATALOG_SOURCES = {
     },
 }
 
-# Shared bin definition: left-closed right-open.
+# Binning mode:
+# - "edges": use RANK_COL_EDGES as left-closed right-open intervals.
+# - "top_counts": sort by rank_col and split sequentially by TOP_COUNTS.
+BINNING_MODE = "edges"  # "edges" or "top_counts"
+if BINNING_MODE not in {"edges", "top_counts"}:
+    raise ValueError("BINNING_MODE must be 'edges' or 'top_counts'.")
+if BINNING_MODE == "edges":
+    # Shared bin definition: left-closed right-open.
+    if SOURCE.endswith("mass"):
+        # log10 outer stellar mass
+        RANK_COL_EDGES = [10.63, 10.8, 11.0, 11.2, 11.6]
+    else:
+        # richness
+        RANK_COL_EDGES = [6.0, 10.0, 20.0, 35.0, 120.0]
+else:
+    # Used only when BINNING_MODE == "top_counts".
+    # Example: [x1, x2, x3, x4] means pick top x1 first, then top x2 from remaining, etc.
+    TOP_COUNTS = [50, 197, 662, 1165]
 
-# richness
-RANK_COL_EDGES = [6.0, 10.0, 20.0, 35.0, 120.0]
+    # Used only when BINNING_MODE == "top_counts".
+    # "desc": larger rank_col is better (top first); "asc": smaller rank_col is better.
+    TOP_SELECTION_ORDER = "desc"
 
-# log10 outer stellar mass
-# RANK_COL_EDGES = [10.63, 10.8, 11.0, 11.2, 11.6]
 
 # Sky region limits (only for plotting and diagnostics, no effect on data)
 RA_MIN, RA_MAX = 235, 250.0
@@ -184,6 +200,7 @@ def show_alignment_plot(
     bin_name,
     low_edge,
     high_edge,
+    bin_desc=None,
 ):
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
 
@@ -246,9 +263,89 @@ def show_alignment_plot(
     axes[2].set_ylabel("Density")
     axes[2].legend()
 
-    title_high = "+inf" if high_edge == float("inf") else f"{high_edge}"
-    fig.suptitle(f"{bin_name} lambda in [{low_edge}, {title_high})")
+    if bin_desc is None:
+        title_high = "+inf" if high_edge == float("inf") else f"{high_edge}"
+        fig.suptitle(f"{bin_name} lambda in [{low_edge}, {title_high})")
+    else:
+        fig.suptitle(f"{bin_name} {bin_desc}")
     fig.tight_layout()
+
+
+def build_bin_slices(np, lens, rank_col):
+    if BINNING_MODE == "edges":
+        if len(RANK_COL_EDGES) < 2:
+            raise ValueError("RANK_COL_EDGES must contain at least two values.")
+
+        bin_slices = []
+        for i in range(len(RANK_COL_EDGES) - 1):
+            low_edge = RANK_COL_EDGES[i]
+            high_edge = RANK_COL_EDGES[i + 1]
+            lens_mask = (lens[rank_col] >= low_edge) & (lens[rank_col] < high_edge)
+            lens_bin = lens[lens_mask]
+            bin_name = f"bin{i + 1}"
+            bin_desc = f"{rank_col} in [{low_edge}, {high_edge})"
+            bin_slices.append((bin_name, lens_bin, low_edge, high_edge, bin_desc))
+        return bin_slices
+
+    if BINNING_MODE == "top_counts":
+        if not TOP_COUNTS:
+            raise ValueError(
+                "TOP_COUNTS must be non-empty when BINNING_MODE='top_counts'."
+            )
+
+        if any((not isinstance(c, int)) or c <= 0 for c in TOP_COUNTS):
+            raise ValueError("TOP_COUNTS must contain only positive integers.")
+
+        if TOP_SELECTION_ORDER not in {"asc", "desc"}:
+            raise ValueError("TOP_SELECTION_ORDER must be 'asc' or 'desc'.")
+
+        reverse = TOP_SELECTION_ORDER == "desc"
+        order_idx = np.argsort(np.asarray(lens[rank_col]))
+        if reverse:
+            order_idx = order_idx[::-1]
+
+        sorted_lens = lens[order_idx]
+        cursor = 0
+        raw_bins = []
+
+        for count in TOP_COUNTS:
+            next_cursor = min(cursor + count, len(sorted_lens))
+            lens_bin = sorted_lens[cursor:next_cursor]
+            rank_window = f"rank index [{cursor}, {next_cursor}) by {rank_col} {TOP_SELECTION_ORDER}"
+            bin_desc = f"top_counts={count}, {rank_window}"
+            raw_bins.append((lens_bin, None, None, bin_desc))
+            cursor = next_cursor
+
+        # Keep selection by TOP_SELECTION_ORDER, but present bins low->high in rank_col
+        # so ordering is consistent with edge-based bins.
+        if TOP_SELECTION_ORDER == "desc":
+            ordered_bins = raw_bins[::-1]
+        else:
+            ordered_bins = raw_bins
+
+        bin_slices = []
+        for i, (lens_bin, low_edge, high_edge, bin_desc) in enumerate(
+            ordered_bins, start=1
+        ):
+            bin_name = f"bin{i}"
+            bin_slices.append((bin_name, lens_bin, low_edge, high_edge, bin_desc))
+
+        return bin_slices
+
+    raise ValueError("BINNING_MODE must be 'edges' or 'top_counts'.")
+
+
+def summarize_bin_boundaries(np, lens_bin, rank_col, low_edge, high_edge):
+    if len(lens_bin) == 0:
+        return "lower=NA, upper=NA"
+
+    if BINNING_MODE == "edges":
+        return f"lower={low_edge}, upper={high_edge}"
+
+    rank_vals = np.asarray(lens_bin[rank_col])
+    rank_min = float(np.min(rank_vals))
+    rank_max = float(np.max(rank_vals))
+    return f"lower={rank_min:.6g}, upper={rank_max:.6g}"
 
 
 def run_pipeline(source_name):
@@ -263,6 +360,27 @@ def run_pipeline(source_name):
 
     lens = Table.read(lens_path)
     random = Table.read(random_path)
+
+    if source_name == "s16a_mass":
+        # For the s16a_mass case, we need to mask bsm_s18a and selection according to "logm_cmod"
+        if "bsm_s18a" in lens.colnames:
+            mask_bsm = lens["bsm_s18a"] > 0
+            lens = lens[mask_bsm]
+            print(f"Applied bsm_s18a > 0 mask: {np.sum(mask_bsm)} objects remain.")
+        else:
+            print(
+                "Warning: 'bsm_s18a' column not found in lens catalog; skipping mask."
+            )
+        if "logm_cmod" in lens.colnames:
+            mask_logm = lens["logm_cmod"] >= 11.2
+            lens = lens[mask_logm]
+            print(
+                f"Applied logm_cmod >= 11.2 mask: {np.sum(mask_logm)} objects remain."
+            )
+        else:
+            print(
+                "Warning: 'logm_cmod' column not found in lens catalog; skipping mass cut."
+            )
 
     col_rank = cfg["columns"]["rank_col"]
     col_ra = cfg["columns"]["ra"]
@@ -295,21 +413,21 @@ def run_pipeline(source_name):
     if len(random_region) == 0:
         raise ValueError("No random points found in the target RA/Dec region.")
 
-    bin_definitions = [
-        ("bin1", RANK_COL_EDGES[0], RANK_COL_EDGES[1]),
-        ("bin2", RANK_COL_EDGES[1], RANK_COL_EDGES[2]),
-        ("bin3", RANK_COL_EDGES[2], RANK_COL_EDGES[3]),
-        ("bin4", RANK_COL_EDGES[3], RANK_COL_EDGES[4]),
-    ]
+    bin_slices = build_bin_slices(np, lens, col_rank)
 
-    for bin_name, low_edge, high_edge in bin_definitions:
-        lens_mask = (lens[col_rank] >= low_edge) & (lens[col_rank] < high_edge)
-        lens_bin = lens[lens_mask]
-
+    for bin_name, lens_bin, low_edge, high_edge, bin_desc in bin_slices:
         n_bin = len(lens_bin)
         if n_bin == 0:
-            print(f"{bin_name} [{low_edge}, {high_edge}) has 0 objects; skip writing.")
+            print(f"{bin_name} has 0 objects; skip writing. ({bin_desc})")
             continue
+
+        boundary_text = summarize_bin_boundaries(
+            np=np,
+            lens_bin=lens_bin,
+            rank_col=col_rank,
+            low_edge=low_edge,
+            high_edge=high_edge,
+        )
 
         in_region = (
             (lens_bin[col_ra] >= RA_MIN)
@@ -321,9 +439,9 @@ def run_pipeline(source_name):
         density = n_in_region / sky_area_deg2
 
         print(
-            f"{bin_name} [{low_edge}, {high_edge}) -> "
-            f"N_total={n_bin}, N_region={n_in_region}, density={density:.6f} deg^-2"
+            f"{bin_name} ({bin_desc}) -> N_total={n_bin}, N_region={n_in_region}, density={density:.6f} deg^-2"
         )
+        print(f"{bin_name} rank boundary -> {boundary_text}")
 
         lens_out = Table()
         lens_out["ra"] = lens_bin[col_ra]
@@ -363,6 +481,7 @@ def run_pipeline(source_name):
                 bin_name=bin_name,
                 low_edge=low_edge,
                 high_edge=high_edge,
+                bin_desc=bin_desc,
             )
 
         print(f"{lens_label} Saved: {lens_file}")
