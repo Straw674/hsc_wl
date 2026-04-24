@@ -8,7 +8,7 @@
 misc:
   njobs: 12
   tomography: false # true when doing cosmology
-  comoving: true # h^-1
+  comoving: false
   lens_source_cut: 0.1 # zsource > zlens + lens_source_cut, very soft
   verbose: true
   njackknife: 100
