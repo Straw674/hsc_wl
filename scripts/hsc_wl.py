@@ -16,7 +16,7 @@ from dsigma.surveys import hsc as hsc_survey
 
 # ---------- runtime settings ----------
 # Switch this label before each run when using profile-based YAML config.
-RUN_PROFILE_LABEL = "s16a"
+RUN_PROFILE_LABEL = "pdr3"
 
 
 def find_one(path_or_pattern, description):

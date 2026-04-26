@@ -345,6 +345,7 @@ def compare_masks(
             title=f"{title} (Cartesian zoom)",
             cbar=False,
         )
+        fig2.axes[-1].invert_xaxis()
 
         # Draw the same sky-region rectangle using healpy projection coordinates.
         _draw_sky_box(
@@ -422,6 +423,7 @@ def compare_two_masks(mask_top, mask_bottom, nside_compare, cmap="cividis_r"):
             title=title,
             cbar=False,
         )
+        fig.axes[-1].invert_xaxis()
 
     norm = mpl.colors.Normalize(vmin=0.0, vmax=1.0)
     sm = mpl.cm.ScalarMappable(norm=norm, cmap=plt.get_cmap(cmap))

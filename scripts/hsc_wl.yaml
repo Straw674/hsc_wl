@@ -15,7 +15,7 @@ misc:
 
 lens_galaxies:
   surveys: hsc
-  z_bins: [0.19, 0.52]
+  z_bins: [0.10, 0.60]
   rpmin: 0.10
   rpmax: 20.0
   n_rpbins: 11
@@ -70,6 +70,19 @@ label_paths:
       - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin3.fits
       - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin2.fits
       - /Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin1.fits
+
+  s16a_forced:
+    savepath: /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/dsigma/
+    lens_files:
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin4.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin1.fits
+    random_files:
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin4.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin3.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin2.fits
+      - /Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin1.fits
 
 # Survey-specific corrections configuration.
 # These apply to source_galaxies.surveys.
