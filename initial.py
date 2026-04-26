@@ -23,6 +23,8 @@ from astropy.table import Row, Table
 from astropy.wcs import WCS
 from selasviz import launch_explorer
 
+from src.visual import *
+
 # matplotlib settings
 plt.rcParams["figure.dpi"] = 300
 desired_font = "Source Serif 4"
