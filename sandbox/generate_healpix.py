@@ -272,8 +272,8 @@ hsp_mask.write(hsp_out, clobber=True)
 print(f"Saved HealSparse mask to: {hsp_out}")
 
 # %%
-CAMP = "cividis"
-LON_RANGE = [200.0, 250.0]
+CAMP = "Oranges"
+LON_RANGE = [199.0, 251.0]
 LAT_RANGE = [41.0, 45.0]
 XSIZE = 1200
 
@@ -289,15 +289,52 @@ def _resample_mask(mask, nside_out, order_in="NEST", order_out="NEST"):
     )
 
 
-def compare_three_masks(mask_triplet, nside_compare, cmap="cividis_r"):
-    """Compare three masks with local cartesian views on identical scale."""
+def _draw_sky_box(
+    ra_min,
+    ra_max,
+    dec_min,
+    dec_max,
+    color="black",
+    lw=1.6,
+    linestyle="--",
+):
+    """Draw an RA/Dec rectangle on the current healpy projection axis."""
+    # healpy cartview uses a negative-x longitude convention in this setup.
+    # The visible box therefore needs to be drawn at x = -RA.
+    x_min, x_max = -float(ra_max), -float(ra_min)
+    ax = plt.gca()
+    style = dict(color=color, lw=lw, linestyle=linestyle, zorder=20)
+    ax.plot([x_min, x_max], [dec_min, dec_min], **style)
+    ax.plot([x_min, x_max], [dec_max, dec_max], **style)
+    ax.plot([x_min, x_min], [dec_min, dec_max], **style)
+    ax.plot([x_max, x_max], [dec_min, dec_max], **style)
+
+
+def compare_masks(
+    masks,
+    cmap="cividis_r",
+    ra_box=(200.0, 250.0),
+    dec_box=(42.0, 44.5),
+):
+    """Compare masks with local cartesian views on identical scale.
+
+    All masks are resampled to ``nside_compare`` in NEST order before plotting,
+    and each panel includes a common RA/Dec selection box.
+    """
+    ra_min, ra_max = map(float, ra_box)
+    dec_min, dec_max = map(float, dec_box)
+    if ra_max <= ra_min or dec_max <= dec_min:
+        raise ValueError(
+            "Invalid highlight box: require ra_max>ra_min and dec_max>dec_min."
+        )
+
     # Local comparison around HSC footprint in Cartesian projection.
-    fig2 = plt.figure(figsize=(12, 5))
-    for i, (title, mask) in enumerate(mask_triplet, start=1):
+    fig2 = plt.figure(figsize=(12, 1 + len(masks)))
+    for i, (title, mask) in enumerate(masks, start=1):
         hp.cartview(
             mask,
             fig=fig2.number,
-            sub=(3, 1, i),
+            sub=(len(masks), 1, i),
             nest=True,
             cmap=cmap,
             min=0.0,
@@ -307,6 +344,17 @@ def compare_three_masks(mask_triplet, nside_compare, cmap="cividis_r"):
             xsize=XSIZE,
             title=f"{title} (Cartesian zoom)",
             cbar=False,
+        )
+
+        # Draw the same sky-region rectangle using healpy projection coordinates.
+        _draw_sky_box(
+            ra_min,
+            ra_max,
+            dec_min,
+            dec_max,
+            color="black",
+            lw=0.8,
+            linestyle="--",
         )
 
     # Use a single shared colorbar to avoid unstable placement across healpy subplots.
@@ -322,6 +370,7 @@ def compare_three_masks(mask_triplet, nside_compare, cmap="cividis_r"):
 
 mask1 = hp.read_map(root_path / "data/mask/fdfc_hp_window.fits", nest=True)
 mask2 = hp.read_map(root_path / "data/mask/s19a_fdfc_hp_contarea_izy-gt-5_trimmed.fits")
+mask3 = hp.read_map(root_path / "data/mask/new/mask_nside1024.fits", nest=True)
 hp_mask_for_plot = (1.0 - hp_mask).astype(np.float32)
 
 mask_new_cmp = _resample_mask(
@@ -334,15 +383,20 @@ mask2_cmp = _resample_mask(
     mask2, nside_out=best_nside, order_in="RING", order_out="NEST"
 )
 
+mask3_cmp = _resample_mask(
+    mask3, nside_out=best_nside, order_in="NEST", order_out="NEST"
+)
 
-compare_three_masks(
+compare_masks(
     [
         (f"New mask (nside={best_nside})", mask_new_cmp),
         ("Ref mask 1: fdfc_hp_window", mask1_cmp),
-        ("Ref mask 2: s19a_contarea", mask2_cmp),
+        ("Ref mask 2: s19a_fdfc_hp_contarea_izy-gt-5_trimmed", mask2_cmp),
+        ("Ref mask 3: mask_nside1024", mask3_cmp),
     ],
-    nside_compare=best_nside,
     cmap=CAMP,
+    ra_box=(200.0, 250.0),
+    dec_box=(42.0, 44.5),
 )
 
 
