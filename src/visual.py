@@ -13,16 +13,6 @@ def load_result_tables(base_dir):
     return tables
 
 
-def _pair_marker_sizes(n_pairs, min_size=30.0, max_size=190.0):
-    n_pairs = np.asarray(n_pairs, dtype=float)
-    safe = np.clip(n_pairs, 1.0, None)
-    log_np = np.log10(safe)
-    lo, hi = np.nanmin(log_np), np.nanmax(log_np)
-    if not np.isfinite(lo) or not np.isfinite(hi) or np.isclose(lo, hi):
-        return np.full_like(log_np, (min_size + max_size) * 0.5)
-    return min_size + (log_np - lo) / (hi - lo) * (max_size - min_size)
-
-
 def _label_variant_color(base_color, label_index, n_labels):
     from matplotlib.colors import to_hex, to_rgb
 
@@ -52,7 +42,6 @@ def plot_radial_profile(
     tables,
     value_column,
     title_label,
-    show_pair_sizes=False,
     multiply_by_radius=True,
     point_errorbar_mode=False,
     ax_list=None,
@@ -77,7 +66,6 @@ def plot_radial_profile(
         rp = np.asarray(table["rp"], dtype=float)
         value = np.asarray(table[value_column], dtype=float)
         ds_err = np.asarray(table["ds_err"], dtype=float)
-        n_pairs = np.asarray(table["n_pairs"], dtype=float)
 
         if multiply_by_radius:
             plot_y = rp * value
@@ -90,7 +78,6 @@ def plot_radial_profile(
         rp = rp[order]
         plot_y = plot_y[order]
         plot_yerr = plot_yerr[order]
-        n_pairs = n_pairs[order]
 
         base_color = palette[i % len(palette)]
         current_color = _label_variant_color(base_color, label_index, n_labels)
@@ -100,7 +87,6 @@ def plot_radial_profile(
         rp = rp[valid]
         plot_y = plot_y[valid]
         plot_yerr = np.clip(plot_yerr[valid], 0.0, np.inf)
-        n_pairs = n_pairs[valid]
 
         if len(rp) == 0:
             if ax_list is None:
@@ -194,29 +180,16 @@ def plot_radial_profile(
                 linewidth=0,
             )
             ax.plot(x_dense, y_dense, color=current_color, lw=2.0)
-            if show_pair_sizes:
-                marker_sizes = _pair_marker_sizes(n_pairs)
-                ax.scatter(
-                    rp,
-                    plot_y,
-                    s=marker_sizes,
-                    c=current_color,
-                    alpha=0.85,
-                    edgecolor="white",
-                    linewidth=0.8,
-                    zorder=3,
-                    label=label_text if i == 0 else None,
-                )
-            else:
-                ax.plot(
-                    rp,
-                    plot_y,
-                    color=current_color,
-                    marker=marker,
-                    ms=4.5,
-                    lw=0.0,
-                    label=label_text if i == 0 else None,
-                )
+
+            ax.plot(
+                rp,
+                plot_y,
+                color=current_color,
+                marker=marker,
+                ms=4.5,
+                lw=0.0,
+                label=label_text if i == 0 else None,
+            )
 
             if ax_list is None:
                 y_for_lim = np.concatenate([plot_y - plot_yerr, plot_y + plot_yerr])
@@ -236,7 +209,6 @@ def plot_radial_profile(
             rp_pos = rp[pos]
             y_pos = plot_y[pos]
             yerr_pos = plot_yerr[pos]
-            n_pairs_pos = n_pairs[pos]
 
             if len(rp_pos) == 0:
                 if ax_list is None:
@@ -282,29 +254,16 @@ def plot_radial_profile(
                 linewidth=0,
             )
             ax.plot(x_dense, y_dense, color=current_color, lw=2.0)
-            if show_pair_sizes:
-                marker_sizes = _pair_marker_sizes(n_pairs_pos)
-                ax.scatter(
-                    rp_pos,
-                    y_pos,
-                    s=marker_sizes,
-                    c=current_color,
-                    alpha=0.85,
-                    edgecolor="white",
-                    linewidth=0.8,
-                    zorder=3,
-                    label=label_text if i == 0 else None,
-                )
-            else:
-                ax.plot(
-                    rp_pos,
-                    y_pos,
-                    color=current_color,
-                    marker=marker,
-                    ms=4.5,
-                    lw=0.0,
-                    label=label_text if i == 0 else None,
-                )
+
+            ax.plot(
+                rp_pos,
+                y_pos,
+                color=current_color,
+                marker=marker,
+                ms=4.5,
+                lw=0.0,
+                label=label_text if i == 0 else None,
+            )
 
             ax.set_yscale("log")
 
@@ -323,15 +282,6 @@ def plot_radial_profile(
     for ax in axes:
         ax.set_ylabel(ylabel)
     axes[-1].set_xlabel(r"$R\ [\mathrm{Mpc}]$")
-    if show_pair_sizes:
-        fig.text(
-            0.5,
-            0.012,
-            "Marker size scales with n_pairs in each rp bin",
-            ha="center",
-            va="bottom",
-            fontsize=10,
-        )
 
     if ax_list is None:
         fig.suptitle(rf"{title_label} {title_suffix}", y=0.996)
