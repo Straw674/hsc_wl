@@ -40,12 +40,17 @@ else:
 label = "pdr3"
 RANDOM_SUBTRACTION = False
 
-# Select which plot function to use for main visualization
-MULTIPLY_BY_RADIUS = True
+# Main profile style.
+MAIN_MULTIPLY_BY_RADIUS = True
+MAIN_USE_LOG_Y = False
+MAIN_USE_SPLINE = True
+MAIN_REFERENCE_LINE_Y = 0.0
 
-# False: keep current spline + shaded error band.
-# True: disable spline/shaded band and draw only points with vertical error bars.
-USE_POINT_ERRORBAR_MODE = False
+# Random-subtraction profile style.
+RANDOM_MULTIPLY_BY_RADIUS = True
+RANDOM_USE_LOG_Y = False
+RANDOM_USE_SPLINE = True
+RANDOM_REFERENCE_LINE_Y = 0.0
 
 
 result_dir = root_path / f"output/{label}/dsigma"
@@ -97,24 +102,29 @@ basic_fig = plot_radial_profile(
     tables,
     value_column="ds",
     title_label=f"{label} - corrected (main)",
-    show_pair_sizes=False,
-    multiply_by_radius=MULTIPLY_BY_RADIUS,
-    point_errorbar_mode=USE_POINT_ERRORBAR_MODE,
+    multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
+    use_spline=MAIN_USE_SPLINE,
+    use_log_y=MAIN_USE_LOG_Y,
+    reference_line_y=MAIN_REFERENCE_LINE_Y,
 )
 raw_fig = plot_radial_profile(
     tables,
     value_column="ds_raw",
     title_label=f"{label} - raw",
-    multiply_by_radius=MULTIPLY_BY_RADIUS,
-    point_errorbar_mode=USE_POINT_ERRORBAR_MODE,
+    multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
+    use_spline=MAIN_USE_SPLINE,
+    use_log_y=MAIN_USE_LOG_Y,
+    reference_line_y=MAIN_REFERENCE_LINE_Y,
 )
 if RANDOM_SUBTRACTION:
     rds_fig = plot_radial_profile(
         tables,
         value_column="ds_r",
         title_label=f"{label} - random",
-        multiply_by_radius=MULTIPLY_BY_RADIUS,
-        point_errorbar_mode=USE_POINT_ERRORBAR_MODE,
+        multiply_by_radius=RANDOM_MULTIPLY_BY_RADIUS,
+        use_spline=RANDOM_USE_SPLINE,
+        use_log_y=RANDOM_USE_LOG_Y,
+        reference_line_y=RANDOM_REFERENCE_LINE_Y,
     )
 # pair_fig = plot_pair_counts_vs_rp(tables)
 # factor_fig = plot_correction_factors_radial(tables)

@@ -43,7 +43,12 @@ def plot_radial_profile(
     value_column,
     title_label,
     multiply_by_radius=True,
-    point_errorbar_mode=False,
+    use_spline=True,
+    error_column="ds_err",
+    use_log_y=None,
+    reference_line_y=0.0,
+    y_label=None,
+    title_suffix=None,
     ax_list=None,
     label_text=None,
     label_index=0,
@@ -60,19 +65,21 @@ def plot_radial_profile(
         fig = axes[0].get_figure()
 
     palette = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    if use_log_y is None:
+        use_log_y = not multiply_by_radius
 
     for i, table in enumerate(tables):
         ax = axes[i]
         rp = np.asarray(table["rp"], dtype=float)
         value = np.asarray(table[value_column], dtype=float)
-        ds_err = np.asarray(table["ds_err"], dtype=float)
+        value_err = np.asarray(table[error_column], dtype=float)
 
         if multiply_by_radius:
             plot_y = rp * value
-            plot_yerr = rp * ds_err
+            plot_yerr = rp * value_err
         else:
             plot_y = value
-            plot_yerr = ds_err
+            plot_yerr = value_err
 
         order = np.argsort(rp)
         rp = rp[order]
@@ -95,8 +102,8 @@ def plot_radial_profile(
                 ax.grid(alpha=0.2, which="both")
             continue
 
-        if point_errorbar_mode:
-            if multiply_by_radius:
+        if not use_spline:
+            if not use_log_y:
                 if ax_list is None:
                     y_for_lim = np.concatenate([plot_y - plot_yerr, plot_y + plot_yerr])
                     y_for_lim = y_for_lim[np.isfinite(y_for_lim)]
@@ -122,7 +129,9 @@ def plot_radial_profile(
                     alpha=0.95,
                     label=label_text if i == 0 else None,
                 )
-                ax.axhline(0.0, color="0.35", lw=1.0, ls="--", zorder=0)
+                ax.axhline(
+                    reference_line_y, color="0.35", lw=1.0, ls="--", zorder=0
+                )
             else:
                 pos = plot_y > 0
                 rp_pos = rp[pos]
@@ -158,7 +167,7 @@ def plot_radial_profile(
                 ax.set_title(f"Lens bin {i}")
             continue
 
-        if multiply_by_radius:
+        if not use_log_y:
             x_dense = np.logspace(np.log10(rp.min()), np.log10(rp.max()), 300)
             x_log = np.log10(rp)
             if len(rp) >= 2:
@@ -203,7 +212,7 @@ def plot_radial_profile(
                         pad = 0.08 * (y_max - y_min)
                     ax.set_ylim(y_min - pad, y_max + pad)
 
-            ax.axhline(0.0, color="0.35", lw=1.0, ls="--", zorder=0)
+            ax.axhline(reference_line_y, color="0.35", lw=1.0, ls="--", zorder=0)
         else:
             pos = plot_y > 0
             rp_pos = rp[pos]
@@ -272,12 +281,22 @@ def plot_radial_profile(
         if ax_list is None:
             ax.set_title(f"Lens bin {i}")
 
-    if multiply_by_radius:
+    if y_label is not None:
+        ylabel = y_label
+    elif multiply_by_radius:
         ylabel = r"$R \times \Delta\Sigma\ [10^6\,M_{\odot}/\mathrm{pc}]$"
-        title_suffix = r"$R \times \Delta\Sigma$ Profiles"
-    else:
+    elif use_log_y:
         ylabel = r"$\Delta\Sigma\ [10^6\,M_{\odot}/\mathrm{pc}]$"
-        title_suffix = r"$\Delta\Sigma$ Profiles"
+    else:
+        ylabel = value_column
+
+    if title_suffix is None:
+        if multiply_by_radius:
+            title_suffix = r"$R \times \Delta\Sigma$ Profiles"
+        elif use_log_y:
+            title_suffix = r"$\Delta\Sigma$ Profiles"
+        else:
+            title_suffix = f"{value_column} Profiles"
 
     for ax in axes:
         ax.set_ylabel(ylabel)
