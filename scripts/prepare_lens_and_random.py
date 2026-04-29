@@ -46,7 +46,7 @@ SOURCE = "pdr3"  # Choose from CATALOG_SOURCES keys
 CATALOG_SOURCES = {
     "pdr3": {
         "label": "pdr3",
-        "lens_path": "/Users/xinq/redmapper_HSC/output/redmapper_run/rich_thre_10_15/run/hsc_run_redmapper_v0.9.1.dev2+g030802198_lgt05_catalog.fit",
+        "lens_path": "/Users/xinq/redmapper_HSC/output/redmapper_run/add_geo_mask/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260421_lgt05_catalog.fit",
         "random_path": "data/random_hectomap.fits",
         "random_multiplier": 1,
         "columns": {
@@ -99,9 +99,15 @@ CATALOG_SOURCES = {
 # - "top_counts": sort by col_rank and split sequentially by TOP_COUNTS.
 BINNING_MODE = "top_counts"  # "edges" or "top_counts"
 
+# -----------------------------------------------------------------------
+# EDGES
+
 # Used only when BINNING_MODE == "edges".
 COL_RANK_EDGES_RICHNESS = [6.0, 10.0, 20.0, 35.0, 120.0]
 COL_RANK_EDGES_MASS = [10.63, 10.8, 11.0, 11.2, 11.6]
+
+# -----------------------------------------------------------------------
+# TOP_COUNTS
 
 # Used only when BINNING_MODE == "top_counts".
 # Example: [x1, x2, x3, x4] means pick top x1 first, then top x2 from remaining, etc.
@@ -110,11 +116,13 @@ TOP_COUNTS = [50, 197, 662, 1165]
 # Used only when BINNING_MODE == "top_counts".
 # A multiplier for TOP_COUNTS. Example: 2 means [x1, x2, ...] -> [2*x1, 2*x2, ...].
 TOP_COUNTS_FACTOR = 0.810458
+# TOP_COUNTS_FACTOR = 1
 
 # Used only when BINNING_MODE == "top_counts".
 # "desc": larger col_rank is better (top first); "asc": smaller col_rank is better.
 TOP_SELECTION_ORDER = "desc"
 
+# -----------------------------------------------------------------------
 
 # Sky region limits (only for plotting and diagnostics, no effect on data)
 RA_MIN, RA_MAX = 210, 250.0
