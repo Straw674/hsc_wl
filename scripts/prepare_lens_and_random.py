@@ -40,7 +40,7 @@ else:
 # User-editable parameters
 # =========================
 
-SOURCE = "pdr3"  # Choose from CATALOG_SOURCES keys
+SOURCE = "s16a"  # Choose from CATALOG_SOURCES keys
 
 # Path can be absolute or relative to the project root.
 CATALOG_SOURCES = {
@@ -58,7 +58,7 @@ CATALOG_SOURCES = {
     },
     "s16a": {
         "label": "s16a",
-        "lens_path": "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits",
+        "lens_path": "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
         "random_path": "data/random_hectomap.fits",
         "random_multiplier": 1,
         "columns": {
@@ -111,7 +111,8 @@ COL_RANK_EDGES_MASS = [10.63, 10.8, 11.0, 11.2, 11.6]
 
 # Used only when BINNING_MODE == "top_counts".
 # Example: [x1, x2, x3, x4] means pick top x1 first, then top x2 from remaining, etc.
-TOP_COUNTS = [50, 197, 662, 1165]
+# TOP_COUNTS = [50, 197, 662, 1165]
+TOP_COUNTS = [53, 196, 660, 1159]
 
 # Used only when BINNING_MODE == "top_counts".
 # A multiplier for TOP_COUNTS. Example: 2 means [x1, x2, ...] -> [2*x1, 2*x2, ...].
