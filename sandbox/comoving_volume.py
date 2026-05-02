@@ -141,7 +141,8 @@ print(result2)
 print(f"Ratio of volumes: {result2 / result:.6f}")
 
 # %%
-for z in np.linspace(0.1, 0.6, 6):
+# for z in np.linspace(0.1, 0.6, 6):
+for z in [0.50, 0.52]:
     v = Planck18.comoving_volume(z).to(u.Gpc**3)
     print(f"Comoving volume to z={z}: {v:.3f}")
 
