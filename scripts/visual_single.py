@@ -37,20 +37,24 @@ else:
 
 # %%
 
-label = "pdr3"
+label = "s16a"
 RANDOM_SUBTRACTION = False
 
 # Main profile style.
 MAIN_MULTIPLY_BY_RADIUS = True
-MAIN_USE_LOG_Y = False
-MAIN_USE_SPLINE = True
+MAIN_USE_LOG_Y = not MAIN_MULTIPLY_BY_RADIUS
+MAIN_USE_SPLINE = False
 MAIN_REFERENCE_LINE_Y = 0.0
 
 # Random-subtraction profile style.
-RANDOM_MULTIPLY_BY_RADIUS = True
-RANDOM_USE_LOG_Y = False
-RANDOM_USE_SPLINE = True
-RANDOM_REFERENCE_LINE_Y = 0.0
+if RANDOM_SUBTRACTION:
+    RANDOM_MULTIPLY_BY_RADIUS = True
+    RANDOM_USE_LOG_Y = False
+    RANDOM_USE_SPLINE = True
+    RANDOM_REFERENCE_LINE_Y = 0.0
+
+# whether plot raw
+PLOT_RAW = False
 
 
 result_dir = root_path / f"output/{label}/dsigma"
@@ -107,15 +111,17 @@ basic_fig = plot_radial_profile(
     use_log_y=MAIN_USE_LOG_Y,
     reference_line_y=MAIN_REFERENCE_LINE_Y,
 )
-raw_fig = plot_radial_profile(
-    tables,
-    value_column="ds_raw",
-    title_label=f"{label} - raw",
-    multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
-    use_spline=MAIN_USE_SPLINE,
-    use_log_y=MAIN_USE_LOG_Y,
-    reference_line_y=MAIN_REFERENCE_LINE_Y,
-)
+
+if PLOT_RAW:
+    raw_fig = plot_radial_profile(
+        tables,
+        value_column="ds_raw",
+        title_label=f"{label} - raw",
+        multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
+        use_spline=MAIN_USE_SPLINE,
+        use_log_y=MAIN_USE_LOG_Y,
+        reference_line_y=MAIN_REFERENCE_LINE_Y,
+    )
 if RANDOM_SUBTRACTION:
     rds_fig = plot_radial_profile(
         tables,
