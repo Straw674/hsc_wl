@@ -10,9 +10,12 @@ from joblib import Parallel, delayed
 
 from astropy.table import Table
 
-from dsigma.stacking import excess_surface_density
-from dsigma.jackknife import add_continous_fields
-from dsigma.jackknife import jackknife_field_centers, add_jackknife_fields
+try:
+    from dsigma.stacking import excess_surface_density
+    from dsigma.jackknife import add_continous_fields
+    from dsigma.jackknife import jackknife_field_centers, add_jackknife_fields
+except ImportError:
+    pass
 
 
 __all__ = ['dsigma_no_wsys', 'dsigma_jk_resample', 'dsigma_bootstrap', 'dsigma_with_mask',

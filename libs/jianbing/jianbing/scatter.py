@@ -71,9 +71,19 @@ def get_scatter_summary(sigma, rad, obs_bin, sim_use, cov_type='jk',
 
     # Get best-fit scatter using cumulative distribution
     try:
-        likelihood = np.exp(-0.5 * summary['chi2_' + cov_type])
+        chi2_arr = summary['chi2_' + cov_type]
+        min_chi2 = np.nanmin(chi2_arr)
+        # Shift carefully to avoid underflow
+        likelihood = np.exp(-0.5 * (chi2_arr - min_chi2))
+        
         cum_curve = np.cumsum(likelihood / np.nansum(likelihood))
-        cum_inter = interpolate.interp1d(cum_curve, sigma, kind='slinear')
+        
+        # FIX: float64 cumulative sum plateau issue (drop identical consecutive values)
+        # np.unique returns the first occurrence of each unique value
+        cum_curve_uniq, uniq_idx = np.unique(cum_curve, return_index=True)
+        sigma_uniq = sigma[uniq_idx]
+        
+        cum_inter = interpolate.interp1d(cum_curve_uniq, sigma_uniq, kind='slinear')
         summary['sig_low_' + cov_type] = cum_inter(0.16)[()]
         summary['sig_upp_' + cov_type] = cum_inter(0.84)[()]
         summary['sig_med_' + cov_type] = cum_inter(0.50)[()]

@@ -10,6 +10,7 @@ dependencies = [
 	"healpy>=1.18.1",
 	"healsparse>=1.11.1",
 	"selasviz>=0.1.12",
+	"jianbing",
 ]
 
 [dependency-groups]
@@ -18,3 +19,6 @@ dev = ["ipykernel>=7.2.0", "matplotlib>=3.10.8"]
 # ignore F401, F403 and F405 in ruff
 [tool.ruff]
 ignore = ["F401", "F403", "F405"]
+
+[tool.uv.sources]
+jianbing = { path = "libs/jianbing", editable = true }

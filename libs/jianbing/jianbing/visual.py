@@ -463,6 +463,7 @@ def sample_over_mass_plane(data, mask=None, cmap='OrRd', xlim=None, ylim=None,
         return fig
     return ax
 
+
 def compare_dsigma_profiles(dsig_ref, dsig_cmp, sim_dsig, sim_mhalo, sig_type='bt',
                             compare_to_model=True, use_ref_range=False,
                             label_ref=r'$\rm Ref$', label_cmp=r'$\rm Test$',
@@ -783,6 +784,7 @@ def compare_dsigma_profiles(dsig_ref, dsig_cmp, sim_dsig, sim_mhalo, sig_type='b
             tick.label.set_fontsize(30)
 
     return fig
+
 
 def show_split_result(dsig, x_arr, y_arr, mask_list, mask=None, line_result=None,
                       x_label=r'$\rm X$', y_label=r'$\rm Y$', info_1=None, info_2=None,
