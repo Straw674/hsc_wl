@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
-import argparse
+# %%
 import glob
 import os
 
 import numpy as np
-import yaml
 from astropy.cosmology import Planck15
 from astropy.table import Table
 from dsigma.helpers import dsigma_table
@@ -14,11 +12,143 @@ from dsigma.stacking import excess_surface_density
 from dsigma.surveys import hsc as hsc_survey
 
 
-# ---------- runtime settings ----------
+# ---------- Runtime Settings ----------
 # Switch this label before each run when using profile-based YAML config.
-RUN_PROFILE_LABEL = "pdr3"
+RUN_PROFILE_LABEL = "s16a"
+
+# ---------- Misc ----------
+NJOBS = 12
+TOMOGRAPHY = False
+COMOVING = False
+LENS_SOURCE_CUT = 0.1
+VERBOSE = True
+NJACKKNIFE = 100
+
+# ---------- Lens ----------
+LENS_SURVEY = "hsc"
+
+# NOTE: check if the redshift bins needs adjustment!
+LENS_Z_BINS = [0.19, 0.52]
+
+LENS_RPMIN = 0.10
+LENS_RPMAX = 20.0
+LENS_N_RPBINS = 11
+LENS_LINLOG = "log"
+
+# Column names in lens catalog
+LENS_Z_COL = "z"
+LENS_RA_COL = "ra"
+LENS_DEC_COL = "dec"
+
+# ---------- Source ----------
+SOURCE_SURVEY = "hsc"
+SOURCE_FILE = "/Users/xinq/dev/repos/hsc_wl/data/hsc_y3.fits"
+SOURCE_NZ_FILE = "/Users/xinq/dev/repos/hsc_wl/data/nz.fits"
+
+# ---------- Paths ----------
+LABEL_PATHS = {
+    "pdr3": {
+        "savepath": "/Users/xinq/dev/repos/hsc_wl/output/pdr3/dsigma/",
+        "lens_files": [
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin1.fits",
+        ],
+        "random_files": [
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin1.fits",
+        ],
+    },
+    "s16a": {
+        "savepath": "/Users/xinq/dev/repos/hsc_wl/output/s16a/dsigma/",
+        "lens_files": [
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin1.fits",
+        ],
+        "random_files": [
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin1.fits",
+        ],
+    },
+    "s16a_mass": {
+        "savepath": "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/dsigma/",
+        "lens_files": [
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin1.fits",
+        ],
+        "random_files": [
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin1.fits",
+        ],
+    },
+    "s16a_forced": {
+        "savepath": "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/dsigma/",
+        "lens_files": [
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin1.fits",
+        ],
+        "random_files": [
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin1.fits",
+        ],
+    },
+}
+
+# ---------- Corrections ----------
+CORRECTIONS = {
+    "sdss": {
+        "photo_z_dilution_correction": True,
+        "boost_correction": False,
+        "scalar_shear_response_correction": True,
+        "matrix_shear_response_correction": False,
+        "shear_responsivity_correction": True,
+        "hsc_selection_bias_correction": False,
+        "random_subtraction": True,
+    },
+    "des": {
+        "photo_z_dilution_correction": False,
+        "boost_correction": False,
+        "scalar_shear_response_correction": True,
+        "matrix_shear_response_correction": True,
+        "shear_responsivity_correction": False,
+        "hsc_selection_bias_correction": False,
+        "random_subtraction": True,
+    },
+    "kids": {
+        "photo_z_dilution_correction": False,
+        "boost_correction": False,
+        "scalar_shear_response_correction": True,
+        "matrix_shear_response_correction": False,
+        "shear_responsivity_correction": False,
+        "hsc_selection_bias_correction": False,
+        "random_subtraction": True,
+    },
+    "hsc": {
+        "scalar_shear_response_correction": True,
+        "shear_responsivity_correction": True,
+        "selection_bias_correction": True,
+        "random_subtraction": False,
+        "boost_correction": False,
+    },
+}
 
 
+# %%
 def find_one(path_or_pattern, description):
     paths = (
         sorted(glob.glob(path_or_pattern))
@@ -111,90 +241,68 @@ def assign_jackknife_fields_with_fallback(
 
 
 # ---------- core ----------
-def run_from_config(config_path, run_label=RUN_PROFILE_LABEL):
-    """Load and parse YAML configuration file."""
-    with open(config_path, "r") as f:
-        cfg = yaml.safe_load(f)
-
+def run_analysis(run_label=RUN_PROFILE_LABEL):
+    """Run dsigma analysis using the global constants."""
     print(f"[config] run_label: {run_label}")
 
-    # Validate required top-level sections
-    for sec in (
-        "misc",
-        "lens_galaxies",
-        "source_galaxies",
-        "label_paths",
-        "corrections",
-    ):
-        if sec not in cfg:
-            raise KeyError(f"Missing required section: {sec}")
-
-    label_paths = cfg["label_paths"]
-    if run_label not in label_paths:
-        available = ", ".join(sorted(label_paths.keys()))
+    if run_label not in LABEL_PATHS:
+        available = ", ".join(sorted(LABEL_PATHS.keys()))
         raise KeyError(
             f"Unknown run profile label: {run_label}. Available labels: {available}"
         )
-    run_paths = label_paths[run_label]
+    run_paths = LABEL_PATHS[run_label]
 
     for key in ("savepath", "lens_files", "random_files"):
         if key not in run_paths:
-            raise KeyError(f"Missing required key in label_paths.{run_label}: {key}")
+            raise KeyError(f"Missing required key in LABEL_PATHS.{run_label}: {key}")
 
-    # ---- [misc] (all required, no defaults)
-    misc = cfg["misc"]
+    # ---- [misc]
     savepath = run_paths["savepath"]
     os.makedirs(savepath, exist_ok=True)
 
-    njobs = int(misc["njobs"])
-    comoving = bool(misc["comoving"])
-    lens_source_cut = float(misc["lens_source_cut"])
-    n_jk = int(misc["njackknife"])
+    njobs = NJOBS
+    comoving = COMOVING
+    lens_source_cut = LENS_SOURCE_CUT
+    n_jk = NJACKKNIFE
 
     # ---- [lens_galaxies]
-    lenssec = cfg["lens_galaxies"]
-    lens_survey = lenssec["surveys"].strip()
-    z_bins = np.array(lenssec["z_bins"])
-    rpmin = float(lenssec["rpmin"])
-    rpmax = float(lenssec["rpmax"])
-    n_rpbins = int(lenssec["n_rpbins"])
-    linlog = lenssec["linlog"].lower()
+    lens_survey = LENS_SURVEY.strip()
+    z_bins = np.array(LENS_Z_BINS)
+    rpmin = LENS_RPMIN
+    rpmax = LENS_RPMAX
+    n_rpbins = LENS_N_RPBINS
+    linlog = LENS_LINLOG.lower()
     if linlog not in ("lin", "log"):
-        raise ValueError('[lens_galaxies] linlog must be "lin" or "log"')
+        raise ValueError('LENS_LINLOG must be "lin" or "log"')
 
     lens_files = [find_one(p, "lens file") for p in run_paths["lens_files"]]
     rand_files = [find_one(p, "random file") for p in run_paths["random_files"]]
-    lens_z_col = lenssec["z_col"]
-    lens_ra_col = lenssec["ra_col"]
-    lens_dec_col = lenssec["dec_col"]
+    lens_z_col = LENS_Z_COL
+    lens_ra_col = LENS_RA_COL
+    lens_dec_col = LENS_DEC_COL
 
     # ---- [source_galaxies]
-    srcsec = cfg["source_galaxies"]
-    src_survey = srcsec["surveys"].strip()
-    src_file = find_one(srcsec["source_file"], "source catalog")
-    nz_file = find_one(srcsec["nz_file"], "n(z) file")
+    src_survey = SOURCE_SURVEY.strip()
+    src_file = find_one(SOURCE_FILE, "source catalog")
+    nz_file = find_one(SOURCE_NZ_FILE, "n(z) file")
 
     # ---- survey-specific corrections
-    if "corrections" not in cfg:
-        raise KeyError("Missing required section: corrections")
-    corr_all = cfg["corrections"]
-    if src_survey not in corr_all:
+    if src_survey not in CORRECTIONS:
         raise KeyError(
             f"Missing required correction config for source survey: {src_survey}"
         )
 
+    corr_all = CORRECTIONS[src_survey]
     corr = {
-        "boost_correction": bool(corr_all[src_survey]["boost_correction"]),
+        "boost_correction": bool(corr_all["boost_correction"]),
         "scalar_shear_response_correction": bool(
-            corr_all[src_survey]["scalar_shear_response_correction"]
+            corr_all["scalar_shear_response_correction"]
         ),
         "shear_responsivity_correction": bool(
-            corr_all[src_survey]["shear_responsivity_correction"]
+            corr_all["shear_responsivity_correction"]
         ),
-        "random_subtraction": bool(corr_all[src_survey]["random_subtraction"]),
-        "selection_bias_correction": bool(
-            corr_all[src_survey]["selection_bias_correction"]
-        ),
+        "random_subtraction": bool(corr_all["random_subtraction"]),
+        "selection_bias_correction": bool(corr_all["selection_bias_correction"]),
     }
 
     # ---------------- load catalogs ----------------
@@ -382,9 +490,7 @@ def run_from_config(config_path, run_label=RUN_PROFILE_LABEL):
     print("[done]")
 
 
+# %%
 # ---------- CLI ----------
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="Run dsigma from YAML config.")
-    ap.add_argument("config", help="Path to YAML configuration file.")
-    args = ap.parse_args()
-    run_from_config(args.config, run_label=RUN_PROFILE_LABEL)
+    run_analysis(run_label=RUN_PROFILE_LABEL)
