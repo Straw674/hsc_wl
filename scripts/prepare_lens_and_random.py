@@ -48,7 +48,7 @@ CATALOG_SOURCES = {
         "label": "pdr3",
         "lens_path": "/Users/xinq/redmapper_HSC/output/redmapper_run/add_geo_mask/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260421_lgt05_catalog.fit",
         "random_path": "data/random_hectomap.fits",
-        "random_multiplier": 1,
+        "random_multiplier": 20,
         "columns": {
             "col_rank": "lambda",
             "ra": "ra",
@@ -59,8 +59,8 @@ CATALOG_SOURCES = {
     "s16a": {
         "label": "s16a",
         "lens_path": "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
-        "random_path": "data/random_hectomap.fits",
-        "random_multiplier": 1,
+        "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
+        "random_multiplier": 20,
         "columns": {
             "col_rank": "lambda",
             "ra": "ra",
@@ -71,8 +71,8 @@ CATALOG_SOURCES = {
     "s16a_mass": {
         "label": "s16a_mass",
         "lens_path": "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits",
-        "random_path": "data/random_hectomap.fits",
-        "random_multiplier": 1,
+        "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
+        "random_multiplier": 20,
         "columns": {
             "col_rank": "logm_50_100",
             "ra": "ra",
@@ -83,8 +83,8 @@ CATALOG_SOURCES = {
     "s16a_forced": {
         "label": "s16a_forced",
         "lens_path": "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits",
-        "random_path": "data/random_hectomap.fits",
-        "random_multiplier": 1,
+        "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
+        "random_multiplier": 20,
         "columns": {
             "col_rank": "lam",
             "ra": "ra",
@@ -112,22 +112,20 @@ COL_RANK_EDGES_MASS = [10.63, 10.8, 11.0, 11.2, 11.6]
 # Used only when BINNING_MODE == "top_counts".
 # Example: [x1, x2, x3, x4] means pick top x1 first, then top x2 from remaining, etc.
 # TOP_COUNTS = [50, 197, 662, 1165]
+# exactly same as the number in topn paper
 TOP_COUNTS = [53, 196, 660, 1159]
 
 # Used only when BINNING_MODE == "top_counts".
 # A multiplier for TOP_COUNTS. Example: 2 means [x1, x2, ...] -> [2*x1, 2*x2, ...].
-TOP_COUNTS_FACTOR = 0.810458
-# TOP_COUNTS_FACTOR = 1
+TOP_COUNTS_FACTOR = 1
+if SOURCE == "pdr3":
+    TOP_COUNTS_FACTOR = 0.810458
 
 # Used only when BINNING_MODE == "top_counts".
 # "desc": larger col_rank is better (top first); "asc": smaller col_rank is better.
 TOP_SELECTION_ORDER = "desc"
 
 # -----------------------------------------------------------------------
-
-# Sky region limits (only for plotting and diagnostics, no effect on data)
-RA_MIN, RA_MAX = 210, 250.0
-DEC_MIN, DEC_MAX = 42.0, 44.5
 
 # Set to an integer for reproducibility (e.g., 42), or None for random seed.
 RNG_SEED = None
@@ -142,30 +140,6 @@ def resolve_path(path_value, root_path):
     if path_obj.is_absolute():
         return path_obj
     return root_path / path_obj
-
-
-def calculate_celestial_area(np, ra1, ra2, dec1, dec2):
-    """Area (deg^2) of a spherical lon/lat rectangle."""
-    if ra1 > ra2:
-        ra1, ra2 = ra2, ra1
-    if dec1 > dec2:
-        dec1, dec2 = dec2, dec1
-    delta_ra_rad = np.deg2rad(ra2 - ra1)
-    dec1_rad = np.deg2rad(dec1)
-    dec2_rad = np.deg2rad(dec2)
-    area_sr = delta_ra_rad * (np.sin(dec2_rad) - np.sin(dec1_rad))
-    area = area_sr * (180.0 / np.pi) ** 2
-    return abs(area)
-
-
-def max_cdf_diff(np, a, b):
-    """Kolmogorov-like max CDF distance without scipy."""
-    a_sorted = np.sort(np.asarray(a))
-    b_sorted = np.sort(np.asarray(b))
-    grid = np.unique(np.concatenate([a_sorted, b_sorted]))
-    cdf_a = np.searchsorted(a_sorted, grid, side="right") / len(a_sorted)
-    cdf_b = np.searchsorted(b_sorted, grid, side="right") / len(b_sorted)
-    return float(np.max(np.abs(cdf_a - cdf_b)))
 
 
 def gaussian_kde_1d(np, values, grid=None, num_points=256, bandwidth=None):
@@ -226,6 +200,19 @@ def show_alignment_plot(
     lens_count = len(lens_out)
     random_count = len(random_out)
 
+    # Determine plot limits from data
+    ra_min = min(np.min(lens_out[ra_col]), np.min(random_out[ra_col]))
+    ra_max = max(np.max(lens_out[ra_col]), np.max(random_out[ra_col]))
+    dec_min = min(np.min(lens_out[dec_col]), np.min(random_out[dec_col]))
+    dec_max = max(np.max(lens_out[dec_col]), np.max(random_out[dec_col]))
+
+    # Add small padding
+    ra_pad = (ra_max - ra_min) * 0.05 if ra_max != ra_min else 1.0
+    dec_pad = (dec_max - dec_min) * 0.05 if dec_max != dec_min else 1.0
+
+    plot_ra_lim = (ra_min - ra_pad, ra_max + ra_pad)
+    plot_dec_lim = (dec_min - dec_pad, dec_max + dec_pad)
+
     axes[0].scatter(
         lens_out[ra_col],
         lens_out[dec_col],
@@ -237,22 +224,22 @@ def show_alignment_plot(
     axes[0].set_title(f"{lens_label} footprint (N={lens_count})")
     axes[0].set_xlabel("RA")
     axes[0].set_ylabel("Dec")
-    axes[0].set_xlim(RA_MIN, RA_MAX)
-    axes[0].set_ylim(DEC_MIN, DEC_MAX)
+    axes[0].set_xlim(plot_ra_lim)
+    axes[0].set_ylim(plot_dec_lim)
 
     h2 = axes[1].hexbin(
         random_out[ra_col],
         random_out[dec_col],
         gridsize=45,
-        extent=(RA_MIN, RA_MAX, DEC_MIN, DEC_MAX),
+        extent=(ra_min, ra_max, dec_min, dec_max),
         mincnt=1,
         cmap="Blues",
     )
     axes[1].set_title(f"Random footprint (N={random_count})")
     axes[1].set_xlabel("RA")
     axes[1].set_ylabel("Dec")
-    axes[1].set_xlim(RA_MIN, RA_MAX)
-    axes[1].set_ylim(DEC_MIN, DEC_MAX)
+    axes[1].set_xlim(plot_ra_lim)
+    axes[1].set_ylim(plot_dec_lim)
     fig.colorbar(h2, ax=axes[1], label="Counts")
 
     z_min = float(min(np.min(lens_out[z_col]), np.min(random_out[z_col])))
@@ -472,14 +459,18 @@ def run_pipeline(source_name):
         print(
             f"Warning: col_rank '{col_rank}' not found in lens catalog; This may cause issues with binning and random selection."
         )
-
+    print("-" * 80)
     print(f"Using source: {source_name}")
+    print(f"Column used for ranking: {col_rank}")
+    print("-" * 80)
     print(f"Lens file: {lens_path}")
     print(f"Random file: {random_path}")
     print(f"Lens columns: {lens.colnames}")
     print(f"Random columns: {random.colnames}")
 
     binning_settings = get_binning_settings(np, source_name)
+
+    print("-" * 80)
     if binning_settings["mode"] == "edges":
         print(
             f"Binning mode=edges, COL_RANK_EDGES={binning_settings['col_rank_edges']}"
@@ -493,24 +484,13 @@ def run_pipeline(source_name):
             f"TOP_SELECTION_ORDER={binning_settings['top_selection_order']}"
         )
 
-    sky_area_deg2 = calculate_celestial_area(np, RA_MIN, RA_MAX, DEC_MIN, DEC_MAX)
-    print(f"Sky area of the target region: {sky_area_deg2:.4f} deg^2")
-
     rng = np.random.default_rng(RNG_SEED)
 
     output_dir = root_path / f"output/{cfg['label']}/prepare"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    random_region_mask = (
-        (random[col_ra] >= RA_MIN)
-        & (random[col_ra] <= RA_MAX)
-        & (random[col_dec] >= DEC_MIN)
-        & (random[col_dec] <= DEC_MAX)
-    )
-    random_region = random[random_region_mask]
-
-    if len(random_region) == 0:
-        raise ValueError("No random points found in the target RA/Dec region.")
+    if len(random) == 0:
+        raise ValueError("No random points found in the input catalog.")
 
     bin_slices = build_bin_slices(
         np=np,
@@ -521,6 +501,9 @@ def run_pipeline(source_name):
         top_counts=binning_settings["top_counts"],
         top_selection_order=binning_settings["top_selection_order"],
     )
+
+    saved_lens_files = []
+    saved_random_files = []
 
     for bin_name, lens_bin, low_edge, high_edge, bin_desc in bin_slices:
         n_bin = len(lens_bin)
@@ -537,18 +520,8 @@ def run_pipeline(source_name):
             binning_mode=binning_settings["mode"],
         )
 
-        in_region = (
-            (lens_bin[col_ra] >= RA_MIN)
-            & (lens_bin[col_ra] <= RA_MAX)
-            & (lens_bin[col_dec] >= DEC_MIN)
-            & (lens_bin[col_dec] <= DEC_MAX)
-        )
-        n_in_region = int(np.sum(in_region))
-        density = n_in_region / sky_area_deg2
-
-        print(
-            f"{bin_name} ({bin_desc}) -> N_total={n_bin}, N_region={n_in_region}, density={density:.6f} deg^-2"
-        )
+        print("-" * 80)
+        print(f"{bin_name} ({bin_desc}) -> N_total={n_bin}")
         print(f"{bin_name} rank boundary -> {boundary_text}")
 
         lens_out = Table()
@@ -558,24 +531,24 @@ def run_pipeline(source_name):
         lens_out["wsys"] = np.ones(n_bin, dtype=float)
 
         n_random = n_bin * int(cfg["random_multiplier"])
-        replace_ra_dec = n_random > len(random_region)
-        rand_idx = rng.choice(len(random_region), size=n_random, replace=replace_ra_dec)
+        replace_ra_dec = n_random > len(random)
+        rand_idx = rng.choice(len(random), size=n_random, replace=replace_ra_dec)
         z_idx = rng.choice(n_bin, size=n_random, replace=True)
 
         random_out = Table()
-        random_out["ra"] = random_region[col_ra][rand_idx]
-        random_out["dec"] = random_region[col_dec][rand_idx]
+        random_out["ra"] = random[col_ra][rand_idx]
+        random_out["dec"] = random[col_dec][rand_idx]
         random_out["z"] = lens_bin[col_z][z_idx]
         random_out["wsys"] = np.ones(n_random, dtype=float)
-
-        z_mean_diff = abs(np.mean(lens_out["z"]) - np.mean(random_out["z"]))
-        z_cdf_diff = max_cdf_diff(np, lens_out["z"], random_out["z"])
 
         lens_file = output_dir / f"{lens_label}_{bin_name}.fits"
         random_file = output_dir / f"{lens_label}_random_{bin_name}.fits"
 
         lens_out.write(lens_file, overwrite=True)
         random_out.write(random_file, overwrite=True)
+
+        saved_lens_files.append(str(lens_file))
+        saved_random_files.append(str(random_file))
 
         if MAKE_PLOTS:
             show_alignment_plot(
@@ -592,13 +565,10 @@ def run_pipeline(source_name):
                 bin_desc=bin_desc,
             )
 
-        print(f"{lens_label} Saved: {lens_file}")
-        print(f"Random Saved: {random_file}")
-        print(
-            f"{bin_name} alignment check -> "
-            f"N_{lens_label}={n_bin}, N_random={n_random}, "
-            f"|mean(z)_diff|={z_mean_diff:.6e}, max_cdf_diff={z_cdf_diff:.6e}"
-        )
+    print("\n" + "=" * 30)
+
+    print(f"Lenses saved to: {', '.join(saved_lens_files)}")
+    print(f"Randoms saved to: {', '.join(saved_random_files)}")
 
 
 if __name__ == "__main__":

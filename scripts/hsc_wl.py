@@ -14,7 +14,7 @@ from dsigma.surveys import hsc as hsc_survey
 
 # ---------- Runtime Settings ----------
 # Switch this label before each run when using profile-based YAML config.
-RUN_PROFILE_LABEL = "s16a"
+RUN_PROFILE_LABEL = "pdr3"
 
 # ---------- Misc ----------
 NJOBS = 12
@@ -29,6 +29,8 @@ LENS_SURVEY = "hsc"
 
 # NOTE: check if the redshift bins needs adjustment!
 LENS_Z_BINS = [0.19, 0.52]
+if RUN_PROFILE_LABEL == "pdr3":
+    LENS_Z_BINS = [0.10, 0.60]
 
 LENS_RPMIN = 0.10
 LENS_RPMAX = 20.0
@@ -142,7 +144,7 @@ CORRECTIONS = {
         "scalar_shear_response_correction": True,
         "shear_responsivity_correction": True,
         "selection_bias_correction": True,
-        "random_subtraction": False,
+        "random_subtraction": True,
         "boost_correction": False,
     },
 }
@@ -285,6 +287,8 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
     src_survey = SOURCE_SURVEY.strip()
     src_file = find_one(SOURCE_FILE, "source catalog")
     nz_file = find_one(SOURCE_NZ_FILE, "n(z) file")
+
+    print(f"lens_z: {lens_z_col}")
 
     # ---- survey-specific corrections
     if src_survey not in CORRECTIONS:
@@ -481,11 +485,23 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
         )
         result["ds_err"] = np.sqrt(np.diag(cov))
 
-        out_csv = os.path.join(
-            savepath, f"{src_survey.lower()}_{lens_survey or 'lenses'}_lens{i}_lens.csv"
+        out_fits = os.path.join(
+            savepath,
+            f"{src_survey.lower()}_{lens_survey or 'lenses'}_lens{i}_lens.fits",
         )
-        result.write(out_csv, overwrite=True)
-        print(f"  wrote: {out_csv}")
+
+        # Create the HDU list with the full result table and the covariance matrix
+        from astropy.io import fits
+
+        hdul = fits.HDUList(
+            [
+                fits.PrimaryHDU(),
+                fits.BinTableHDU(result, name="PROFILE"),
+                fits.ImageHDU(cov, name="JK_COV"),
+            ]
+        )
+        hdul.writeto(out_fits, overwrite=True)
+        print(f"  wrote: {out_fits}")
 
     print("[done]")
 
