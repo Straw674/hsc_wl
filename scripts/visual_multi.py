@@ -37,11 +37,15 @@ else:
 
 # %%
 
-labels_to_compare = ["s16a", "pdr3", "s16a_forced"]
+# labels_to_compare = ["s16a_mass", "huang2022_logm_50_100"]
+# labels_to_compare = ["s16a", "huang2022_redm_hsc"]
+labels_to_compare = ["s16a_mass", "s16a", "pdr3"]
+
+
 # Main comparison style.
 MAIN_MULTIPLY_BY_RADIUS = True
-MAIN_USE_LOG_Y = False
-MAIN_USE_SPLINE = True
+MAIN_USE_LOG_Y = not MAIN_MULTIPLY_BY_RADIUS
+MAIN_USE_SPLINE = False
 MAIN_REFERENCE_LINE_Y = 0.0
 
 
@@ -188,3 +192,68 @@ if loaded_tables:
         y=0.996,
     )
     ratio_fig.tight_layout()
+    plt.show()
+
+
+# %%
+def calculate_comparison_statistics(present_labels, loaded_tables):
+    if len(loaded_tables) <= 1:
+        return
+
+    print("\n" + "=" * 70)
+    print(f"{'Statistical Comparison (Chi-Square)':^70}")
+    print("=" * 70)
+
+    # Calculate chi2 for all unique pairs (n*(n-1)/2 combinations)
+    for i in range(len(present_labels)):
+        for j in range(i + 1, len(present_labels)):
+            label_1, tables_1 = present_labels[i], loaded_tables[i]
+            label_2, tables_2 = present_labels[j], loaded_tables[j]
+
+            print(f"\nComparing '{label_2}' vs '{label_1}':")
+            chi2_total = 0.0
+            ndof_total = 0
+
+            for bin_idx, (tab_2, tab_1) in enumerate(zip(tables_2, tables_1)):
+                t_2 = tab_2.copy()
+                t_1 = tab_1.copy()
+                t_2.sort("rp")
+                t_1.sort("rp")
+
+                ds_1 = np.asarray(t_1["ds"], dtype=float)
+                err_1 = np.asarray(t_1["ds_err"], dtype=float)
+                ds_2 = np.asarray(t_2["ds"], dtype=float)
+                err_2 = np.asarray(t_2["ds_err"], dtype=float)
+
+                err_comb2 = err_1**2 + err_2**2
+                mask = (
+                    np.isfinite(ds_1)
+                    & np.isfinite(ds_2)
+                    & np.isfinite(err_comb2)
+                    & (err_comb2 > 0)
+                )
+
+                if np.any(mask):
+                    chi2_bin = np.sum(
+                        ((ds_2[mask] - ds_1[mask]) ** 2) / err_comb2[mask]
+                    )
+                    ndof_bin = np.sum(mask)
+                    chi2_total += chi2_bin
+                    ndof_total += ndof_bin
+                    red_chi2 = chi2_bin / ndof_bin
+                    print(
+                        f"  Bin {bin_idx}: chi2 = {chi2_bin:7.2f} | ndof = {ndof_bin:2d} | red_chi2 = {red_chi2:6.2f}"
+                    )
+                else:
+                    print(f"  Bin {bin_idx}: No valid data points.")
+
+            if ndof_total > 0:
+                print("-" * 70)
+                print(
+                    f"  OVERALL: chi2 = {chi2_total:7.2f} | ndof = {ndof_total:3d} | red_chi2 = {chi2_total / ndof_total:6.2f}"
+                )
+            print("-" * 70)
+
+
+if loaded_tables:
+    calculate_comparison_statistics(present_labels, loaded_tables)

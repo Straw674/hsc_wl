@@ -38,7 +38,13 @@ else:
 # %%
 
 label = "s16a"
-RANDOM_SUBTRACTION = False
+
+# Whether to plot random and raw\
+PLOT_RANDOM = True
+PLOT_RAW = False
+
+if label.startswith("huang2022"):
+    PLOT_RANDOM = False
 
 # Main profile style.
 MAIN_MULTIPLY_BY_RADIUS = True
@@ -47,60 +53,25 @@ MAIN_USE_SPLINE = False
 MAIN_REFERENCE_LINE_Y = 0.0
 
 # Random-subtraction profile style.
-if RANDOM_SUBTRACTION:
-    RANDOM_MULTIPLY_BY_RADIUS = True
+if PLOT_RANDOM:
+    RANDOM_MULTIPLY_BY_RADIUS = False
     RANDOM_USE_LOG_Y = False
-    RANDOM_USE_SPLINE = True
+    RANDOM_USE_SPLINE = False
     RANDOM_REFERENCE_LINE_Y = 0.0
-
-# whether plot raw
-PLOT_RAW = False
 
 
 result_dir = root_path / f"output/{label}/dsigma"
 tables = load_result_tables(result_dir)
 
-expected_cols = [
-    "rp_min",
-    "rp_max",
-    "n_pairs",
-    "rp",
-    "ds_raw",
-    "ds",
-    "z_l",
-    "z_s",
-    "1+m",
-    "2R",
-    "1+m_sel",
-    "ds_err",
-]
-if RANDOM_SUBTRACTION:
+expected_cols = ["rp", "ds", "ds_err"]
+if PLOT_RANDOM:
     expected_cols.append("ds_r")
-print("Columns in result table:")
-print(tables[0].colnames)
+if PLOT_RAW:
+    expected_cols.append("ds_raw")
+
 missing_cols = [c for c in expected_cols if c not in tables[0].colnames]
 if missing_cols:
     raise KeyError(f"Missing expected columns: {missing_cols}")
-
-column_meaning = {
-    "rp_min": "radial bin lower edge",
-    "rp_max": "radial bin upper edge",
-    "n_pairs": "number of lens-source pairs",
-    "rp": "radial bin center",
-    "ds_raw": "raw DeltaSigma before all enabled corrections",
-    "ds": "corrected DeltaSigma (main WL signal)",
-    "z_l": "weighted mean lens redshift",
-    "z_s": "weighted mean source redshift",
-    "1+m": "multiplicative shear-bias factor",
-    "2R": "shear responsivity factor",
-    "1+m_sel": "selection-bias correction factor",
-    "ds_r": "random-point DeltaSigma term",
-    "ds_err": "jackknife error on ds",
-}
-
-print("\nColumn meanings:")
-for k in expected_cols:
-    print(f"- {k:8s}: {column_meaning[k]}")
 
 basic_fig = plot_radial_profile(
     tables,
@@ -122,7 +93,7 @@ if PLOT_RAW:
         use_log_y=MAIN_USE_LOG_Y,
         reference_line_y=MAIN_REFERENCE_LINE_Y,
     )
-if RANDOM_SUBTRACTION:
+if PLOT_RANDOM:
     rds_fig = plot_radial_profile(
         tables,
         value_column="ds_r",
@@ -132,5 +103,3 @@ if RANDOM_SUBTRACTION:
         use_log_y=RANDOM_USE_LOG_Y,
         reference_line_y=RANDOM_REFERENCE_LINE_Y,
     )
-# pair_fig = plot_pair_counts_vs_rp(tables)
-# factor_fig = plot_correction_factors_radial(tables)
