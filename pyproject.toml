@@ -11,10 +11,11 @@ dependencies = [
 	"healsparse>=1.11.1",
 	"selasviz>=0.1.12",
 	"jianbing",
+	"h5py>=3.16.0",
 ]
 
 [dependency-groups]
-dev = ["ipykernel>=7.2.0", "matplotlib>=3.10.8"]
+dev = ["ipykernel>=7.2.0", "jupyter-bokeh>=4.0.5", "matplotlib>=3.10.8"]
 
 # ignore F401, F403 and F405 in ruff
 [tool.ruff]
