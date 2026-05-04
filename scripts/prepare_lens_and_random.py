@@ -40,7 +40,9 @@ else:
 # User-editable parameters
 # =========================
 
-SOURCE = "s16a"  # Choose from CATALOG_SOURCES keys
+SOURCE = "pdr3"  # Choose from CATALOG_SOURCES keys
+
+RANDOM_MULTIPLIER = 20
 
 # Path can be absolute or relative to the project root.
 CATALOG_SOURCES = {
@@ -48,7 +50,8 @@ CATALOG_SOURCES = {
         "label": "pdr3",
         "lens_path": "/Users/xinq/redmapper_HSC/output/redmapper_run/add_geo_mask/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260421_lgt05_catalog.fit",
         "random_path": "data/random_hectomap.fits",
-        "random_multiplier": 20,
+        "redshift_range": [0.10, 0.60],
+        "top_counts_factor": 0.810458,
         "columns": {
             "col_rank": "lambda",
             "ra": "ra",
@@ -60,7 +63,8 @@ CATALOG_SOURCES = {
         "label": "s16a",
         "lens_path": "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
         "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
-        "random_multiplier": 20,
+        "redshift_range": [0.19, 0.52],
+        "top_counts_factor": 1.0,
         "columns": {
             "col_rank": "lambda",
             "ra": "ra",
@@ -72,7 +76,8 @@ CATALOG_SOURCES = {
         "label": "s16a_mass",
         "lens_path": "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits",
         "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
-        "random_multiplier": 20,
+        "redshift_range": [0.19, 0.52],
+        "top_counts_factor": 1.0,
         "columns": {
             "col_rank": "logm_50_100",
             "ra": "ra",
@@ -84,7 +89,8 @@ CATALOG_SOURCES = {
         "label": "s16a_forced",
         "lens_path": "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits",
         "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
-        "random_multiplier": 20,
+        "redshift_range": [0.19, 0.52],
+        "top_counts_factor": 1.0,
         "columns": {
             "col_rank": "lam",
             "ra": "ra",
@@ -115,15 +121,10 @@ COL_RANK_EDGES_MASS = [10.63, 10.8, 11.0, 11.2, 11.6]
 # exactly same as the number in topn paper
 TOP_COUNTS = [53, 196, 660, 1159]
 
-# Used only when BINNING_MODE == "top_counts".
-# A multiplier for TOP_COUNTS. Example: 2 means [x1, x2, ...] -> [2*x1, 2*x2, ...].
-TOP_COUNTS_FACTOR = 1
-if SOURCE == "pdr3":
-    TOP_COUNTS_FACTOR = 0.810458
 
-# Used only when BINNING_MODE == "top_counts".
 # "desc": larger col_rank is better (top first); "asc": smaller col_rank is better.
 TOP_SELECTION_ORDER = "desc"
+
 
 # -----------------------------------------------------------------------
 
@@ -277,7 +278,7 @@ def show_alignment_plot(
     fig.tight_layout()
 
 
-def get_binning_settings(np, source_name):
+def get_binning_settings(np, source_name, top_counts_factor):
     if BINNING_MODE not in {"edges", "top_counts"}:
         raise ValueError("BINNING_MODE must be 'edges' or 'top_counts'.")
 
@@ -303,13 +304,13 @@ def get_binning_settings(np, source_name):
     if any((not isinstance(c, int)) or c <= 0 for c in TOP_COUNTS):
         raise ValueError("TOP_COUNTS must contain only positive integers.")
 
-    if not np.isfinite(TOP_COUNTS_FACTOR) or TOP_COUNTS_FACTOR <= 0:
-        raise ValueError("TOP_COUNTS_FACTOR must be a positive finite number.")
+    if not np.isfinite(top_counts_factor) or top_counts_factor <= 0:
+        raise ValueError("top_counts_factor must be a positive finite number.")
 
-    scaled_top_counts = [int(round(c * TOP_COUNTS_FACTOR)) for c in TOP_COUNTS]
+    scaled_top_counts = [int(round(c * top_counts_factor)) for c in TOP_COUNTS]
     if any(c <= 0 for c in scaled_top_counts):
         raise ValueError(
-            "Scaled TOP_COUNTS must be positive. Increase TOP_COUNTS_FACTOR."
+            "Scaled TOP_COUNTS must be positive. Increase top_counts_factor."
         )
 
     if TOP_SELECTION_ORDER not in {"asc", "desc"}:
@@ -459,16 +460,29 @@ def run_pipeline(source_name):
         print(
             f"Warning: col_rank '{col_rank}' not found in lens catalog; This may cause issues with binning and random selection."
         )
+
+    redshift_range = cfg.get("redshift_range")
+    if redshift_range is not None:
+        z_min, z_max = redshift_range
+        mask_z = (lens[col_z] >= z_min) & (lens[col_z] <= z_max)
+        lens = lens[mask_z]
+        print(
+            f"Applied redshift mask {redshift_range} on '{col_z}': {np.sum(mask_z)} objects remain."
+        )
+
     print("-" * 80)
     print(f"Using source: {source_name}")
     print(f"Column used for ranking: {col_rank}")
     print("-" * 80)
+    print(f"Redshift range: {redshift_range}")
     print(f"Lens file: {lens_path}")
     print(f"Random file: {random_path}")
     print(f"Lens columns: {lens.colnames}")
     print(f"Random columns: {random.colnames}")
 
-    binning_settings = get_binning_settings(np, source_name)
+    binning_settings = get_binning_settings(
+        np, source_name, cfg.get("top_counts_factor", 1.0)
+    )
 
     print("-" * 80)
     if binning_settings["mode"] == "edges":
@@ -479,7 +493,7 @@ def run_pipeline(source_name):
         print(
             "Binning mode=top_counts, "
             f"TOP_COUNTS(raw)={TOP_COUNTS}, "
-            f"TOP_COUNTS_FACTOR={TOP_COUNTS_FACTOR}, "
+            f"top_counts_factor={cfg.get('top_counts_factor', 1.0)}, "
             f"TOP_COUNTS(scaled)={binning_settings['top_counts']}, "
             f"TOP_SELECTION_ORDER={binning_settings['top_selection_order']}"
         )
@@ -530,7 +544,7 @@ def run_pipeline(source_name):
         lens_out["z"] = lens_bin[col_z]
         lens_out["wsys"] = np.ones(n_bin, dtype=float)
 
-        n_random = n_bin * int(cfg["random_multiplier"])
+        n_random = n_bin * int(RANDOM_MULTIPLIER)
         replace_ra_dec = n_random > len(random)
         rand_idx = rng.choice(len(random), size=n_random, replace=replace_ra_dec)
         z_idx = rng.choice(n_bin, size=n_random, replace=True)

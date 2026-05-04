@@ -1,6 +1,7 @@
 # %%
 import glob
 import os
+from pathlib import Path
 
 import numpy as np
 from astropy.cosmology import Planck15
@@ -14,11 +15,13 @@ from dsigma.surveys import hsc as hsc_survey
 
 # ---------- Runtime Settings ----------
 # Switch this label before each run when using profile-based YAML config.
-RUN_PROFILE_LABEL = "pdr3"
+RUN_PROFILE_LABEL = "s16a_mass"
+
+# Source catalog version: "Y3" (PDR3/S19A) or "Y1" (S16A/Y1)
+SOURCE_VERSION = "Y1"
 
 # ---------- Misc ----------
 NJOBS = 12
-TOMOGRAPHY = False
 COMOVING = False
 LENS_SOURCE_CUT = 0.1
 VERBOSE = True
@@ -26,11 +29,6 @@ NJACKKNIFE = 100
 
 # ---------- Lens ----------
 LENS_SURVEY = "hsc"
-
-# NOTE: check if the redshift bins needs adjustment!
-LENS_Z_BINS = [0.19, 0.52]
-if RUN_PROFILE_LABEL == "pdr3":
-    LENS_Z_BINS = [0.10, 0.60]
 
 LENS_RPMIN = 0.10
 LENS_RPMAX = 20.0
@@ -42,15 +40,28 @@ LENS_Z_COL = "z"
 LENS_RA_COL = "ra"
 LENS_DEC_COL = "dec"
 
-# ---------- Source ----------
-SOURCE_SURVEY = "hsc"
-SOURCE_FILE = "/Users/xinq/dev/repos/hsc_wl/data/hsc_y3.fits"
-SOURCE_NZ_FILE = "/Users/xinq/dev/repos/hsc_wl/data/nz.fits"
+# ---------- Source Configuration ----------
+if SOURCE_VERSION == "Y3":
+    TOMOGRAPHY = True
+    SOURCE_FILE = "/Users/xinq/dev/repos/hsc_wl/data/hsc_y3.fits"
+    SOURCE_NZ_FILE = "/Users/xinq/dev/repos/hsc_wl/data/nz.fits"
+    SOURCE_SURVEY = "hsc"
+elif SOURCE_VERSION == "Y1":
+    TOMOGRAPHY = False
+    # Path to the S16A medium source catalog
+    SOURCE_FILE = "/Users/xinq/dev/repos/hsc_wl/data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_source.fits"
+    SOURCE_NZ_FILE = None
+    SOURCE_SURVEY = "hsc"
+    SOURCE_Z_COL = "z"
+else:
+    raise ValueError(f"Unsupported SOURCE_VERSION: {SOURCE_VERSION}")
+
 
 # ---------- Paths ----------
-LABEL_PATHS = {
+RUN_PROFILES = {
     "pdr3": {
-        "savepath": "/Users/xinq/dev/repos/hsc_wl/output/pdr3/dsigma/",
+        "lens_z_bins": [0.10, 0.60],
+        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/pdr3/",
         "lens_files": [
             "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin4.fits",
             "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin3.fits",
@@ -65,7 +76,8 @@ LABEL_PATHS = {
         ],
     },
     "s16a": {
-        "savepath": "/Users/xinq/dev/repos/hsc_wl/output/s16a/dsigma/",
+        "lens_z_bins": [0.19, 0.52],
+        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a/",
         "lens_files": [
             "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin4.fits",
             "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin3.fits",
@@ -80,7 +92,8 @@ LABEL_PATHS = {
         ],
     },
     "s16a_mass": {
-        "savepath": "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/dsigma/",
+        "lens_z_bins": [0.19, 0.52],
+        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/",
         "lens_files": [
             "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin4.fits",
             "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin3.fits",
@@ -95,7 +108,8 @@ LABEL_PATHS = {
         ],
     },
     "s16a_forced": {
-        "savepath": "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/dsigma/",
+        "lens_z_bins": [0.19, 0.52],
+        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/",
         "lens_files": [
             "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin4.fits",
             "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin3.fits",
@@ -153,13 +167,13 @@ CORRECTIONS = {
 # %%
 def find_one(path_or_pattern, description):
     paths = (
-        sorted(glob.glob(path_or_pattern))
-        if any(ch in path_or_pattern for ch in "*?[]")
-        else [path_or_pattern]
+        sorted(glob.glob(str(path_or_pattern)))
+        if any(ch in str(path_or_pattern) for ch in "*?[]")
+        else [str(path_or_pattern)]
     )
     for p in paths:
         if os.path.exists(p):
-            return p
+            return Path(p)
     raise FileNotFoundError(f"Could not find {description}: {path_or_pattern}")
 
 
@@ -246,21 +260,22 @@ def assign_jackknife_fields_with_fallback(
 def run_analysis(run_label=RUN_PROFILE_LABEL):
     """Run dsigma analysis using the global constants."""
     print(f"[config] run_label: {run_label}")
+    print(f"[config] SOURCE_VERSION: {SOURCE_VERSION}")
 
-    if run_label not in LABEL_PATHS:
-        available = ", ".join(sorted(LABEL_PATHS.keys()))
+    if run_label not in RUN_PROFILES:
+        available = ", ".join(sorted(RUN_PROFILES.keys()))
         raise KeyError(
             f"Unknown run profile label: {run_label}. Available labels: {available}"
         )
-    run_paths = LABEL_PATHS[run_label]
+    run_paths = RUN_PROFILES[run_label]
 
-    for key in ("savepath", "lens_files", "random_files"):
+    for key in ("save_root", "lens_files", "random_files", "lens_z_bins"):
         if key not in run_paths:
-            raise KeyError(f"Missing required key in LABEL_PATHS.{run_label}: {key}")
+            raise KeyError(f"Missing required key in RUN_PROFILES.{run_label}: {key}")
 
-    # ---- [misc]
-    savepath = run_paths["savepath"]
-    os.makedirs(savepath, exist_ok=True)
+    # ---- [Paths with Pathlib]
+    savepath = Path(run_paths["save_root"]) / SOURCE_VERSION / "dsigma"
+    savepath.mkdir(parents=True, exist_ok=True)
 
     njobs = NJOBS
     comoving = COMOVING
@@ -269,7 +284,7 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
 
     # ---- [lens_galaxies]
     lens_survey = LENS_SURVEY.strip()
-    z_bins = np.array(LENS_Z_BINS)
+    z_bins = np.array(run_paths["lens_z_bins"])
     rpmin = LENS_RPMIN
     rpmax = LENS_RPMAX
     n_rpbins = LENS_N_RPBINS
@@ -286,9 +301,7 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
     # ---- [source_galaxies]
     src_survey = SOURCE_SURVEY.strip()
     src_file = find_one(SOURCE_FILE, "source catalog")
-    nz_file = find_one(SOURCE_NZ_FILE, "n(z) file")
-
-    print(f"lens_z: {lens_z_col}")
+    nz_file = find_one(SOURCE_NZ_FILE, "n(z) file") if TOMOGRAPHY else None
 
     # ---- survey-specific corrections
     if src_survey not in CORRECTIONS:
@@ -353,22 +366,8 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
         ["i_hsmshaperegauss_resolution", "resolution", "R_2"],
         "source resolution column",
     )
-    source_zbin_col = pick_required_column(
-        source_cols, ["hsc_y3_zbin", "z_bin"], "source redshift-bin column"
-    )
-    source_mag_col = pick_required_column(
-        source_cols,
-        ["i_apertureflux_10_mag", "aperture_mag", "mag_A"],
-        "source aperture magnitude column",
-    )
 
-    # check whether the b-mode mask column exists, and if so, filter to only use sources that pass the mask
-    if "b_mode_mask" in source_cols:
-        table_s = table_s[table_s["b_mode_mask"] == 1]
-    table_s = dsigma_table(
-        table_s,
-        "source",
-        survey=src_survey.upper(),
+    dsigma_table_kwargs = dict(
         ra=source_ra_col,
         dec=source_dec_col,
         e_1=source_e1_col,
@@ -377,27 +376,78 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
         m=source_m_col,
         e_rms=source_e_rms_col,
         R_2=source_r2_col,
-        z_bin=source_zbin_col,
-        mag_A=source_mag_col,
     )
 
-    table_s["m_sel"] = hsc_survey.multiplicative_selection_bias(table_s)
-    # Remove galaxies with bimodal P(z)'s.
-    table_s = table_s[table_s["z_bin"] > 0]
-    # dsigma expects the first redshift bin to be 0, not 1.
-    table_s["z_bin"] = table_s["z_bin"] - 1
+    # mag_A is only used/required for Y3+ selection bias correction
+    if SOURCE_VERSION in ["Y3", "PDR3", "S19A"]:
+        source_mag_col = pick_required_column(
+            source_cols,
+            ["i_apertureflux_10_mag", "aperture_mag", "mag_A"],
+            "source aperture magnitude column",
+        )
+        dsigma_table_kwargs["mag_A"] = source_mag_col
 
-    print(f"[load] n(z): {nz_file}")
-    table_n = Table.read(nz_file)
-    table_n.rename_column("Z_MID", "z")
-    table_n["n"] = np.column_stack([table_n[f"BIN{i + 1}"] for i in range(4)])
-    table_n.keep_columns(["z", "n"])
+    # check whether the b-mode mask column exists, and if so, filter to only use sources that pass the mask
+    if "b_mode_mask" in source_cols:
+        table_s = table_s[table_s["b_mode_mask"] == 1]
 
-    # Assign each galaxy in the source catalog the mean redshift of the bin. This
-    # is only used to determine which lens-source pairs to use.
-    table_s["z"] = np.sum(table_n["z"][:, np.newaxis] * table_n["n"], axis=0)[
-        table_s["z_bin"]
-    ]
+    if TOMOGRAPHY:
+        source_zbin_col = pick_required_column(
+            source_cols, ["hsc_y3_zbin", "z_bin"], "source redshift-bin column"
+        )
+        dsigma_table_kwargs["z_bin"] = source_zbin_col
+    else:
+        source_z_col = pick_required_column(
+            source_cols,
+            [SOURCE_Z_COL, "z", "photoz_best"],
+            "source photo-z column",
+        )
+        dsigma_table_kwargs["z"] = source_z_col
+
+    # dsigma sets 'z_low': 'photoz_err68_min' by default for S16A/Y1, so we must override it
+    # if our catalog uses a different name (e.g., 'z_low') for the lower redshift bound.
+    z_low_col = pick_column(source_cols, ["z_low", "photoz_err68_min"])
+    if z_low_col:
+        dsigma_table_kwargs["z_low"] = z_low_col
+    elif SOURCE_VERSION == "Y1":
+        # Fallback to avoid KeyError in dsigma if no lower bound is found
+        dsigma_table_kwargs["z_low"] = dsigma_table_kwargs.get("z", "z")
+
+    table_s = dsigma_table(
+        table_s,
+        "source",
+        survey=src_survey.upper(),
+        version=SOURCE_VERSION,
+        **dsigma_table_kwargs,
+    )
+
+    # Re-flip e_2 for Y1 if it was already in standard format
+    if SOURCE_VERSION == "Y1":
+        table_s["e_2"] = -table_s["e_2"]
+
+    table_s["m_sel"] = hsc_survey.multiplicative_selection_bias(
+        table_s, version=SOURCE_VERSION
+    )
+
+    if TOMOGRAPHY:
+        # Remove galaxies with bimodal P(z)'s.
+        table_s = table_s[table_s["z_bin"] > 0]
+        # dsigma expects the first redshift bin to be 0, not 1.
+        table_s["z_bin"] = table_s["z_bin"] - 1
+
+        print(f"[load] n(z): {nz_file}")
+        table_n = Table.read(nz_file)
+        table_n.rename_column("Z_MID", "z")
+        table_n["n"] = np.column_stack([table_n[f"BIN{i + 1}"] for i in range(4)])
+        table_n.keep_columns(["z", "n"])
+
+        # Assign each galaxy in the source catalog the mean redshift of the bin. This
+        # is only used to determine which lens-source pairs to use.
+        table_s["z"] = np.sum(table_n["z"][:, np.newaxis] * table_n["n"], axis=0)[
+            table_s["z_bin"]
+        ]
+    else:
+        table_n = None
 
     rp_bins = np.logspace(np.log10(rpmin), np.log10(rpmax), n_rpbins + 1)
 
@@ -461,17 +511,6 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
         kwargs["return_table"] = True
         kwargs["table_r"] = table_r[mR]
 
-        # kwargs = dict(
-        #     return_table=True,
-        #     scalar_shear_response_correction=True,
-        #     shear_responsivity_correction=True,
-        #     selection_bias_correction=True,
-        #     boost_correction=False,
-        #     random_subtraction=True,
-        #     table_r=table_r[mR],
-        # )
-
-        # kwargs = dict(return_table=False, table_r=table_r[mR], **corr)
         kwargs_summary = {k: v for k, v in kwargs.items() if k != "table_r"}
         kwargs_summary["table_r_rows"] = len(kwargs["table_r"])
         print("[stack] kwargs summary", kwargs_summary)
@@ -485,9 +524,8 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
         )
         result["ds_err"] = np.sqrt(np.diag(cov))
 
-        out_fits = os.path.join(
-            savepath,
-            f"{src_survey.lower()}_{lens_survey or 'lenses'}_lens{i}_lens.fits",
+        out_fits = (
+            savepath / f"{src_survey.lower()}_{lens_survey or 'lenses'}_lens{i}.fits"
         )
 
         # Create the HDU list with the full result table and the covariance matrix

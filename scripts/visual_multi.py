@@ -37,9 +37,12 @@ else:
 
 # %%
 
-# labels_to_compare = ["s16a_mass", "huang2022_logm_50_100"]
-# labels_to_compare = ["s16a", "huang2022_redm_hsc"]
-labels_to_compare = ["s16a_mass", "s16a", "pdr3"]
+# List of (label, version) pairs to compare
+# e.g., [("s16a", "Y1"), ("s16a", "Y3"), ("pdr3", "Y3")]
+# configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a", "Y1")]
+# configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a", "Y1"), ("s16a", "Y3")]
+configs_to_compare = [("huang2022_logm_50_100", "Y1"), ("s16a_mass", "Y1")]
+# configs_to_compare = [ ("huang2022_logm_50_100", "Y1"), ("s16a_mass", "Y1"), ("s16a_mass", "Y3") ]
 
 
 # Main comparison style.
@@ -57,14 +60,15 @@ axes = np.atleast_1d(axes)
 present_labels = []
 loaded_tables = []
 
-for i, label_name in enumerate(labels_to_compare):
-    print(f"Loading data for {label_name}...")
-    current_dir = root_path / f"output/{label_name}/dsigma"
+for i, (label_name, version_name) in enumerate(configs_to_compare):
+    display_name = f"{label_name} ({version_name})"
+    print(f"Loading data for {display_name}...")
+    current_dir = root_path / f"output/{label_name}/{version_name}/dsigma"
     if not current_dir.exists():
         print(f"Warning: {current_dir} does not exist. Skipping.")
         continue
     current_tables = load_result_tables(current_dir)
-    present_labels.append(label_name)
+    present_labels.append(display_name)
     loaded_tables.append(current_tables)
 
     plot_radial_profile(
@@ -72,9 +76,9 @@ for i, label_name in enumerate(labels_to_compare):
         value_column="ds",
         title_label="Comparison",
         ax_list=axes,
-        label_text=label_name,
+        label_text=display_name,
         label_index=i,
-        n_labels=len(labels_to_compare),
+        n_labels=len(configs_to_compare),
         marker=MARKERS[i % len(MARKERS)],
         multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
         use_spline=MAIN_USE_SPLINE,
