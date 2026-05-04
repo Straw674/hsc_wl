@@ -51,31 +51,33 @@ MATCH_TOLERANCE_ARCSEC = 1.0
 
 # %%
 def _read_shape_catalogs(root):
-    shape1 = Table.read(root / "data/hscy3_cat.fits")
+    shape1 = Table.read(root / "data/hsc_y3.fits")
     print(len(shape1), shape1.colnames)
     # 25260877 ['RA', 'Dec', 'e_1', 'e_2', 'e_rms', 'weight', 'm_corr', 'c_1', 'c_2', 'resolution', 'aperture_mag', 'z_bin', 'e1_psf', 'e2_psf']
 
-    shape2 = Table.read(root / "data/HECTOMAP.fits")
+    shape2 = Table.read(
+        root / "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_source.fits"
+    )
     print(len(shape2), shape2.colnames)
-    # 3704425 ['i_ra', 'i_dec', 'object_id', 'i_hsmshaperegauss_e1', 'i_hsmshaperegauss_e2', 'i_hsmshaperegauss_derived_sigma_e', 'i_hsmshaperegauss_derived_rms_e', 'i_hsmshaperegauss_derived_weight', 'i_hsmshaperegauss_derived_shear_bias_m', 'i_hsmshaperegauss_derived_shear_bias_c1', 'i_hsmshaperegauss_derived_shear_bias_c2', 'i_hsmshaperegauss_resolution', 'i_apertureflux_10_mag', 'hsc_y3_zbin', 'b_mode_mask', 'i_sdssshape_psf_shape11', 'i_sdssshape_psf_shape22', 'i_sdssshape_psf_shape12']
+    # ['z', 'ra', 'dec', 'w', 'e_1', 'e_2', 'z_low', 'm', 'e_rms', 'R_2', 'field', 'z_upp', 'z_l_max']
     return shape1, shape2
 
 
 def _filter_shape1(shape1):
     mask = (
-        (shape1["RA"] >= REGION_RA_MIN)
-        & (shape1["RA"] <= REGION_RA_MAX)
-        & (shape1["Dec"] >= REGION_DEC_MIN)
-        & (shape1["Dec"] <= REGION_DEC_MAX)
+        (shape1["i_ra"] >= REGION_RA_MIN)
+        & (shape1["i_ra"] <= REGION_RA_MAX)
+        & (shape1["i_dec"] >= REGION_DEC_MIN)
+        & (shape1["i_dec"] <= REGION_DEC_MAX)
     )
     return shape1[mask]
 
 
 def _match_by_skycoord(shape1_region, shape2_region):
-    coord1 = SkyCoord(ra=shape1_region["RA"] * u.deg, dec=shape1_region["Dec"] * u.deg)
-    coord2 = SkyCoord(
-        ra=shape2_region["i_ra"] * u.deg, dec=shape2_region["i_dec"] * u.deg
+    coord1 = SkyCoord(
+        ra=shape1_region["i_ra"] * u.deg, dec=shape1_region["i_dec"] * u.deg
     )
+    coord2 = SkyCoord(ra=shape2_region["ra"] * u.deg, dec=shape2_region["dec"] * u.deg)
     match_idx, sep2d, _ = coord1.match_to_catalog_sky(coord2)
     match_mask = sep2d.arcsec <= MATCH_TOLERANCE_ARCSEC
 
@@ -140,8 +142,8 @@ def _print_summary_table(records):
 
 
 def _plot_e2_hist2d(matched_shape1, matched_shape2):
-    left = np.asarray(matched_shape1["e_2"], dtype=float)
-    right = np.asarray(matched_shape2["i_hsmshaperegauss_e2"], dtype=float)
+    left = np.asarray(matched_shape1["i_hsmshaperegauss_e2"], dtype=float)
+    right = np.asarray(matched_shape2["e_2"], dtype=float)
 
     valid = np.isfinite(left) & np.isfinite(right)
     left = left[valid]
@@ -187,15 +189,11 @@ def _plot_e2_hist2d(matched_shape1, matched_shape2):
 shape1, shape2 = _read_shape_catalogs(root_path)
 
 shape1_region = _filter_shape1(shape1)
-shape2_region = shape2[shape2["b_mode_mask"]]
+shape2_region = shape2
 
 print(
     f"shape1 region filter: {len(shape1_region)} / {len(shape1)} rows remain "
     f"for RA in [{REGION_RA_MIN}, {REGION_RA_MAX}] and Dec in [{REGION_DEC_MIN}, {REGION_DEC_MAX}]"
-)
-print(
-    f"shape2 region prefilter: {len(shape2_region)} / {len(shape2)} rows remain "
-    f"after expanding the search box by {MATCH_TOLERANCE_ARCSEC} arcsec"
 )
 
 matched_shape1, matched_shape2, matched_sep, match_mask = _match_by_skycoord(
@@ -217,19 +215,15 @@ print(
     f"max={np.max(sep_arcsec):.6f}"
 )
 
+# %%
 column_pairs = [
-    ("RA", "i_ra"),
-    ("Dec", "i_dec"),
-    ("e_1", "i_hsmshaperegauss_e1"),
-    ("e_2", "i_hsmshaperegauss_e2"),
-    ("e_rms", "i_hsmshaperegauss_derived_rms_e"),
-    ("weight", "i_hsmshaperegauss_derived_weight"),
-    ("m_corr", "i_hsmshaperegauss_derived_shear_bias_m"),
-    ("c_1", "i_hsmshaperegauss_derived_shear_bias_c1"),
-    ("c_2", "i_hsmshaperegauss_derived_shear_bias_c2"),
-    ("resolution", "i_hsmshaperegauss_resolution"),
-    ("aperture_mag", "i_apertureflux_10_mag"),
-    ("z_bin", "hsc_y3_zbin"),
+    ("i_ra", "ra"),
+    ("i_dec", "dec"),
+    ("i_hsmshaperegauss_e1", "e_1"),
+    ("i_hsmshaperegauss_e2", "e_2"),
+    ("i_hsmshaperegauss_derived_rms_e", "e_rms"),
+    ("i_hsmshaperegauss_derived_weight", "w"),
+    ("i_hsmshaperegauss_derived_shear_bias_m", "m"),
 ]
 
 summary_records = []
@@ -275,9 +269,3 @@ print(overall_table)
 
 
 _plot_e2_hist2d(matched_shape1, matched_shape2)
-
-# %%
-
-# flip the sign of e_2 in shape1 and write to a new file
-shape1["e_2"] = -shape1["e_2"]
-shape1.write(root_path / "data/hscy3_cat_flipped_e2.fits", overwrite=True)
