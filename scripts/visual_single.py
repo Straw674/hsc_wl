@@ -38,6 +38,7 @@ else:
 # %%
 
 label = "s16a"
+version = "Y1"  # "Y1" or "Y3"
 
 # Whether to plot random and raw\
 PLOT_RANDOM = True
@@ -60,7 +61,7 @@ if PLOT_RANDOM:
     RANDOM_REFERENCE_LINE_Y = 0.0
 
 
-result_dir = root_path / f"output/{label}/dsigma"
+result_dir = root_path / f"output/{label}/{version}/dsigma"
 tables = load_result_tables(result_dir)
 
 expected_cols = ["rp", "ds", "ds_err"]

@@ -7,14 +7,14 @@ import re
 
 
 def load_result_tables(base_dir):
-    # Pattern to find hsc_hsc_lens[N]_lens.fits or .csv
+    # Pattern to find hsc_hsc_lens[N].fits or .csv
     # We use a dict to store the best file path for each index
     # key: index (int), value: path (Path)
     bin_files = {}
 
     # Find all matching files in the directory
-    for path in base_dir.glob("hsc_hsc_lens*_lens.*"):
-        match = re.search(r"hsc_hsc_lens(\d+)_lens\.(fits|csv)$", path.name)
+    for path in base_dir.glob("hsc_hsc_lens*.*"):
+        match = re.search(r"hsc_hsc_lens(\d+)\.(fits|csv)$", path.name)
         if match:
             idx = int(match.group(1))
             ext = match.group(2).lower()

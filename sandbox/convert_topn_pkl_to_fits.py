@@ -106,7 +106,7 @@ def export_table_to_fits(
         profile_table["ds_err"] = ds_err[:n_radial]
 
         lens_idx = row_idx
-        out_path = output_dir / f"hsc_hsc_lens{lens_idx}_lens.fits"
+        out_path = output_dir / f"hsc_hsc_lens{lens_idx}.fits"
 
         # Create the HDU list with the profile and the full covariance matrix
         hdul = fits.HDUList(
@@ -129,7 +129,8 @@ def export_table_to_fits(
 
 # %%
 OUTPUT_LABEL = "huang2022_logm_50_100"
-output_path = root_path / "output" / OUTPUT_LABEL / "dsigma"
+OUTPUT_VERSION = "Y1"  # "Y1" or "Y3"
+output_path = root_path / "output" / OUTPUT_LABEL / OUTPUT_VERSION / "dsigma"
 
 # Uncomment the following line to run the export
 fits_paths = export_table_to_fits(PKL_RELATIVE_PATH, TABLE_KEY, output_path)

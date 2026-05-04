@@ -44,6 +44,7 @@ else:
 
 # %% ---------- runtime settings ----------
 LABEL = "s16a"
+VERSION = "Y3"  # "Y1" or "Y3"
 
 # Path to simulation data (relative to root_path)
 # SIM_PATH = "libs/jianbing/data/simulation/sim_merge_all_dsig.fits"
@@ -52,14 +53,13 @@ SIM_PATH = "libs/jianbing/data/simulation/sim_mdpl2_cen_dsig.fits"
 # List your 4 FITS files in order (relative to root_path).
 # bin_id=1 corresponds to the 1st file (richest/most massive).
 FITS_FILES = [
-    f"output/{LABEL}/dsigma/hsc_hsc_lens0_lens.fits",
-    f"output/{LABEL}/dsigma/hsc_hsc_lens1_lens.fits",
-    f"output/{LABEL}/dsigma/hsc_hsc_lens2_lens.fits",
-    f"output/{LABEL}/dsigma/hsc_hsc_lens3_lens.fits",
+    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_lens0.fits",
+    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_lens1.fits",
+    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_lens2.fits",
+    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_lens3.fits",
 ]
 
-OUTPUT_PKL = f"output/{LABEL}/pkl/custom_samples_sum.pkl"
-VIS_PLOT_DIR = f"output/{LABEL}/plots"
+OUTPUT_PKL = f"output/{LABEL}/{VERSION}/pkl/{LABEL}_{VERSION}_sum.pkl"
 
 # %% ---------- load simulation model ----------
 
