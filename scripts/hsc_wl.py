@@ -15,7 +15,7 @@ from dsigma.surveys import hsc as hsc_survey
 
 # ---------- Runtime Settings ----------
 # Switch this label before each run when using profile-based YAML config.
-RUN_PROFILE_LABEL = "s16a_redm_hsc"
+RUN_PROFILE_LABEL = "s16a_logm_50_100"
 
 # Source catalog version: "Y3" (PDR3/S19A) or "Y1" (S16A/Y1)
 SOURCE_VERSION = "Y1"
@@ -43,14 +43,18 @@ LENS_DEC_COL = "dec"
 # ---------- Source Configuration ----------
 if SOURCE_VERSION == "Y3":
     TOMOGRAPHY = True
+    PHOTO_Z_DILUTION_CORRECTION = False
     SOURCE_FILE = "/Users/xinq/dev/repos/hsc_wl/data/hsc_y3.fits"
     SOURCE_NZ_FILE = "/Users/xinq/dev/repos/hsc_wl/data/nz.fits"
+    SOURCE_CALIB_FILE = None
     SOURCE_SURVEY = "hsc"
 elif SOURCE_VERSION == "Y1":
     TOMOGRAPHY = False
+    PHOTO_Z_DILUTION_CORRECTION = True
     # Path to the S16A medium source catalog
     SOURCE_FILE = "/Users/xinq/dev/repos/hsc_wl/data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_source.fits"
     SOURCE_NZ_FILE = None
+    SOURCE_CALIB_FILE = "/Users/xinq/dev/repos/hsc_wl/data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_calib.fits"
     SOURCE_SURVEY = "hsc"
     SOURCE_Z_COL = "z"
 else:
@@ -62,106 +66,28 @@ RUN_PROFILES = {
     "pdr3_redm_hsc": {
         "lens_z_bins": [0.10, 0.60],
         "save_root": "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/",
-        "lens_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_bin1.fits",
-        ],
-        "random_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_random_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_random_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_random_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_random_bin1.fits",
-        ],
     },
     "s16a_redm_hsc": {
         "lens_z_bins": [0.19, 0.52],
         "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/",
-        "lens_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_bin1.fits",
-        ],
-        "random_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_random_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_random_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_random_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_random_bin1.fits",
-        ],
     },
     "s16a_logm_50_100": {
         "lens_z_bins": [0.19, 0.52],
         "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/",
-        "lens_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_bin1.fits",
-        ],
-        "random_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_random_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_random_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_random_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_random_bin1.fits",
-        ],
     },
     "forced": {
         "lens_z_bins": [0.19, 0.52],
         "save_root": "/Users/xinq/dev/repos/hsc_wl/output/forced/",
-        "lens_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_bin1.fits",
-        ],
-        "random_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_random_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_random_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_random_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_random_bin1.fits",
-        ],
     },
 }
 
 # ---------- Corrections ----------
-CORRECTIONS = {
-    "sdss": {
-        "photo_z_dilution_correction": True,
-        "boost_correction": False,
-        "scalar_shear_response_correction": True,
-        "matrix_shear_response_correction": False,
-        "shear_responsivity_correction": True,
-        "hsc_selection_bias_correction": False,
-        "random_subtraction": True,
-    },
-    "des": {
-        "photo_z_dilution_correction": False,
-        "boost_correction": False,
-        "scalar_shear_response_correction": True,
-        "matrix_shear_response_correction": True,
-        "shear_responsivity_correction": False,
-        "hsc_selection_bias_correction": False,
-        "random_subtraction": True,
-    },
-    "kids": {
-        "photo_z_dilution_correction": False,
-        "boost_correction": False,
-        "scalar_shear_response_correction": True,
-        "matrix_shear_response_correction": False,
-        "shear_responsivity_correction": False,
-        "hsc_selection_bias_correction": False,
-        "random_subtraction": True,
-    },
-    "hsc": {
-        "scalar_shear_response_correction": True,
-        "shear_responsivity_correction": True,
-        "selection_bias_correction": True,
-        "random_subtraction": True,
-        "boost_correction": False,
-    },
-}
+SCALAR_SHEAR_RESPONSE_CORRECTION = True
+MATRIX_SHEAR_RESPONSE_CORRECTION = False
+SHEAR_RESPONSIVITY_CORRECTION = True
+SELECTION_BIAS_CORRECTION = True
+RANDOM_SUBTRACTION = True
+BOOST_CORRECTION = False
 
 
 # %%
@@ -269,12 +195,20 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
         )
     run_paths = RUN_PROFILES[run_label]
 
-    for key in ("save_root", "lens_files", "random_files", "lens_z_bins"):
+    for key in ("save_root", "lens_z_bins"):
         if key not in run_paths:
             raise KeyError(f"Missing required key in RUN_PROFILES.{run_label}: {key}")
 
+    save_root = run_paths["save_root"]
+    lens_files_raw = [
+        f"{save_root}prepare/{run_label}_bin{i}.fits" for i in range(4, 0, -1)
+    ]
+    random_files_raw = [
+        f"{save_root}prepare/{run_label}_random_bin{i}.fits" for i in range(4, 0, -1)
+    ]
+
     # ---- [Paths with Pathlib]
-    savepath = Path(run_paths["save_root"]) / SOURCE_VERSION / "dsigma"
+    savepath = Path(save_root) / SOURCE_VERSION / "dsigma"
     savepath.mkdir(parents=True, exist_ok=True)
 
     njobs = NJOBS
@@ -292,8 +226,8 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
     if linlog not in ("lin", "log"):
         raise ValueError('LENS_LINLOG must be "lin" or "log"')
 
-    lens_files = [find_one(p, "lens file") for p in run_paths["lens_files"]]
-    rand_files = [find_one(p, "random file") for p in run_paths["random_files"]]
+    lens_files = [find_one(p, "lens file") for p in lens_files_raw]
+    rand_files = [find_one(p, "random file") for p in random_files_raw]
     lens_z_col = LENS_Z_COL
     lens_ra_col = LENS_RA_COL
     lens_dec_col = LENS_DEC_COL
@@ -301,31 +235,31 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
     # ---- [source_galaxies]
     src_survey = SOURCE_SURVEY.strip()
     src_file = find_one(SOURCE_FILE, "source catalog")
+    calib_file = (
+        find_one(SOURCE_CALIB_FILE, "calibration catalog")
+        if SOURCE_CALIB_FILE
+        else None
+    )
     nz_file = find_one(SOURCE_NZ_FILE, "n(z) file") if TOMOGRAPHY else None
 
     # ---- survey-specific corrections
-    if src_survey not in CORRECTIONS:
-        raise KeyError(
-            f"Missing required correction config for source survey: {src_survey}"
-        )
-
-    corr_all = CORRECTIONS[src_survey]
     corr = {
-        "boost_correction": bool(corr_all["boost_correction"]),
-        "scalar_shear_response_correction": bool(
-            corr_all["scalar_shear_response_correction"]
-        ),
-        "shear_responsivity_correction": bool(
-            corr_all["shear_responsivity_correction"]
-        ),
-        "random_subtraction": bool(corr_all["random_subtraction"]),
-        "selection_bias_correction": bool(corr_all["selection_bias_correction"]),
+        "photo_z_dilution_correction": PHOTO_Z_DILUTION_CORRECTION,
+        "boost_correction": BOOST_CORRECTION,
+        "scalar_shear_response_correction": SCALAR_SHEAR_RESPONSE_CORRECTION,
+        "matrix_shear_response_correction": MATRIX_SHEAR_RESPONSE_CORRECTION,
+        "shear_responsivity_correction": SHEAR_RESPONSIVITY_CORRECTION,
+        "random_subtraction": RANDOM_SUBTRACTION,
+        "selection_bias_correction": SELECTION_BIAS_CORRECTION,
     }
 
     # ---------------- load catalogs ----------------
     print(f"[load] sources: {src_file}")
+    if calib_file is not None:
+        print(f"[load] calibration: {calib_file}")
 
     table_s = Table.read(src_file)
+    table_c = Table.read(calib_file) if calib_file is not None else None
 
     source_cols = table_s.colnames
     source_ra_col = pick_required_column(
@@ -470,6 +404,7 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
             table_l,
             table_s,
             rp_bins,
+            table_c=table_c,
             cosmology=Planck15,
             comoving=comoving,
             table_n=table_n,
@@ -482,6 +417,7 @@ def run_analysis(run_label=RUN_PROFILE_LABEL):
             table_r,
             table_s,
             rp_bins,
+            table_c=table_c,
             cosmology=Planck15,
             comoving=comoving,
             table_n=table_n,
