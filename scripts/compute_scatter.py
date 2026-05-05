@@ -1,5 +1,5 @@
 """
-fit_custom_scatter.py
+compute_scatter.py
 
 Calculate best-fit scatter and output summary results directly from
 pre-computed lens FITS files (with PROFILE and JK_COV extensions)
@@ -43,7 +43,7 @@ else:
     sys.exit(1)
 
 # %% ---------- runtime settings ----------
-LABEL = "s16a_redm_hsc"
+LABEL = "forced"
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Path to simulation data (relative to root_path)
