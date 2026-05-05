@@ -15,10 +15,10 @@ from dsigma.surveys import hsc as hsc_survey
 
 # ---------- Runtime Settings ----------
 # Switch this label before each run when using profile-based YAML config.
-RUN_PROFILE_LABEL = "s16a_mass"
+RUN_PROFILE_LABEL = "forced"
 
 # Source catalog version: "Y3" (PDR3/S19A) or "Y1" (S16A/Y1)
-SOURCE_VERSION = "Y1"
+SOURCE_VERSION = "Y3"
 
 # ---------- Misc ----------
 NJOBS = 12
@@ -59,68 +59,68 @@ else:
 
 # ---------- Paths ----------
 RUN_PROFILES = {
-    "pdr3": {
+    "pdr3_redm_hsc": {
         "lens_z_bins": [0.10, 0.60],
-        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/pdr3/",
+        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/",
         "lens_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_bin1.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_bin1.fits",
         ],
         "random_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/pdr3/prepare/pdr3_random_bin1.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_random_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_random_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_random_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/pdr3_redm_hsc/prepare/pdr3_redm_hsc_random_bin1.fits",
         ],
     },
-    "s16a": {
+    "s16a_redm_hsc": {
         "lens_z_bins": [0.19, 0.52],
-        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a/",
+        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/",
         "lens_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_bin1.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_bin1.fits",
         ],
         "random_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a/prepare/s16a_random_bin1.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_random_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_random_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_random_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_redm_hsc/prepare/s16a_redm_hsc_random_bin1.fits",
         ],
     },
-    "s16a_mass": {
+    "s16a_logm_50_100": {
         "lens_z_bins": [0.19, 0.52],
-        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/",
+        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/",
         "lens_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_bin1.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_bin1.fits",
         ],
         "random_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_mass/prepare/s16a_mass_random_bin1.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_random_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_random_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_random_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/s16a_logm_50_100/prepare/s16a_logm_50_100_random_bin1.fits",
         ],
     },
-    "s16a_forced": {
+    "forced": {
         "lens_z_bins": [0.19, 0.52],
-        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/",
+        "save_root": "/Users/xinq/dev/repos/hsc_wl/output/forced/",
         "lens_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_bin1.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_bin1.fits",
         ],
         "random_files": [
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin4.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin3.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin2.fits",
-            "/Users/xinq/dev/repos/hsc_wl/output/s16a_forced/prepare/s16a_forced_random_bin1.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_random_bin4.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_random_bin3.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_random_bin2.fits",
+            "/Users/xinq/dev/repos/hsc_wl/output/forced/prepare/forced_random_bin1.fits",
         ],
     },
 }

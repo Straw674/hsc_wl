@@ -37,7 +37,7 @@ else:
 
 # %% ---------- runtime settings ----------
 # Add your labels here
-LABELS = ["s16a_mass", "s16a", "pdr3", "huang2022_logm_50_100", "huang2022_redm_hsc"]
+LABELS = ["s16a_logm_50_100", "s16a_redm_hsc", "pdr3_redm_hsc", "huang2022_logm_50_100", "huang2022_redm_hsc"]
 # Optional: display names for labels in the legend
 DISPLAY_NAMES = {}
 

@@ -40,14 +40,14 @@ else:
 # User-editable parameters
 # =========================
 
-SOURCE = "pdr3"  # Choose from CATALOG_SOURCES keys
+SOURCE = "forced"  # Choose from CATALOG_SOURCES keys
 
 RANDOM_MULTIPLIER = 20
 
 # Path can be absolute or relative to the project root.
 CATALOG_SOURCES = {
-    "pdr3": {
-        "label": "pdr3",
+    "pdr3_redm_hsc": {
+        "label": "pdr3_redm_hsc",
         "lens_path": "/Users/xinq/redmapper_HSC/output/redmapper_run/add_geo_mask/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260421_lgt05_catalog.fit",
         "random_path": "data/random_hectomap.fits",
         "redshift_range": [0.10, 0.60],
@@ -59,8 +59,8 @@ CATALOG_SOURCES = {
             "z": "z_lambda",
         },
     },
-    "s16a": {
-        "label": "s16a",
+    "s16a_redm_hsc": {
+        "label": "s16a_redm_hsc",
         "lens_path": "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
         "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
         "redshift_range": [0.19, 0.52],
@@ -72,8 +72,8 @@ CATALOG_SOURCES = {
             "z": "z_lambda",
         },
     },
-    "s16a_mass": {
-        "label": "s16a_mass",
+    "s16a_logm_50_100": {
+        "label": "s16a_logm_50_100",
         "lens_path": "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits",
         "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
         "redshift_range": [0.19, 0.52],
@@ -85,8 +85,8 @@ CATALOG_SOURCES = {
             "z": "z_best",
         },
     },
-    "s16a_forced": {
-        "label": "s16a_forced",
+    "forced": {
+        "label": "forced",
         "lens_path": "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits",
         "random_path": "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
         "redshift_range": [0.19, 0.52],
@@ -433,7 +433,7 @@ def run_pipeline(source_name):
         print(f"Applied bsm_s18a > 0 mask: {np.sum(mask_bsm)} objects remain.")
     else:
         print(
-            "Warning: 'bsm_s18a' column not found in lens catalog; This is expected if the input catalog is not from the s16a source."
+            "Warning: 'bsm_s18a' column not found in lens catalog; This is expected if the input catalog is not from the s16a_redm_hsc source."
         )
     if "logm_cmod" in lens.colnames:
         mask_logm = lens["logm_cmod"] >= 11.2
@@ -441,7 +441,7 @@ def run_pipeline(source_name):
         print(f"Applied logm_cmod >= 11.2 mask: {np.sum(mask_logm)} objects remain.")
     else:
         print(
-            "Warning: 'logm_cmod' column not found in lens catalog; This is expected if the input catalog is not from the s16a source."
+            "Warning: 'logm_cmod' column not found in lens catalog; This is expected if the input catalog is not from the s16a_redm_hsc source."
         )
     # avoid nan values in col_rank if it exists, since they can cause issues with binning and random selection
     col_rank = cfg["columns"]["col_rank"]

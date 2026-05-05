@@ -43,7 +43,7 @@ else:
     sys.exit(1)
 
 # %% ---------- runtime settings ----------
-LABEL = "s16a"
+LABEL = "s16a_redm_hsc"
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Path to simulation data (relative to root_path)

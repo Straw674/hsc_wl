@@ -37,7 +37,7 @@ else:
 
 # %%
 
-label = "s16a"
+label = "s16a_redm_hsc"
 version = "Y1"  # "Y1" or "Y3"
 
 # Whether to plot random and raw\

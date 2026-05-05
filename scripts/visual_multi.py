@@ -38,11 +38,11 @@ else:
 # %%
 
 # List of (label, version) pairs to compare
-# e.g., [("s16a", "Y1"), ("s16a", "Y3"), ("pdr3", "Y3")]
-# configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a", "Y1")]
-# configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a", "Y1"), ("s16a", "Y3")]
-configs_to_compare = [("huang2022_logm_50_100", "Y1"), ("s16a_mass", "Y1")]
-# configs_to_compare = [ ("huang2022_logm_50_100", "Y1"), ("s16a_mass", "Y1"), ("s16a_mass", "Y3") ]
+# e.g., [("s16a_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y3"), ("pdr3_redm_hsc", "Y3")]
+# configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y1")]
+# configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y3")]
+configs_to_compare = [("huang2022_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y1")]
+# configs_to_compare = [ ("huang2022_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y3") ]
 
 
 # Main comparison style.

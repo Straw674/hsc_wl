@@ -87,13 +87,13 @@ print("shape1 b_mode_mask counts:", np.bincount(shape1["b_mode_mask"]))
 
 # %%
 
-s16a_mass = Table.read(
+s16a_logm_50_100 = Table.read(
     root_path / "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits"
 )
 
-print(s16a_mass.colnames, len(s16a_mass))
+print(s16a_logm_50_100.colnames, len(s16a_logm_50_100))
 # check "bsm_s18a" column
-print("s16a_mass bsm_s18a counts:", np.bincount(s16a_mass["bsm_s18a"]))
+print("s16a_logm_50_100 bsm_s18a counts:", np.bincount(s16a_logm_50_100["bsm_s18a"]))
 
 # %%
 
