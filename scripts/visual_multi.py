@@ -40,9 +40,22 @@ else:
 # List of (label, version) pairs to compare
 # e.g., [("s16a_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y3"), ("pdr3_redm_hsc", "Y3")]
 # configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y1")]
-# configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y3")]
-configs_to_compare = [("huang2022_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y1")]
-# configs_to_compare = [ ("huang2022_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y3") ]
+# configs_to_compare = [
+#     ("huang2022_redm_hsc", "Y1"),
+#     ("s16a_redm_hsc", "Y1"),
+#     ("s16a_redm_hsc", "Y3"),
+# ]
+# configs_to_compare = [("huang2022_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y1")]
+# configs_to_compare = [
+#     ("huang2022_logm_50_100", "Y1"),
+#     ("s16a_logm_50_100", "Y1"),
+#     ("s16a_logm_50_100", "Y3"),
+# ]
+configs_to_compare = [
+    ("s16a_logm_50_100", "Y3"),
+    ("s16a_redm_hsc", "Y3"),
+    ("pdr3_redm_hsc", "Y3"),
+]
 
 
 # Main comparison style.
@@ -90,7 +103,7 @@ handles, legend_labels = axes[0].get_legend_handles_labels()
 if handles:
     axes[0].legend(handles, legend_labels, loc="best", title="label")
 
-fig.suptitle(f"Comparison of ΔΣ Profiles: {', '.join(present_labels)}", y=0.996)
+fig.suptitle("Comparison of ΔΣ Profiles", y=0.996)
 fig.tight_layout()
 plt.show()
 
@@ -192,7 +205,7 @@ if loaded_tables:
         ratio_axes[0].legend(handles, legend_labels, loc="best", title="label")
 
     ratio_fig.suptitle(
-        f"ΔΣ Ratio relative to {present_labels[0]}: {', '.join(present_labels[1:])}",
+        f"ΔΣ Ratio relative to {present_labels[0]}",
         y=0.996,
     )
     ratio_fig.tight_layout()

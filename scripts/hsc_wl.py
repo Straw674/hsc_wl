@@ -15,10 +15,10 @@ from dsigma.surveys import hsc as hsc_survey
 
 # ---------- Runtime Settings ----------
 # Switch this label before each run when using profile-based YAML config.
-RUN_PROFILE_LABEL = "forced"
+RUN_PROFILE_LABEL = "s16a_redm_hsc"
 
 # Source catalog version: "Y3" (PDR3/S19A) or "Y1" (S16A/Y1)
-SOURCE_VERSION = "Y3"
+SOURCE_VERSION = "Y1"
 
 # ---------- Misc ----------
 NJOBS = 12
