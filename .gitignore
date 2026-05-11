@@ -3,7 +3,5 @@ __pycache__
 
 /data
 /output
-/.agents
-.github/copilot-instructions.md
 sandbox/playground.py
-GEMINI.md
+
