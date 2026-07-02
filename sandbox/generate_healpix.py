@@ -1,4 +1,4 @@
-# %%
+# %%k
 import sys
 import logging
 from pathlib import Path
@@ -19,7 +19,6 @@ while True:
 
     if (current_dir / marker).exists():
         root_path = current_dir
-        logger.info(f"Project root found: {root_path}")  # Confirm the path found
         break
     else:
         current_dir = current_dir.parent
@@ -272,7 +271,7 @@ hsp_mask.write(hsp_out, clobber=True)
 print(f"Saved HealSparse mask to: {hsp_out}")
 
 # %%
-CAMP = "Oranges"
+CMAP = "Oranges"
 LON_RANGE = [199.0, 251.0]
 LAT_RANGE = [41.0, 45.0]
 XSIZE = 1200
@@ -345,7 +344,6 @@ def compare_masks(
             title=f"{title} (Cartesian zoom)",
             cbar=False,
         )
-        fig2.axes[-1].invert_xaxis()
 
         # Draw the same sky-region rectangle using healpy projection coordinates.
         _draw_sky_box(
@@ -395,9 +393,88 @@ compare_masks(
         ("Ref mask 2: s19a_fdfc_hp_contarea_izy-gt-5_trimmed", mask2_cmp),
         ("Ref mask 3: mask_nside1024", mask3_cmp),
     ],
-    cmap=CAMP,
+    cmap=CMAP,
     ra_box=(200.0, 250.0),
     dec_box=(42.0, 44.5),
+)
+
+
+# %%
+def plot_individual_maps(map_list, ra_box=(200.0, 250.0), dec_box=(42.0, 44.5)):
+    """Plot maps with individual colorbars and colormaps."""
+    fig = plt.figure(figsize=(12, 4 * len(map_list)))
+    ra_min, ra_max = map(float, ra_box)
+    dec_min, dec_max = map(float, dec_box)
+
+    for i, (title, m, cmap, vmin, vmax) in enumerate(map_list, start=1):
+        # Create a copy to avoid modifying original and set bad values to UNSEEN
+        m_plot = m.copy()
+        # Treat both 0 and NaN as unobserved
+        m_plot[~np.isfinite(m_plot) | (m_plot == 0)] = hp.UNSEEN
+
+        hp.cartview(
+            m_plot,
+            fig=fig.number,
+            sub=(len(map_list), 1, i),
+            nest=True,
+            cmap=cmap,
+            min=vmin,
+            max=vmax,
+            lonra=LON_RANGE,
+            latra=LAT_RANGE,
+            xsize=XSIZE,
+            title=title,
+            cbar=True,
+            badcolor="lightgray",  # Use a neutral color for unobserved/NaN
+        )
+        _draw_sky_box(ra_min, ra_max, dec_min, dec_max, color="white", lw=1.0)
+
+    plt.show()
+
+
+mask_var = hp.read_map(root_path / "data/mask/new/i_variance_nside1024.fits", nest=True)
+mask_fwhm = hp.read_map(root_path / "data/mask/new/i_fwhm_nside1024.fits", nest=True)
+
+# Resample to best_nside for consistency with the rest of the script
+mask_var_cmp = _resample_mask(
+    mask_var, nside_out=best_nside, order_in="NEST", order_out="NEST"
+)
+mask_fwhm_cmp = _resample_mask(
+    mask_fwhm, nside_out=best_nside, order_in="NEST", order_out="NEST"
+)
+
+
+def get_robust_limits(name, m, n_sigma=3.0):
+    """Compute robust vmin, vmax using median +/- n_sigma * NMAD."""
+    # Filter finite and non-zero values to avoid background bias
+    data = m[np.isfinite(m) & (m > 0) & (m != hp.UNSEEN)]
+    if len(data) == 0:
+        logger.warning(f"No valid data for {name}")
+        return None, None
+    med = np.median(data)
+    nmad = 1.4826 * np.median(np.abs(data - med))
+    vmin, vmax = med - n_sigma * nmad, med + n_sigma * nmad
+    logger.info(
+        f"{name} stats: valid_pix={len(data)}, median={med:.4e}, "
+        f"nmad={nmad:.4e}, vmin={vmin:.4e}, vmax={vmax:.4e}"
+    )
+    return vmin, vmax
+
+
+var_min, var_max = get_robust_limits("i_variance", mask_var_cmp)
+fwhm_min, fwhm_max = get_robust_limits("i_fwhm", mask_fwhm_cmp)
+
+plot_individual_maps(
+    [
+        (
+            "Variance distribution (i_variance)",
+            mask_var_cmp,
+            CMAP,
+            var_min,
+            var_max,
+        ),
+        ("Seeing distribution (i_fwhm)", mask_fwhm_cmp, CMAP, fwhm_min, fwhm_max),
+    ]
 )
 
 
@@ -423,7 +500,6 @@ def compare_two_masks(mask_top, mask_bottom, nside_compare, cmap="cividis_r"):
             title=title,
             cbar=False,
         )
-        fig.axes[-1].invert_xaxis()
 
     norm = mpl.colors.Normalize(vmin=0.0, vmax=1.0)
     sm = mpl.cm.ScalarMappable(norm=norm, cmap=plt.get_cmap(cmap))
@@ -445,7 +521,122 @@ compare_two_masks(
     [("HEALPix mask (1 = masked)", hp_mask_vis)],
     [("HealSparse mask (1 = masked)", hsp_mask_vis)],
     nside_compare=best_nside,
-    cmap=CAMP,
+    cmap=CMAP,
 )
 
 # %%
+output_dir = Path("/Users/xinq/redmapper_HSC/data/mask")
+mask1 = hp.read_map(root_path / "data/mask/fdfc_hp_window.fits", nest=True)
+
+# Invert mask1 (flip 0/1) and save it as a HealSparse mask
+mask1_inverted = mask1
+
+mask1_nside = hp.npix2nside(mask1_inverted.size)
+mask1_coverage_nside = _choose_coverage_nside(mask1_nside)
+mask1_hsp = hsp.HealSparseMap.make_empty(
+    nside_coverage=mask1_coverage_nside,
+    nside_sparse=mask1_nside,
+    dtype=np.float32,
+    sentinel=np.float32(hp.UNSEEN),
+)
+
+active_pix = np.flatnonzero(mask1_inverted > 0.5)
+if len(active_pix) > 0:
+    mask1_hsp.update_values_pix(active_pix, np.ones(len(active_pix), dtype=np.float32))
+
+mask1_inverted_path = output_dir / "fdfc_hp_window_inverted_healsparse.fits"
+mask1_hsp.write(mask1_inverted_path, clobber=True)
+logger.info(f"Saved inverted mask1 as HealSparse to: {mask1_inverted_path}")
+logger.info(
+    f"Inverted mask1 dtype: {mask1_inverted.dtype}, "
+    f"min={np.min(mask1_inverted)}, max={np.max(mask1_inverted)}"
+)
+
+# %%
+# Debug: Compare mask1 before and after inversion
+logger.info("=" * 80)
+logger.info("INVERSION DEBUG INFO")
+logger.info("=" * 80)
+
+# Original mask1 stats
+mask1_count_0 = np.sum(mask1 == 0)
+mask1_count_1 = np.sum(mask1 == 1)
+mask1_count_unseen = np.sum(mask1 == hp.UNSEEN)
+mask1_total_valid = mask1_count_0 + mask1_count_1
+
+logger.info("Original mask1 (before inversion):")
+logger.info(f"  - Count of 0s: {mask1_count_0}")
+logger.info(f"  - Count of 1s: {mask1_count_1}")
+logger.info(f"  - Count of UNSEEN: {mask1_count_unseen}")
+logger.info(f"  - Total pixels: {len(mask1)}")
+logger.info(f"  - Valid pixels (0 or 1): {mask1_total_valid}")
+if mask1_total_valid > 0:
+    logger.info(f"  - Fraction of 1s: {mask1_count_1 / mask1_total_valid:.4f}")
+
+# Inverted mask1 stats
+mask1_inv_count_0 = np.sum(mask1_inverted == 0)
+mask1_inv_count_1 = np.sum(mask1_inverted == 1)
+mask1_inv_count_other = np.sum((mask1_inverted != 0) & (mask1_inverted != 1))
+
+logger.info("\nInverted mask1 (after 1 - mask1):")
+logger.info(f"  - Count of 0s: {mask1_inv_count_0}")
+logger.info(f"  - Count of 1s: {mask1_inv_count_1}")
+logger.info(f"  - Count of other values: {mask1_inv_count_other}")
+logger.info(f"  - Total pixels: {len(mask1_inverted)}")
+if mask1_total_valid > 0:
+    logger.info(f"  - Fraction of 1s: {mask1_inv_count_1 / mask1_total_valid:.4f}")
+
+# HealSparse mask stats
+active_count = len(active_pix)
+logger.info("\nHealSparse mask created:")
+logger.info(f"  - Active pixels written: {active_count}")
+logger.info(
+    f"  - Expected (sum of mask1_inverted > 0.5): {np.sum(mask1_inverted > 0.5)}"
+)
+logger.info(f"  - Sentinel value: {np.float32(hp.UNSEEN)}")
+
+logger.info("=" * 80)
+
+# %%
+
+
+def compare_two_masks(mask_top, mask_bottom, nside_compare, cmap="cividis_r"):
+    """Compare two masks in stacked Cartesian views with one shared colorbar."""
+    fig = plt.figure(figsize=(12, 5))
+    for i, (title, mask) in enumerate(mask_top + mask_bottom, start=1):
+        mask = _resample_mask(
+            mask, nside_out=nside_compare, order_in="NEST", order_out="NEST"
+        )
+        hp.cartview(
+            mask,
+            fig=fig.number,
+            sub=(2, 1, i),
+            nest=True,
+            cmap=cmap,
+            min=0.0,
+            max=1.0,
+            lonra=LON_RANGE,
+            latra=LAT_RANGE,
+            xsize=XSIZE,
+            title=title,
+            cbar=False,
+        )
+
+    norm = mpl.colors.Normalize(vmin=0.0, vmax=1.0)
+    sm = mpl.cm.ScalarMappable(norm=norm, cmap=plt.get_cmap(cmap))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=fig.axes, location="right", fraction=0.025, pad=0.02)
+    cbar.set_label("Mask Value")
+    fig.subplots_adjust(left=0.03, right=0.92, bottom=0.08, top=0.90, hspace=0.18)
+
+    plt.show()
+
+
+# Visual comparison: original vs inverted
+logger.info("Generating visual comparison...")
+compare_two_masks(
+    [("Original mask1\n(0=unobserved, 1=observed)", mask1)],
+    [("Inverted mask1\n(0=observed, 1=unobserved)", mask1_inverted)],
+    nside_compare=mask1_nside,
+    cmap=CMAP,
+)
