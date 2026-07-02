@@ -25,7 +25,9 @@ from hsc_wl.config import (
     WLConfig,
     get_latest_cluster_catalog,
     resolve_binning,
+    resolve_config,
 )
+from hsc_wl.coverage import filter_lens_by_mask
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +314,11 @@ def prepare_lens_random_tables(
     """
     lens = apply_lens_quality_filters(lens_catalog.copy())
     lens = apply_lens_range_filters(lens, catalog_config)
+    lens = filter_lens_by_mask(
+        lens,
+        ra_col=catalog_config.columns.ra,
+        dec_col=catalog_config.columns.dec,
+    )
 
     if len(random_catalog) == 0:
         raise ValueError("No random points found in the input catalog.")
@@ -559,6 +566,7 @@ def run_prepare_pipeline(cfg: WLConfig, root: Path | None = None):
     ``<save_root>/prepare/``.
     """
     root = _find_root(root)
+    cfg = resolve_config(cfg, root)
     lens_cfg = cfg.lens
 
     lens_path = resolve_path(lens_cfg.lens_path, root)
@@ -572,6 +580,12 @@ def run_prepare_pipeline(cfg: WLConfig, root: Path | None = None):
 
     lens = apply_lens_quality_filters(lens)
     lens = apply_lens_range_filters(lens, lens_cfg)
+    lens = filter_lens_by_mask(
+        lens,
+        root=root,
+        ra_col=lens_cfg.columns.ra,
+        dec_col=lens_cfg.columns.dec,
+    )
 
     col_rank = lens_cfg.columns.col_rank
     print("-" * 80)
@@ -579,6 +593,11 @@ def run_prepare_pipeline(cfg: WLConfig, root: Path | None = None):
     print(f"Column used for ranking: {col_rank}")
     print("-" * 80)
     print(f"Redshift range: {lens_cfg.redshift_range}")
+    print(
+        f"Effective area: {lens_cfg.area_deg2:.4f} deg2"
+        if lens_cfg.area_deg2
+        else "Effective area: N/A"
+    )
     print(f"Lens file: {lens_path}")
     print(f"Random file: {random_path}")
     print(f"Lens columns: {lens.colnames}")

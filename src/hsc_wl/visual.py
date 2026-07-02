@@ -192,6 +192,7 @@ def plot_radial_profile(
     label_index=0,
     n_labels=1,
     marker="o",
+    color_mode="by_label",
 ):
     if ax_list is None:
         n_bins = len(tables)
@@ -233,7 +234,7 @@ def plot_radial_profile(
                 ax.grid(alpha=0.2, which="both")
             continue
 
-        if len(tables) == 1:
+        if color_mode == "by_label" or len(tables) == 1:
             current_color = palette[label_index % len(palette)]
         else:
             base_color = palette[i % len(palette)]

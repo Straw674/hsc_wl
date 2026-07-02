@@ -92,6 +92,7 @@ def plot_main_comparison(
     use_spline,
     use_log_y,
     reference_line_y,
+    color_mode,
 ):
     """Plot the main ΔΣ comparison profile across all labels."""
     fig_height = max(4.0, 3.3 * n_bins)
@@ -112,18 +113,26 @@ def plot_main_comparison(
             label_index=i,
             n_labels=len(present_labels),
             marker=MARKERS[i % len(MARKERS)],
+            color_mode=color_mode,
             multiply_by_radius=multiply_by_radius,
             use_spline=use_spline,
             use_log_y=use_log_y,
             reference_line_y=reference_line_y,
         )
 
-    handles, legend_labels = axes[0].get_legend_handles_labels()
-    if handles:
-        axes[0].legend(handles, legend_labels, loc="best", title="label")
-
     fig.suptitle("Comparison of ΔΣ Profiles", y=0.996)
     fig.tight_layout()
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            legend_labels,
+            loc="upper left",
+            bbox_to_anchor=(1.01, 1.0),
+            title="label",
+            fontsize="small",
+            frameon=False,
+        )
     return fig, axes
 
 
@@ -184,6 +193,7 @@ def plot_ratio_comparison(
     use_spline,
     use_log_y,
     reference_line_y,
+    color_mode,
 ):
     """Plot ratio ΔΣ / ΔΣ_ref across all non-reference labels."""
     if not loaded_tables or len(loaded_tables) <= 1:
@@ -207,15 +217,18 @@ def plot_ratio_comparison(
             for current_table, reference_table in zip(current_tables, reference_tables)
         ]
 
+        config_index = ratio_index + 1
+
         plot_radial_profile(
             ratio_tables,
             value_column="ds",
             title_label=f"Ratio to {present_labels[0]}",
             ax_list=ratio_axes,
             label_text=label_name,
-            label_index=ratio_index,
-            n_labels=len(present_labels) - 1,
-            marker=MARKERS[ratio_index % len(MARKERS)],
+            label_index=config_index,
+            n_labels=len(present_labels),
+            marker=MARKERS[config_index % len(MARKERS)],
+            color_mode=color_mode,
             multiply_by_radius=multiply_by_radius,
             use_spline=use_spline,
             use_log_y=use_log_y,
@@ -224,12 +237,19 @@ def plot_ratio_comparison(
             title_suffix="Ratio Profiles",
         )
 
-    handles, legend_labels = ratio_axes[0].get_legend_handles_labels()
-    if handles:
-        ratio_axes[0].legend(handles, legend_labels, loc="best", title="label")
-
     ratio_fig.suptitle(f"ΔΣ Ratio relative to {present_labels[0]}", y=0.996)
     ratio_fig.tight_layout()
+    handles, legend_labels = ratio_axes[0].get_legend_handles_labels()
+    if handles:
+        ratio_fig.legend(
+            handles,
+            legend_labels,
+            loc="upper left",
+            bbox_to_anchor=(1.01, 1.0),
+            title="label",
+            fontsize="small",
+            frameon=False,
+        )
     return ratio_fig, ratio_axes
 
 
@@ -300,12 +320,16 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 CONFIGS_TO_COMPARE = [
     ("s16a_logm_50_100", "Y3"),
     ("s16a_redm_hsc", "Y3"),
-    ("pdr3_redm_hsc", "Y3"),
-    ("cosine_4bin", "Y3"),
     ("camira_4bin", "Y3"),
+    ("cosine_4bin", "Y3"),
+    ("pdr3_redm_hsc_no_mask", "Y3"),
+    ("pdr3_redm_hsc_5bands_offdiag", "Y3"),
+    ("pdr3_redm_hsc_free_offdiag", "Y3"),
 ]
 
-MARKERS = ["o", "x", "s", "^", "D"]
+MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
+
+COLOR_MODE = "by_label"
 
 OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_multi_main.png"
 OUTPUT_RATIO_FIG = project_root / "output/plots_for_agents/visual_multi_ratio.png"
@@ -333,6 +357,7 @@ if loaded_tables:
         use_spline=MAIN_USE_SPLINE,
         use_log_y=MAIN_USE_LOG_Y,
         reference_line_y=MAIN_REFERENCE_LINE_Y,
+        color_mode=COLOR_MODE,
     )
     fig.savefig(OUTPUT_MAIN_FIG, dpi=300, bbox_inches="tight")
     plt.show()
@@ -355,6 +380,7 @@ if loaded_tables:
         use_spline=RATIO_USE_SPLINE,
         use_log_y=RATIO_USE_LOG_Y,
         reference_line_y=RATIO_REFERENCE_LINE_Y,
+        color_mode=COLOR_MODE,
     )
     if ratio_result is not None:
         ratio_fig, ratio_axes = ratio_result

@@ -29,6 +29,14 @@ from selasviz import launch_explorer
 
 from hsc_wl.visual import *
 
+# Use fork so worker processes (e.g. from dsigma.precompute) do not re-import
+# the main module; this lets interactive scripts skip the
+# `if __name__ == "__main__"` guard. No-op on Linux; skipped on Windows.
+try:
+    multiprocessing.set_start_method("fork", force=True)
+except (ValueError, RuntimeError):
+    pass
+
 # matplotlib settings
 plt.rcParams["figure.dpi"] = 300
 desired_font = "Source Serif 4"
@@ -37,5 +45,3 @@ plt.rcParams["font.serif"] = [desired_font] + plt.rcParams["font.serif"]
 
 # logging settings
 logging.basicConfig(level=logging.INFO)
-
-
