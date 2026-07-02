@@ -39,27 +39,32 @@ DEC_MIN, DEC_MAX = 42.0, 44.5
 # %%
 # EXECUTION
 print(f"Reading catalog from {IN_CATALOG}")
-with open(IN_CATALOG, 'r') as f:
+with open(IN_CATALOG, "r") as f:
     header_line = f.readline().strip()
-    header = header_line.lstrip('#').split()
+    header = header_line.lstrip("#").split()
 
-df = pd.read_csv(IN_CATALOG, sep=r'\s+', comment='#', names=header)
+df = pd.read_csv(IN_CATALOG, sep=r"\s+", comment="#", names=header)
 print(f"Original catalog size: {len(df)}")
 
 # Filter RA/Dec
-df_filtered = df[(df['RA'] >= RA_MIN) & (df['RA'] <= RA_MAX) & (df['Dec'] >= DEC_MIN) & (df['Dec'] <= DEC_MAX)]
+df_filtered = df[
+    (df["RA"] >= RA_MIN)
+    & (df["RA"] <= RA_MAX)
+    & (df["Dec"] >= DEC_MIN)
+    & (df["Dec"] <= DEC_MAX)
+]
 print(f"Size after RA/Dec cut: {len(df_filtered)}")
 
 # Read Mask
 print(f"Reading mask from {MASK_FILE}")
 hdul = fits.open(MASK_FILE)
-mask_data = hdul[1].data['T'].flatten()
-nside = hdul[1].header['NSIDE']
+mask_data = hdul[1].data["T"].flatten()
+nside = hdul[1].header["NSIDE"]
 print(f"Mask NSIDE: {nside}")
 
 # Calculate healpix indices for the catalog
-phi = np.radians(df_filtered['RA'])
-theta = np.radians(90.0 - df_filtered['Dec'])
+phi = np.radians(df_filtered["RA"])
+theta = np.radians(90.0 - df_filtered["Dec"])
 
 pix = hp.ang2pix(nside, theta, phi, nest=False)
 
@@ -70,7 +75,7 @@ df_final = df_filtered[valid_mask]
 print(f"Size after mask cut: {len(df_final)}")
 
 # Save to new file, keeping the same format
-with open(OUT_CATALOG, 'w') as f:
+with open(OUT_CATALOG, "w") as f:
     f.write("# " + " ".join(header) + "\n")
-df_final.to_csv(OUT_CATALOG, sep=' ', index=False, header=False, mode='a')
+df_final.to_csv(OUT_CATALOG, sep=" ", index=False, header=False, mode="a")
 print(f"Saved to {OUT_CATALOG}")

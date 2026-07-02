@@ -21,6 +21,7 @@ from hsc_wl.prepare import run_prepare_pipeline
 from hsc_wl.wl_compute import run_wl_analysis
 from hsc_wl.config import CATALOG_SOURCES, RUN_PROFILES
 
+
 def run():
     print("--- Running prepare for camira (top_n) ---")
     run_prepare_pipeline(
@@ -70,6 +71,7 @@ def run():
         },
         root_path=root_path,
     )
+
 
 if __name__ == "__main__":
     run()
