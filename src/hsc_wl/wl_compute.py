@@ -3,15 +3,25 @@
 This module provides reusable building blocks for HSC weak-lensing analysis.
 It is fully self-contained (no dependency on ``initial.py``) and can be
 imported from any script or notebook in the project.
+
+The top-level entry point is :func:`run_pipeline`, which orchestrates the
+``load source → load prepared lens/random → precompute → stack per bin →
+save`` stages.  Each stage is also exposed as a standalone function so it
+can be run individually from an interactive ``# %%`` cell.
 """
 
+import datetime
 import glob
+import json
 import logging
 import os
+import subprocess
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
 from astropy.cosmology import Planck18
+from astropy.io import fits as fits_io
 from astropy.table import Table
 from dsigma.helpers import dsigma_table
 from dsigma.jackknife import compute_jackknife_fields, jackknife_resampling
@@ -19,7 +29,10 @@ from dsigma.precompute import precompute
 from dsigma.stacking import excess_surface_density
 from dsigma.surveys import hsc as hsc_survey
 
+from hsc_wl.config import CorrectionConfig, SourceConfig, WLConfig
+
 logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Path / column helpers
@@ -58,20 +71,7 @@ def find_one(path_or_pattern, description):
 
 
 def pick_column(cols, candidates):
-    """Return the first column name from *candidates* that exists in *cols*.
-
-    Parameters
-    ----------
-    cols : list[str]
-        Available column names.
-    candidates : list[str]
-        Preferred names, tried in order.
-
-    Returns
-    -------
-    str or None
-        The first match, or ``None`` if nothing matches.
-    """
+    """Return the first column name from *candidates* that exists in *cols*."""
     for c in candidates:
         if c in cols:
             return c
@@ -79,27 +79,7 @@ def pick_column(cols, candidates):
 
 
 def pick_required_column(cols, candidates, description):
-    """Like :func:`pick_column` but raises on failure.
-
-    Parameters
-    ----------
-    cols : list[str]
-        Available column names.
-    candidates : list[str]
-        Preferred names, tried in order.
-    description : str
-        Human-readable label for the error message.
-
-    Returns
-    -------
-    str
-        The first match.
-
-    Raises
-    ------
-    KeyError
-        If none of *candidates* is found.
-    """
+    """Like :func:`pick_column` but raises on failure."""
     col = pick_column(cols, candidates)
     if col is None:
         raise KeyError(f"Could not find {description}. Tried: {', '.join(candidates)}")
@@ -146,7 +126,6 @@ def assign_jackknife_fields_with_fallback(
             f"Need at least 2 lenses after precompute filtering for jackknife; got {len(table_l)}"
         )
 
-    # Use only lenses with non-zero lens-source pair counts for clustering weights.
     weights = np.sum(table_l["sum 1"], axis=1)
     n_positive_weight = int(np.sum(weights > 0))
     if n_positive_weight < 2:
@@ -208,7 +187,6 @@ def assign_jackknife_fields_with_fallback(
 # Source catalogue loading
 # ---------------------------------------------------------------------------
 
-# Default rp bin parameters (matching Y3 defaults in run_hsc_wl.py).
 _DEFAULT_RP_MIN = 0.10
 _DEFAULT_RP_MAX = 20.0
 _DEFAULT_RP_NBINS = 11
@@ -223,35 +201,9 @@ def load_and_prepare_source(
 ):
     """Load and prepare the source (and optional calibration / n(z)) catalogues.
 
-    This function encapsulates the full source-loading logic that was
-    previously embedded in ``run_analysis``: column auto-detection,
-    ``dsigma_table()`` conversion, selection-bias correction, b-mode mask
-    filtering, and tomographic redshift handling.
-
-    Parameters
-    ----------
-    source_file : str or Path
-        Path to the source catalogue FITS file.
-    source_version : {'Y3', 'Y1'}, optional
-        Source catalogue version (default ``'Y3'``).
-    source_survey : str, optional
-        Survey name passed to ``dsigma_table`` (default ``'hsc'``).
-    source_nz_file : str or Path or None, optional
-        Path to the n(z) FITS file.  Required when *source_version* is ``'Y3'``
-        (tomographic mode).
-    source_calib_file : str or Path or None, optional
-        Path to the calibration catalogue (used for Y1/S16A).
-
-    Returns
-    -------
-    table_s : astropy.table.Table
-        Prepared source table.
-    table_c : astropy.table.Table or None
-        Calibration table (``None`` when not applicable).
-    table_n : astropy.table.Table or None
-        Redshift distribution table (``None`` for non-tomographic runs).
-    rp_bins_default : numpy.ndarray
-        Default projected-radius bin edges (log-spaced, Mpc).
+    This function encapsulates the full source-loading logic: column
+    auto-detection, ``dsigma_table()`` conversion, selection-bias
+    correction, b-mode mask filtering, and tomographic redshift handling.
     """
     src_file = find_one(source_file, "source catalog")
     calib_file = (
@@ -270,7 +222,6 @@ def load_and_prepare_source(
     table_s = Table.read(src_file)
     table_c = Table.read(calib_file) if calib_file is not None else None
 
-    # ---- auto-detect column names ----
     source_cols = table_s.colnames
     source_ra_col = pick_required_column(
         source_cols, ["i_ra", "RA", "ra"], "source right ascension column"
@@ -320,7 +271,6 @@ def load_and_prepare_source(
         R_2=source_r2_col,
     )
 
-    # mag_A is only used/required for Y3+ selection bias correction
     if source_version in ("Y3", "PDR3", "S19A"):
         source_mag_col = pick_required_column(
             source_cols,
@@ -329,7 +279,6 @@ def load_and_prepare_source(
         )
         dsigma_table_kwargs["mag_A"] = source_mag_col
 
-    # Apply b-mode mask if available
     if "b_mode_mask" in source_cols:
         table_s = table_s[table_s["b_mode_mask"] == 1]
 
@@ -344,8 +293,6 @@ def load_and_prepare_source(
         )
         dsigma_table_kwargs["z"] = source_z_col
 
-    # dsigma sets 'z_low': 'photoz_err68_min' by default for S16A/Y1, so we
-    # must override it if our catalog uses a different name.
     z_low_col = pick_column(source_cols, ["z_low", "photoz_err68_min"])
     if z_low_col:
         dsigma_table_kwargs["z_low"] = z_low_col
@@ -360,7 +307,6 @@ def load_and_prepare_source(
         **dsigma_table_kwargs,
     )
 
-    # Re-flip e_2 for Y1 if it was already in standard format
     if source_version == "Y1":
         table_s["e_2"] = -table_s["e_2"]
 
@@ -369,9 +315,7 @@ def load_and_prepare_source(
     )
 
     if tomography:
-        # Remove galaxies with bimodal P(z)'s.
         table_s = table_s[table_s["z_bin"] > 0]
-        # dsigma expects the first redshift bin to be 0, not 1.
         table_s["z_bin"] = table_s["z_bin"] - 1
 
         logger.info("[load] n(z): %s", nz_file)
@@ -380,8 +324,6 @@ def load_and_prepare_source(
         table_n["n"] = np.column_stack([table_n[f"BIN{i + 1}"] for i in range(4)])
         table_n.keep_columns(["z", "n"])
 
-        # Assign each galaxy in the source catalog the mean redshift of the bin.
-        # This is only used to determine which lens-source pairs to use.
         table_s["z"] = np.sum(table_n["z"][:, np.newaxis] * table_n["n"], axis=0)[
             table_s["z_bin"]
         ]
@@ -422,8 +364,6 @@ def precompute_catalogs(
     n_jobs=12,
 ):
     """Run dsigma precompute and filter out objects without any nearby sources."""
-    # Ensure all redshifts in table_l are not completely identical (which happens if there's only 1 lens)
-    # to prevent scipy/dsigma cubic interpolation error: ValueError("Expect x to not have duplicates")
     orig_len_l = len(table_l)
     modified_l = False
     if orig_len_l > 0 and np.all(table_l["z"] == table_l["z"][0]):
@@ -447,7 +387,6 @@ def precompute_catalogs(
     if modified_l:
         table_l = table_l[:orig_len_l]
 
-    # Ensure all redshifts in table_r are not completely identical to prevent SciPy interpolation duplicate x error
     orig_len_r = len(table_r)
     modified_r = False
     if orig_len_r > 0 and np.all(table_r["z"] == table_r["z"][0]):
@@ -471,21 +410,9 @@ def precompute_catalogs(
     if modified_r:
         table_r = table_r[:orig_len_r]
 
-    # Drop lenses / randoms without any nearby source.
     table_l = table_l[np.sum(table_l["sum 1"], axis=1) > 0]
     table_r = table_r[np.sum(table_r["sum 1"], axis=1) > 0]
     return table_l, table_r
-
-
-_DEFAULT_CORRECTIONS = {
-    "photo_z_dilution_correction": False,
-    "boost_correction": False,
-    "scalar_shear_response_correction": True,
-    "matrix_shear_response_correction": False,
-    "shear_responsivity_correction": True,
-    "random_subtraction": True,
-    "selection_bias_correction": True,
-}
 
 
 def compute_single_bin_profile(
@@ -505,8 +432,8 @@ def compute_single_bin_profile(
 ):
     """Compute a stacked ΔΣ profile for a single lens bin.
 
-    This function runs the full dsigma pipeline for **one** lens / random
-    pair: ``precompute`` → zero-weight filtering → jackknife assignment →
+    Runs the full dsigma pipeline for **one** lens / random pair:
+    ``precompute`` → zero-weight filtering → jackknife assignment →
     redshift-bin masking → ``excess_surface_density`` + jackknife
     resampling.
 
@@ -535,20 +462,14 @@ def compute_single_bin_profile(
     lens_source_cut : float, optional
         Minimum lens-source redshift separation (default ``0.1``).
     corrections : dict or None, optional
-        Override individual correction flags.  Keys are the same as those
-        accepted by ``excess_surface_density`` (see
-        ``_DEFAULT_CORRECTIONS``).  Any key not supplied falls back to the
-        default.
+        Override individual correction flags (see ``_DEFAULT_CORRECTIONS``).
     source_version : {'Y3', 'Y1'}, optional
         Source catalogue version, used only for logging (default ``'Y3'``).
 
     Returns
     -------
     dict
-        ``'result_table'`` – astropy Table with the ΔΣ profile,
-        ``'jk_cov'`` – jackknife covariance matrix,
-        ``'n_lens'`` – number of lenses in the redshift bin,
-        ``'z_median'`` – median lens redshift.
+        ``'result_table'``, ``'jk_cov'``, ``'n_lens'``, ``'z_median'``.
     """
     rp_bins = np.asarray(rp_bins, dtype=float)
     z_bins = np.asarray(z_bins, dtype=float)
@@ -557,7 +478,6 @@ def compute_single_bin_profile(
     if corrections is not None:
         corr.update(corrections)
 
-    # ---- precompute ----
     if "sum 1" not in table_l.colnames:
         table_l, table_r = precompute_catalogs(
             table_l,
@@ -571,13 +491,11 @@ def compute_single_bin_profile(
             n_jobs=n_jobs,
         )
 
-    # ---- jackknife ----
     logger.info("[jackknife] fields")
     _centers, _n_jk_use = assign_jackknife_fields_with_fallback(
         table_l, table_r, n_jackknife
     )
 
-    # ---- redshift bin mask ----
     lo, hi = z_bins[0], z_bins[1]
     mask_l = (lo <= table_l["z"]) & (table_l["z"] < hi)
     mask_r = (lo <= table_r["z"]) & (table_r["z"] < hi)
@@ -588,7 +506,6 @@ def compute_single_bin_profile(
     n_lens = len(table_l_bin)
     z_median = float(np.median(table_l_bin["z"])) if n_lens > 0 else np.nan
 
-    # ---- stacking ----
     kwargs = corr.copy()
     kwargs["return_table"] = True
     kwargs["table_r"] = table_r_bin
@@ -619,120 +536,169 @@ def compute_single_bin_profile(
     }
 
 
-def run_wl_analysis(
-    run_label,
-    run_profiles,
-    source_version="Y3",
-    njobs=12,
-    comoving=False,
-    lens_source_cut=0.1,
-    n_jackknife=100,
-    lens_survey="hsc",
-    lens_rpmin=0.10,
-    lens_rpmax=20.0,
-    lens_n_rpbins=11,
-    lens_linlog="log",
-    lens_z_col="z",
-    lens_ra_col="ra",
-    lens_dec_col="dec",
-    source_file=None,
-    source_nz_file=None,
-    source_calib_file=None,
-    source_survey="hsc",
-    corrections=None,
-    root_path=None,
-):
-    """Run the lensing profile computation and write output FITS files."""
-    if root_path is None:
-        current_dir = Path.cwd().resolve()
-        marker = "pyproject.toml"
-        while True:
-            if not current_dir or current_dir == current_dir.parent:
-                break
-            if (current_dir / marker).exists():
-                root_path = current_dir
-                break
-            current_dir = current_dir.parent
-        if root_path is None:
-            raise FileNotFoundError("Could not find the project root.")
+# ---------------------------------------------------------------------------
+# Stage result containers
+# ---------------------------------------------------------------------------
 
-    # Assign default files if not provided
-    if source_file is None:
-        if source_version == "Y3":
-            source_file = str(root_path / "data/hsc_y3.fits")
-        elif source_version == "Y1":
-            source_file = str(root_path / "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_source.fits")
-        else:
-            raise ValueError(f"Unsupported source_version: {source_version}")
 
-    if source_nz_file is None and source_version == "Y3":
-        source_nz_file = str(root_path / "data/nz.fits")
+@dataclass(frozen=True, slots=True)
+class SourceData:
+    """Output of :func:`load_source`."""
 
-    if source_calib_file is None and source_version == "Y1":
-        source_calib_file = str(root_path / "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_calib.fits")
+    table_s: Table
+    table_c: Table | None
+    table_n: Table | None
+    rp_bins: np.ndarray
+    version: str
 
-    run_paths = run_profiles[run_label]
-    save_root = run_paths["save_root"]
 
-    lens_file = Path(save_root) / f"prepare/{run_label}_lenses.fits"
-    random_file = Path(save_root) / f"prepare/{run_label}_randoms.fits"
+@dataclass(frozen=True, slots=True)
+class PreparedTables:
+    """Output of :func:`load_prepared_tables`."""
+
+    lens: Table
+    random: Table
+    bin_metadata: list
+
+
+@dataclass(frozen=True, slots=True)
+class PrecomputedTables:
+    """Output of :func:`precompute_global`."""
+
+    lens: Table
+    random: Table
+    bin_metadata: list
+
+
+@dataclass(frozen=True, slots=True)
+class BinProfile:
+    """Output of :func:`stack_one_bin`."""
+
+    bin_id: int
+    bin_name: str
+    result_table: Table
+    jk_cov: np.ndarray
+    n_lens: int
+    z_median: float
+
+
+# ---------------------------------------------------------------------------
+# Root / path resolution
+# ---------------------------------------------------------------------------
+
+
+def _find_root(root: Path | None) -> Path:
+    if root is not None:
+        return Path(root)
+    current_dir = Path.cwd().resolve()
+    while True:
+        if not current_dir or current_dir == current_dir.parent:
+            break
+        if (current_dir / "pyproject.toml").exists():
+            return current_dir
+        current_dir = current_dir.parent
+    raise FileNotFoundError("Could not find the project root.")
+
+
+def default_source_path(version: str, root: Path, kind: str) -> Path:
+    """Return the default source / n(z) / calib file path for *version*.
+
+    *kind* is one of ``"source"``, ``"nz"``, ``"calib"``.
+    """
+    root = Path(root)
+    if version in ("Y3", "PDR3", "S19A"):
+        if kind == "source":
+            return root / "data/hsc_y3.fits"
+        if kind == "nz":
+            return root / "data/nz.fits"
+    elif version == "Y1":
+        if kind == "source":
+            return (
+                root / "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_source.fits"
+            )
+        if kind == "calib":
+            return (
+                root / "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_calib.fits"
+            )
+    raise ValueError(f"No default {kind} file for source version {version!r}.")
+
+
+def _resolve_source_files(
+    src: SourceConfig, root: Path
+) -> tuple[Path, Path | None, Path | None]:
+    source_file = (
+        Path(src.file)
+        if src.file is not None
+        else default_source_path(src.version, root, "source")
+    )
+    nz_file = (
+        Path(src.nz_file)
+        if src.nz_file is not None
+        else (
+            default_source_path(src.version, root, "nz")
+            if src.version in ("Y3", "PDR3", "S19A")
+            else None
+        )
+    )
+    calib_file = (
+        Path(src.calib_file)
+        if src.calib_file is not None
+        else (
+            default_source_path(src.version, root, "calib")
+            if src.version == "Y1"
+            else None
+        )
+    )
+    return source_file, nz_file, calib_file
+
+
+# ---------------------------------------------------------------------------
+# Pipeline stages
+# ---------------------------------------------------------------------------
+
+
+def load_source(cfg: WLConfig, root: Path | None = None) -> SourceData:
+    """Stage 1: load and prepare the source catalogue.
+
+    The result is independent of the lens catalog and can be reused across
+    runs that share the same :class:`SourceConfig`.
+    """
+    root = _find_root(root)
+    src = cfg.source
+    source_file, nz_file, calib_file = _resolve_source_files(src, root)
+
+    table_s, table_c, table_n, rp_bins_default = load_and_prepare_source(
+        source_file=str(source_file),
+        source_version=src.version,
+        source_survey=src.survey,
+        source_nz_file=str(nz_file) if nz_file is not None else None,
+        source_calib_file=str(calib_file) if calib_file is not None else None,
+    )
+    return SourceData(
+        table_s=table_s,
+        table_c=table_c,
+        table_n=table_n,
+        rp_bins=rp_bins_default,
+        version=src.version,
+    )
+
+
+def load_prepared_tables(cfg: WLConfig, root: Path | None = None) -> PreparedTables:
+    """Stage 2: read the unified lens/random FITS written by the prepare stage."""
+    root = _find_root(root)
+    save_root = cfg.resolved_save_root(root)
+    lens_file = save_root / "prepare" / f"{cfg.label}_lenses.fits"
+    random_file = save_root / "prepare" / f"{cfg.label}_randoms.fits"
 
     if not lens_file.exists():
         raise FileNotFoundError(f"Unified lens file not found: {lens_file}")
     if not random_file.exists():
         raise FileNotFoundError(f"Unified random file not found: {random_file}")
 
-    savepath = Path(save_root) / source_version / "dsigma"
-    savepath.mkdir(parents=True, exist_ok=True)
-
-    table_s, table_c, table_n, _ = load_and_prepare_source(
-        source_file=source_file,
-        source_version=source_version,
-        source_survey=source_survey,
-        source_nz_file=source_nz_file,
-        source_calib_file=source_calib_file,
-    )
-
-    rp_bins = np.logspace(np.log10(lens_rpmin), np.log10(lens_rpmax), lens_n_rpbins + 1)
-
     logger.info("loading global lens and random files...")
     global_table_l_raw = Table.read(str(lens_file))
     global_table_r_raw = Table.read(str(random_file))
 
-    global_table_l = dsigma_table(
-        global_table_l_raw,
-        "lens",
-        z=lens_z_col,
-        ra=lens_ra_col,
-        dec=lens_dec_col,
-        w_sys=1.0,
-    )
-    if "bin_id" not in global_table_l.colnames:
-        global_table_l["bin_id"] = global_table_l_raw["bin_id"]
-
-    global_table_r = dsigma_table(
-        global_table_r_raw, "lens", z="z", ra="ra", dec="dec", w_sys=1.0
-    )
-    if "bin_id" not in global_table_r.colnames:
-        global_table_r["bin_id"] = global_table_r_raw["bin_id"]
-
-    logger.info(
-        f"[precompute] global lenses ({len(global_table_l)}), randoms ({len(global_table_r)})"
-    )
-    global_table_l, global_table_r = precompute_catalogs(
-        global_table_l,
-        global_table_r,
-        table_s,
-        table_c,
-        table_n,
-        rp_bins,
-        comoving,
-        lens_source_cut,
-        njobs,
-    )
-    logger.info("[precompute] global precompute finished")
-
-    import json
     bin_meta_json = global_table_l_raw.meta.get("BIN_META", "[]")
     try:
         bin_metadata = json.loads(bin_meta_json)
@@ -741,73 +707,283 @@ def run_wl_analysis(
         logger.warning("BIN_META header could not be parsed.")
 
     if not bin_metadata:
-        unique_bids = np.unique(global_table_l["bin_id"])
+        unique_bids = np.unique(global_table_l_raw["bin_id"]).tolist()
         bin_metadata = [{"bin_id": bid, "bin_name": f"bin{bid}"} for bid in unique_bids]
 
-    for bmeta in bin_metadata:
-        bid = bmeta["bin_id"]
-        bin_name = bmeta.get("bin_name", f"bin{bid}")
-        logger.info(f"--- Processing {bin_name} (ID: {bid}) ---")
+    return PreparedTables(
+        lens=global_table_l_raw, random=global_table_r_raw, bin_metadata=bin_metadata
+    )
 
-        table_l = global_table_l[global_table_l["bin_id"] == bid]
-        table_r = global_table_r[global_table_r["bin_id"] == bid]
 
-        logger.info(f"{bin_name} valid lenses: {len(table_l)}, randoms: {len(table_r)}")
+def precompute_global(
+    prepared: PreparedTables,
+    source: SourceData,
+    cfg: WLConfig,
+) -> PrecomputedTables:
+    """Stage 3: convert to dsigma format and run precompute for all bins at once."""
+    rp_bins = np.logspace(
+        np.log10(cfg.rp.rp_min), np.log10(cfg.rp.rp_max), cfg.rp.n_bins + 1
+    )
 
-        if len(table_l) == 0:
-            logger.info(f"Skipping {bin_name}: no valid lenses after precompute.")
-            continue
+    global_table_l = dsigma_table(
+        prepared.lens, "lens", z="z", ra="ra", dec="dec", w_sys=1.0
+    )
+    if "bin_id" not in global_table_l.colnames:
+        global_table_l["bin_id"] = prepared.lens["bin_id"]
 
-        logger.info("[jackknife] fields")
-        centers, n_jk_use = assign_jackknife_fields_with_fallback(
-            table_l, table_r, n_jackknife
-        )
+    global_table_r = dsigma_table(
+        prepared.random, "lens", z="z", ra="ra", dec="dec", w_sys=1.0
+    )
+    if "bin_id" not in global_table_r.colnames:
+        global_table_r["bin_id"] = prepared.random["bin_id"]
 
-        logger.info("[stack] ΔΣ by lens z-bin")
-        z_bins = np.array(run_paths["lens_z_bins"])
-        lo, hi = z_bins[0], z_bins[1]
-        mL = (lo <= table_l["z"]) & (table_l["z"] < hi)
-        mR = (lo <= table_r["z"]) & (table_r["z"] < hi)
+    logger.info(
+        "[precompute] global lenses (%d), randoms (%d)",
+        len(global_table_l),
+        len(global_table_r),
+    )
+    global_table_l, global_table_r = precompute_catalogs(
+        global_table_l,
+        global_table_r,
+        source.table_s,
+        source.table_c,
+        source.table_n,
+        rp_bins,
+        cfg.comoving,
+        cfg.lens_source_cut,
+        cfg.n_jobs,
+    )
+    logger.info("[precompute] global precompute finished")
 
-        corr = {
-            "photo_z_dilution_correction": False,
-            "boost_correction": False,
-            "scalar_shear_response_correction": True,
-            "matrix_shear_response_correction": False,
-            "shear_responsivity_correction": True,
-            "random_subtraction": True,
-            "selection_bias_correction": True,
-        }
-        if corrections is not None:
-            corr.update(corrections)
+    return PrecomputedTables(
+        lens=global_table_l,
+        random=global_table_r,
+        bin_metadata=prepared.bin_metadata,
+    )
 
-        kwargs = corr.copy()
-        kwargs["return_table"] = True
-        kwargs["table_r"] = table_r[mR]
 
-        result = excess_surface_density(table_l[mL], **kwargs)
-        kwargs["return_table"] = False
-        cov = jackknife_resampling(
-            excess_surface_density,
-            table_l[mL],
-            **kwargs,
-        )
-        result["ds_err"] = np.sqrt(np.diag(cov))
+def stack_one_bin(
+    pre: PrecomputedTables,
+    source: SourceData,
+    cfg: WLConfig,
+    bin_meta: dict,
+    rp_bins: np.ndarray,
+) -> BinProfile | None:
+    """Stage 4 (per bin): jackknife + stack + jackknife covariance."""
+    bid = bin_meta["bin_id"]
+    bin_name = bin_meta.get("bin_name", f"bin{bid}")
 
+    table_l = pre.lens[pre.lens["bin_id"] == bid]
+    table_r = pre.random[pre.random["bin_id"] == bid]
+
+    logger.info(
+        "--- Processing %s (ID: %s): %d lenses ---", bin_name, bid, len(table_l)
+    )
+    if len(table_l) == 0:
+        logger.info("Skipping %s: no valid lenses after precompute.", bin_name)
+        return None
+
+    logger.info("[jackknife] fields")
+    assign_jackknife_fields_with_fallback(table_l, table_r, cfg.n_jackknife)
+
+    z_lo, z_hi = cfg.lens.redshift_range
+    mask_l = (z_lo <= table_l["z"]) & (table_l["z"] < z_hi)
+    mask_r = (z_lo <= table_r["z"]) & (table_r["z"] < z_hi)
+
+    n_lens = int(np.sum(mask_l))
+    z_median = float(np.median(table_l["z"][mask_l])) if n_lens > 0 else np.nan
+
+    corr = CorrectionConfig().to_dsigma_kwargs()
+    corr.update(cfg.corrections.to_dsigma_kwargs())
+
+    kwargs = corr.copy()
+    kwargs["return_table"] = True
+    kwargs["table_r"] = table_r[mask_r]
+
+    logger.info(
+        "[stack] ΔΣ  z=[%.2f, %.2f)  n_lens=%d  z_median=%.3f",
+        z_lo,
+        z_hi,
+        n_lens,
+        z_median,
+    )
+    result = excess_surface_density(table_l[mask_l], **kwargs)
+
+    kwargs["return_table"] = False
+    cov = jackknife_resampling(excess_surface_density, table_l[mask_l], **kwargs)
+    result["ds_err"] = np.sqrt(np.diag(cov))
+
+    return BinProfile(
+        bin_id=bid,
+        bin_name=bin_name,
+        result_table=result,
+        jk_cov=cov,
+        n_lens=n_lens,
+        z_median=z_median,
+    )
+
+
+def stack_per_bin(
+    pre: PrecomputedTables,
+    source: SourceData,
+    cfg: WLConfig,
+) -> list[BinProfile]:
+    """Stage 4: stack ΔΣ for every bin in ``bin_metadata``."""
+    rp_bins = np.logspace(
+        np.log10(cfg.rp.rp_min), np.log10(cfg.rp.rp_max), cfg.rp.n_bins + 1
+    )
+    profiles: list[BinProfile] = []
+    for bin_meta in pre.bin_metadata:
+        prof = stack_one_bin(pre, source, cfg, bin_meta, rp_bins)
+        if prof is not None:
+            profiles.append(prof)
+    return profiles
+
+
+def save_profiles(
+    profiles: list[BinProfile],
+    cfg: WLConfig,
+    root: Path | None = None,
+) -> list[Path]:
+    """Stage 5: write one FITS per bin under ``<save_root>/<source_version>/dsigma/``."""
+    root = _find_root(root)
+    save_root = cfg.resolved_save_root(root)
+    savepath = save_root / cfg.source.version / "dsigma"
+    savepath.mkdir(parents=True, exist_ok=True)
+
+    written: list[Path] = []
+    for prof in profiles:
         out_fits = (
-            savepath / f"{source_survey.lower()}_{lens_survey or 'lenses'}_{bin_name}.fits"
+            savepath
+            / f"{cfg.source.survey.lower()}_{cfg.lens_survey}_{prof.bin_name}.fits"
         )
-
-        from astropy.io import fits
-        hdul = fits.HDUList(
+        hdul = fits_io.HDUList(
             [
-                fits.PrimaryHDU(),
-                fits.BinTableHDU(result, name="PROFILE"),
-                fits.ImageHDU(cov, name="JK_COV"),
+                fits_io.PrimaryHDU(),
+                fits_io.BinTableHDU(prof.result_table, name="PROFILE"),
+                fits_io.ImageHDU(prof.jk_cov, name="JK_COV"),
             ]
         )
         hdul.writeto(out_fits, overwrite=True)
-        logger.info(f"  wrote: {out_fits}")
+        logger.info("  wrote: %s", out_fits)
+        written.append(out_fits)
+    return written
 
-    logger.info("[done]")
 
+# ---------------------------------------------------------------------------
+# Manifest (reproducibility record)
+# ---------------------------------------------------------------------------
+
+
+def _git_commit() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        return out.stdout.strip()
+    except Exception:
+        return "unknown"
+
+
+def _config_to_serialisable(obj):
+    """Recursively convert a dataclass / tuple / Path into JSON-safe types."""
+    if hasattr(obj, "__dataclass_fields__"):
+        return {
+            k: _config_to_serialisable(getattr(obj, k))
+            for k in obj.__dataclass_fields__
+        }
+    if isinstance(obj, (list, tuple)):
+        return [_config_to_serialisable(v) for v in obj]
+    if isinstance(obj, Path):
+        return str(obj)
+    return obj
+
+
+def write_manifest(
+    cfg: WLConfig,
+    profiles: list[BinProfile],
+    root: Path | None = None,
+) -> Path:
+    """Write ``<save_root>/manifest.json`` describing this run."""
+    root = _find_root(root)
+    save_root = cfg.resolved_save_root(root)
+    save_root.mkdir(parents=True, exist_ok=True)
+
+    import astropy
+    import dsigma
+
+    manifest = {
+        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "git_commit": _git_commit(),
+        "versions": {
+            "dsigma": getattr(dsigma, "__version__", "unknown"),
+            "astropy": astropy.__version__,
+        },
+        "config": _config_to_serialisable(cfg),
+        "bins": [
+            {
+                "bin_id": p.bin_id,
+                "bin_name": p.bin_name,
+                "n_lens": p.n_lens,
+                "z_median": p.z_median,
+            }
+            for p in profiles
+        ],
+    }
+    manifest_path = save_root / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, default=str), encoding="utf-8"
+    )
+    logger.info("wrote manifest: %s", manifest_path)
+    return manifest_path
+
+
+# ---------------------------------------------------------------------------
+# Top-level orchestrator
+# ---------------------------------------------------------------------------
+
+
+def run_pipeline(
+    cfg: WLConfig,
+    root: Path | None = None,
+    *,
+    write_manifest_file: bool = True,
+) -> list[BinProfile]:
+    """Run the full weak-lensing pipeline for *cfg*.
+
+    Stages: ``load_source`` → ``load_prepared_tables`` →
+    ``precompute_global`` → ``stack_per_bin`` → ``save_profiles``
+    (→ ``write_manifest``).
+
+    Parameters
+    ----------
+    cfg : WLConfig
+        Fully-specified run configuration (typically an entry of
+        :data:`hsc_wl.config.RUN_REGISTRY`).
+    root : Path or None
+        Project root.  ``None`` auto-detects via ``pyproject.toml``.
+    write_manifest_file : bool
+        If ``True`` (default) write ``manifest.json`` next to the outputs.
+
+    Returns
+    -------
+    list[BinProfile]
+        One profile per non-empty bin.
+    """
+    root = _find_root(root)
+    logger.info("=== run_pipeline: %s ===", cfg.label)
+
+    source = load_source(cfg, root)
+    prepared = load_prepared_tables(cfg, root)
+    pre = precompute_global(prepared, source, cfg)
+    profiles = stack_per_bin(pre, source, cfg)
+    save_profiles(profiles, cfg, root)
+    if write_manifest_file:
+        write_manifest(cfg, profiles, root)
+
+    logger.info("[done] %s: %d bins", cfg.label, len(profiles))
+    return profiles

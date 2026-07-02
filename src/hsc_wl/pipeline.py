@@ -35,11 +35,14 @@ import pandas as pd
 from astropy.table import Table
 from dsigma.helpers import dsigma_table
 
-from hsc_wl.prepare import (
-    build_bin_slices,
-    get_binning_settings,
-    prepare_lens_random_tables,
+from hsc_wl.config import (
+    BinningConfig,
+    ColumnMapping,
+    LensCatalogConfig,
+    WLConfig,
+    resolve_binning,
 )
+from hsc_wl.prepare import prepare_lens_random_tables
 from hsc_wl.scatter_fit import (
     build_scatter_model,
     compute_survey_number_density,
@@ -52,6 +55,33 @@ from hsc_wl.wl_compute import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def lens_config_from_dict(d: dict) -> LensCatalogConfig:
+    """Build a :class:`LensCatalogConfig` from a legacy ``CATALOG_SOURCES`` dict.
+
+    This adapter preserves backwards compatibility for callers (e.g. the
+    cluster-finder optimisation loop) that still pass a plain dict.
+    """
+    cols = d["columns"]
+    rr = d.get("redshift_range")
+    return LensCatalogConfig(
+        label=d["label"],
+        lens_path=d["lens_path"],
+        random_path=d["random_path"],
+        columns=ColumnMapping(
+            col_rank=cols["col_rank"],
+            ra=cols["ra"],
+            dec=cols["dec"],
+            z=cols["z"],
+        ),
+        redshift_range=tuple(rr) if rr else (0.0, 1.0),
+        top_counts_factor=d.get("top_counts_factor", 1.0),
+        lens_format=d.get("lens_format"),
+        random_format=d.get("random_format"),
+        ra_range=tuple(d["ra_range"]) if d.get("ra_range") else None,
+        dec_range=tuple(d["dec_range"]) if d.get("dec_range") else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -220,24 +250,26 @@ def compute_cluster_catalog_dsigma(
     lens_catalog = Table.from_pandas(cluster_df)
 
     top_counts_factor = catalog_config.get("top_counts_factor", 1.0)
-    source_name = catalog_config.get("label", "cluster")
 
-    binning_settings = get_binning_settings(
-        source_name=source_name,
-        top_counts_factor=top_counts_factor,
-        binning_mode=binning_mode,
-        col_rank_edges_mass=col_rank_edges_mass or [],
-        col_rank_edges_richness=col_rank_edges_richness or [],
-        top_counts=top_counts or [],
-        top_selection_order=top_selection_order,
-        top_n=top_n,
+    binning = resolve_binning(
+        BinningConfig(
+            mode=binning_mode,
+            top_counts=tuple(top_counts or ()),
+            top_n=top_n,
+            edges_richness=tuple(col_rank_edges_richness or ()),
+            edges_mass=tuple(col_rank_edges_mass or ()),
+            selection_order=top_selection_order,
+        ),
+        top_counts_factor,
     )
+
+    lens_cfg = lens_config_from_dict(catalog_config)
 
     bin_results = prepare_lens_random_tables(
         lens_catalog=lens_catalog,
         random_catalog=random_table,
-        catalog_config=catalog_config,
-        binning_settings=binning_settings,
+        catalog_config=lens_cfg,
+        binning=binning,
         random_multiplier=random_multiplier,
         rng_seed=rng_seed,
     )
@@ -269,6 +301,7 @@ def compute_cluster_catalog_dsigma(
 
     if sim_cat is not None:
         from jianbing import scatter
+
         from hsc_wl.wl_compute import precompute_catalogs
 
         obs = Table()
