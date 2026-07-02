@@ -1,9 +1,9 @@
 import colorsys
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
-import re
 
 
 def load_result_tables(base_dir):
@@ -193,6 +193,7 @@ def plot_radial_profile(
     n_labels=1,
     marker="o",
     color_mode="by_label",
+    palette=None,
 ):
     if ax_list is None:
         n_bins = len(tables)
@@ -204,7 +205,8 @@ def plot_radial_profile(
         axes = ax_list
         fig = axes[0].get_figure()
 
-    palette = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    if palette is None:
+        palette = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     if use_log_y is None:
         use_log_y = not multiply_by_radius
 
@@ -239,7 +241,7 @@ def plot_radial_profile(
         else:
             base_color = palette[i % len(palette)]
             current_color = _label_variant_color(base_color, label_index, n_labels)
-            
+
         current_label = label_text if i == 0 else None
 
         # Apply a small horizontal offset on log-scale based on label_index to prevent marker overlap

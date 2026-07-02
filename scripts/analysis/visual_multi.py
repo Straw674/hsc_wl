@@ -114,6 +114,7 @@ def plot_main_comparison(
             n_labels=len(present_labels),
             marker=MARKERS[i % len(MARKERS)],
             color_mode=color_mode,
+            palette=LABEL_PALETTE,
             multiply_by_radius=multiply_by_radius,
             use_spline=use_spline,
             use_log_y=use_log_y,
@@ -229,6 +230,7 @@ def plot_ratio_comparison(
             n_labels=len(present_labels),
             marker=MARKERS[config_index % len(MARKERS)],
             color_mode=color_mode,
+            palette=LABEL_PALETTE,
             multiply_by_radius=multiply_by_radius,
             use_spline=use_spline,
             use_log_y=use_log_y,
@@ -319,15 +321,28 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 # List of (label, version) pairs to compare.
 CONFIGS_TO_COMPARE = [
     ("s16a_logm_50_100", "Y3"),
-    ("s16a_redm_hsc", "Y3"),
+    # ("s16a_redm_hsc", "Y3"),
     ("camira_4bin", "Y3"),
-    ("cosine_4bin", "Y3"),
-    ("pdr3_redm_hsc_no_mask", "Y3"),
-    ("pdr3_redm_hsc_5bands_offdiag", "Y3"),
-    ("pdr3_redm_hsc_free_offdiag", "Y3"),
+    # ("cosine_4bin", "Y3"),
+    # ("pdr3_redm_hsc_no_mask", "Y3"),
+    # ("pdr3_redm_hsc_5bands_offdiag", "Y3"),
+    # ("pdr3_redm_hsc_free_offdiag", "Y3"),
 ]
 
 MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
+
+# Paul Tol "bright"-based palette (grey/yellow dropped for white-bg visibility,
+# orange & teal added for extra distinguishability). 8 distinct hues.
+LABEL_PALETTE = [
+    "#4477AA",  # blue
+    "#EE6677",  # red
+    "#228833",  # green
+    "#66CCEE",  # cyan
+    "#AA3377",  # purple
+    "#EE7733",  # orange
+    "#009988",  # teal
+    "#332288",  # indigo
+]
 
 COLOR_MODE = "by_label"
 
