@@ -43,7 +43,7 @@ else:
     sys.exit(1)
 
 # %% ---------- runtime settings ----------
-LABEL = "forced"
+LABEL = "pdr3_redm_hsc"
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Path to simulation data (relative to root_path)
@@ -53,10 +53,10 @@ SIM_PATH = "libs/jianbing/data/simulation/sim_mdpl2_cen_dsig.fits"
 # List your 4 FITS files in order (relative to root_path).
 # bin_id=1 corresponds to the 1st file (richest/most massive).
 FITS_FILES = [
-    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_lens0.fits",
-    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_lens1.fits",
-    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_lens2.fits",
-    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_lens3.fits",
+    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_bin0.fits",
+    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_bin1.fits",
+    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_bin2.fits",
+    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_bin3.fits",
 ]
 
 OUTPUT_PKL = f"output/{LABEL}/{VERSION}/pkl/{LABEL}_{VERSION}_sum.pkl"

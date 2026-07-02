@@ -37,15 +37,35 @@ else:
 
 # %% ---------- runtime settings ----------
 # Add your labels here (lens_label, source_label)
+
+# LABELS = [
+#     ("s16a_logm_50_100", "Y1"),
+#     ("s16a_logm_50_100", "Y3"),
+#     ("huang2022_logm_50_100", "Y1"),
+#     # ("s16a_redm_hsc", "Y1"),
+#     # ("s16a_redm_hsc", "Y3"),
+#     # ("huang2022_redm_hsc", "Y1"),
+#     # ("pdr3_redm_hsc", "Y3"),
+# ]
+
+# ------------------------------------
+
 LABELS = [
-    ("s16a_logm_50_100", "Y1"),
+    # ("s16a_logm_50_100", "Y1"),
     ("s16a_logm_50_100", "Y3"),
-    ("huang2022_logm_50_100", "Y1"),
+    # ("huang2022_logm_50_100", "Y1"),
     # ("s16a_redm_hsc", "Y1"),
-    # ("s16a_redm_hsc", "Y3"),
+    ("s16a_redm_hsc", "Y3"),
     # ("huang2022_redm_hsc", "Y1"),
-    # ("pdr3_redm_hsc", "Y3"),
+    ("pdr3_redm_hsc", "Y3"),
 ]
+
+# ------------------------------------
+
+# LABELS = [("camira_4bin", "Y3"), ("cosine_4bin", "Y3")]
+
+# ------------------------------------
+
 # Optional: display names for labels in the legend
 DISPLAY_NAMES = {}
 

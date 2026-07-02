@@ -16,7 +16,6 @@ while True:
 
     if (current_dir / marker).exists():
         root_path = current_dir
-        print(f"Project root found: {root_path}")  # Confirm the path found
         break
     else:
         current_dir = current_dir.parent

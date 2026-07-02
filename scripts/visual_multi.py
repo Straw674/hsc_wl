@@ -1,5 +1,6 @@
 # %%
 import sys
+from datetime import datetime
 from pathlib import Path
 
 current_dir = Path.cwd().resolve()
@@ -16,7 +17,6 @@ while True:
 
     if (current_dir / marker).exists():
         root_path = current_dir
-        print(f"Project root found: {root_path}")  # Confirm the path found
         break
     else:
         current_dir = current_dir.parent
@@ -39,23 +39,45 @@ else:
 
 # List of (label, version) pairs to compare
 # e.g., [("s16a_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y3"), ("pdr3_redm_hsc", "Y3")]
+
+# ------------------------------------
+
 # configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y1")]
 # configs_to_compare = [
 #     ("huang2022_redm_hsc", "Y1"),
 #     ("s16a_redm_hsc", "Y1"),
 #     ("s16a_redm_hsc", "Y3"),
 # ]
+
+# ------------------------------------
+
 # configs_to_compare = [("huang2022_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y1")]
 # configs_to_compare = [
 #     ("huang2022_logm_50_100", "Y1"),
 #     ("s16a_logm_50_100", "Y1"),
 #     ("s16a_logm_50_100", "Y3"),
 # ]
+
+# ------------------------------------
+
 configs_to_compare = [
     ("s16a_logm_50_100", "Y3"),
     ("s16a_redm_hsc", "Y3"),
     ("pdr3_redm_hsc", "Y3"),
+    ("cosine_4bin", "Y3"),
+    ("camira_4bin", "Y3"),
 ]
+
+# ------------------------------------
+
+# configs_to_compare = [
+#     # ("s16a_logm_50_100_topn", "Y3"),
+#     # ("s16a_redm_hsc_topn", "Y3"),
+#     ("camira", "Y3"),
+#     ("cosine", "Y3"),
+# ]
+
+# ------------------------------------
 
 
 # Main comparison style.
@@ -68,22 +90,57 @@ MAIN_REFERENCE_LINE_Y = 0.0
 MARKERS = ["o", "x", "s", "^", "D"]
 
 
-fig, axes = plt.subplots(4, 1, figsize=(8.6, 13.2), sharex=True, sharey=False)
-axes = np.atleast_1d(axes)
+def _format_ls_time(path: Path) -> str:
+    """Format a file timestamp in the same style as `ls -lh`."""
+    mtime = datetime.fromtimestamp(path.stat().st_mtime)
+    now = datetime.now()
+    if abs((now - mtime).days) >= 180:
+        return mtime.strftime("%b %e  %Y")
+    return mtime.strftime("%b %e %H:%M")
+
+
+def _get_result_time_text(base_dir: Path) -> str:
+    result_files = sorted(base_dir.glob("hsc_hsc_*.*"))
+    if not result_files:
+        return "unknown time"
+
+    latest_file = max(result_files, key=lambda path: path.stat().st_mtime)
+    return _format_ls_time(latest_file)
+
+
 present_labels = []
 loaded_tables = []
+label_time_texts = []
 
 for i, (label_name, version_name) in enumerate(configs_to_compare):
-    display_name = f"{label_name} ({version_name})"
-    print(f"Loading data for {display_name}...")
     current_dir = root_path / f"output/{label_name}/{version_name}/dsigma"
     if not current_dir.exists():
         print(f"Warning: {current_dir} does not exist. Skipping.")
         continue
+    time_text = _get_result_time_text(current_dir)
+    display_name = f"{label_name} ({version_name})"
+    print(f"Loading data for {display_name} | file time: {time_text}")
     current_tables = load_result_tables(current_dir)
     present_labels.append(display_name)
     loaded_tables.append(current_tables)
+    label_time_texts.append(time_text)
 
+if not loaded_tables:
+    print("No data loaded. Exiting.")
+    sys.exit(0)
+
+n_bins = len(loaded_tables[0])
+for tables in loaded_tables:
+    if len(tables) != n_bins:
+        raise ValueError("All labels must have the same number of lens bins.")
+
+fig_height = max(4.0, 3.3 * n_bins)
+fig, axes = plt.subplots(
+    n_bins, 1, figsize=(8.6, fig_height), sharex=True, sharey=False
+)
+axes = np.atleast_1d(axes)
+
+for i, (display_name, current_tables) in enumerate(zip(present_labels, loaded_tables)):
     plot_radial_profile(
         current_tables,
         value_column="ds",
@@ -91,7 +148,7 @@ for i, (label_name, version_name) in enumerate(configs_to_compare):
         ax_list=axes,
         label_text=display_name,
         label_index=i,
-        n_labels=len(configs_to_compare),
+        n_labels=len(present_labels),
         marker=MARKERS[i % len(MARKERS)],
         multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
         use_spline=MAIN_USE_SPLINE,
@@ -165,10 +222,10 @@ def _build_ratio_table(current_table, reference_table):
     return ratio_table
 
 
-if loaded_tables:
+if loaded_tables and len(loaded_tables) > 1:
     reference_tables = loaded_tables[0]
     ratio_fig, ratio_axes = plt.subplots(
-        4, 1, figsize=(8.6, 13.2), sharex=True, sharey=False
+        n_bins, 1, figsize=(8.6, fig_height), sharex=True, sharey=False
     )
     ratio_axes = np.atleast_1d(ratio_axes)
 

@@ -19,7 +19,6 @@ while True:
 
     if (current_dir / marker).exists():
         root_path = current_dir
-        logger.info(f"Project root found: {root_path}")
         break
     else:
         current_dir = current_dir.parent

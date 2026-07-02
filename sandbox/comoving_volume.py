@@ -19,7 +19,6 @@ while True:
 
     if (current_dir / marker).exists():
         root_path = current_dir
-        logger.info(f"Project root found: {root_path}")  # Confirm the path found
         break
     else:
         current_dir = current_dir.parent
@@ -127,15 +126,11 @@ def comoving_volume_region(
     }
 
 
-result = comoving_volume_region(
-    0.19,
-    0.52,
-    area_deg2=137,
-)["volume_gpc3"]
+result = comoving_volume_region(0.19, 0.52, area_deg2=137)["volume_gpc3"]
 
 print(result)
 
-result2 = comoving_volume_region(0.1, 0.6, area_deg2=72.8)["volume_gpc3"]
+result2 = comoving_volume_region(0.1, 0.8, area_deg2=51.4198)["volume_gpc3"]
 print(result2)
 
 print(f"Ratio of volumes: {result2 / result:.6f}")

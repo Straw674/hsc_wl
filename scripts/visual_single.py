@@ -16,7 +16,6 @@ while True:
 
     if (current_dir / marker).exists():
         root_path = current_dir
-        print(f"Project root found: {root_path}")  # Confirm the path found
         break
     else:
         current_dir = current_dir.parent
@@ -37,8 +36,8 @@ else:
 
 # %%
 
-label = "s16a_redm_hsc"
-version = "Y1"  # "Y1" or "Y3"
+label = "cosine_4bin"  # "huang2022_logm_50_100", "s16a_logm_50_100", or "s16a_redm_hsc"
+version = "Y3"  # "Y1" or "Y3"
 
 # Whether to plot random and raw\
 PLOT_RANDOM = True
