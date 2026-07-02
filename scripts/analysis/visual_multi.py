@@ -1,97 +1,31 @@
-# %%
+# %% [Initialization]
 import sys
 from datetime import datetime
 from pathlib import Path
 
-current_dir = Path.cwd().resolve()
-marker = "pyproject.toml"
-root_path = None  # Initialize root_path
+# Dynamically locate the project root using pyproject.toml as a marker
+project_root = Path(__file__).resolve().parent
+while (
+    project_root != project_root.parent
+    and not (project_root / "pyproject.toml").exists()
+):
+    project_root = project_root.parent
 
-while True:
-    # Check if current_dir is valid and hasn't gone above the filesystem root
-    if not current_dir or current_dir == current_dir.parent:
-        print("Error: pyproject.toml not found in parent directories.")
-        # Handle the error appropriately, maybe raise an exception or exit
-        # For now, just break to avoid infinite loop if marker is truly missing
-        break
+if not (project_root / "pyproject.toml").exists():
+    raise RuntimeError(
+        "Could not find project root (containing pyproject.toml) in any parent directory."
+    )
 
-    if (current_dir / marker).exists():
-        root_path = current_dir
-        break
-    else:
-        current_dir = current_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-if root_path:
-    root_path_str = str(root_path)
+from initial import *  # noqa: F401,F403
 
-    if root_path_str not in sys.path:
-        sys.path.append(root_path_str)
-
-    try:
-        from initial import *
-    except ModuleNotFoundError as e:
-        print(f"Error importing 'initial': {e}")
-
-else:
-    print("Could not proceed without finding the project root.")
-
-# %%
-
-# List of (label, version) pairs to compare
-# e.g., [("s16a_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y3"), ("pdr3_redm_hsc", "Y3")]
-
-# ------------------------------------
-
-# configs_to_compare = [("huang2022_redm_hsc", "Y1"), ("s16a_redm_hsc", "Y1")]
-# configs_to_compare = [
-#     ("huang2022_redm_hsc", "Y1"),
-#     ("s16a_redm_hsc", "Y1"),
-#     ("s16a_redm_hsc", "Y3"),
-# ]
-
-# ------------------------------------
-
-# configs_to_compare = [("huang2022_logm_50_100", "Y1"), ("s16a_logm_50_100", "Y1")]
-# configs_to_compare = [
-#     ("huang2022_logm_50_100", "Y1"),
-#     ("s16a_logm_50_100", "Y1"),
-#     ("s16a_logm_50_100", "Y3"),
-# ]
-
-# ------------------------------------
-
-configs_to_compare = [
-    ("s16a_logm_50_100", "Y3"),
-    ("s16a_redm_hsc", "Y3"),
-    ("pdr3_redm_hsc", "Y3"),
-    ("cosine_4bin", "Y3"),
-    ("camira_4bin", "Y3"),
-]
-
-# ------------------------------------
-
-# configs_to_compare = [
-#     # ("s16a_logm_50_100_topn", "Y3"),
-#     # ("s16a_redm_hsc_topn", "Y3"),
-#     ("camira", "Y3"),
-#     ("cosine", "Y3"),
-# ]
-
-# ------------------------------------
-
-
-# Main comparison style.
-MAIN_MULTIPLY_BY_RADIUS = True
-MAIN_USE_LOG_Y = not MAIN_MULTIPLY_BY_RADIUS
-MAIN_USE_SPLINE = False
-MAIN_REFERENCE_LINE_Y = 0.0
-
-
-MARKERS = ["o", "x", "s", "^", "D"]
+# %% Local Functions
 
 
 def _format_ls_time(path: Path) -> str:
-    """Format a file timestamp in the same style as `ls -lh`."""
+    """Format a file timestamp in the same style as ``ls -lh``."""
     mtime = datetime.fromtimestamp(path.stat().st_mtime)
     now = datetime.now()
     if abs((now - mtime).days) >= 180:
@@ -100,6 +34,7 @@ def _format_ls_time(path: Path) -> str:
 
 
 def _get_result_time_text(base_dir: Path) -> str:
+    """Get a human-readable timestamp for the newest result file in ``base_dir``."""
     result_files = sorted(base_dir.glob("hsc_hsc_*.*"))
     if not result_files:
         return "unknown time"
@@ -108,73 +43,92 @@ def _get_result_time_text(base_dir: Path) -> str:
     return _format_ls_time(latest_file)
 
 
-present_labels = []
-loaded_tables = []
-label_time_texts = []
+def load_comparison_data(configs_to_compare, root_path):
+    """Load dsigma result tables for all (label, version) configurations.
 
-for i, (label_name, version_name) in enumerate(configs_to_compare):
-    current_dir = root_path / f"output/{label_name}/{version_name}/dsigma"
-    if not current_dir.exists():
-        print(f"Warning: {current_dir} does not exist. Skipping.")
-        continue
-    time_text = _get_result_time_text(current_dir)
-    display_name = f"{label_name} ({version_name})"
-    print(f"Loading data for {display_name} | file time: {time_text}")
-    current_tables = load_result_tables(current_dir)
-    present_labels.append(display_name)
-    loaded_tables.append(current_tables)
-    label_time_texts.append(time_text)
+    Returns
+    -------
+    present_labels : list[str]
+        Display names (e.g. ``"label (version)"``) in load order.
+    loaded_tables : list[list[Table]]
+        Per-config list of bin tables.
+    label_time_texts : list[str]
+        Formatted file timestamps for each config (for informative prints).
+    """
+    present_labels = []
+    loaded_tables = []
+    label_time_texts = []
 
-if not loaded_tables:
-    print("No data loaded. Exiting.")
-    sys.exit(0)
+    for label_name, version_name in configs_to_compare:
+        current_dir = root_path / f"output/{label_name}/{version_name}/dsigma"
+        if not current_dir.exists():
+            print(f"Warning: {current_dir} does not exist. Skipping.")
+            continue
+        time_text = _get_result_time_text(current_dir)
+        display_name = f"{label_name} ({version_name})"
+        print(f"Loading data for {display_name} | file time: {time_text}")
+        current_tables = load_result_tables(current_dir)
+        present_labels.append(display_name)
+        loaded_tables.append(current_tables)
+        label_time_texts.append(time_text)
 
-n_bins = len(loaded_tables[0])
-for tables in loaded_tables:
-    if len(tables) != n_bins:
-        raise ValueError("All labels must have the same number of lens bins.")
+    if not loaded_tables:
+        print("No data loaded. Exiting.")
+        return present_labels, loaded_tables, label_time_texts
 
-fig_height = max(4.0, 3.3 * n_bins)
-fig, axes = plt.subplots(
-    n_bins, 1, figsize=(8.6, fig_height), sharex=True, sharey=False
-)
-axes = np.atleast_1d(axes)
+    n_bins = len(loaded_tables[0])
+    for tables in loaded_tables:
+        if len(tables) != n_bins:
+            raise ValueError("All labels must have the same number of lens bins.")
 
-for i, (display_name, current_tables) in enumerate(zip(present_labels, loaded_tables)):
-    plot_radial_profile(
-        current_tables,
-        value_column="ds",
-        title_label="Comparison",
-        ax_list=axes,
-        label_text=display_name,
-        label_index=i,
-        n_labels=len(present_labels),
-        marker=MARKERS[i % len(MARKERS)],
-        multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
-        use_spline=MAIN_USE_SPLINE,
-        use_log_y=MAIN_USE_LOG_Y,
-        reference_line_y=MAIN_REFERENCE_LINE_Y,
+    return present_labels, loaded_tables, label_time_texts
+
+
+def plot_main_comparison(
+    present_labels,
+    loaded_tables,
+    n_bins,
+    multiply_by_radius,
+    use_spline,
+    use_log_y,
+    reference_line_y,
+):
+    """Plot the main ΔΣ comparison profile across all labels."""
+    fig_height = max(4.0, 3.3 * n_bins)
+    fig, axes = plt.subplots(
+        n_bins, 1, figsize=(8.6, fig_height), sharex=True, sharey=False
     )
+    axes = np.atleast_1d(axes)
 
-handles, legend_labels = axes[0].get_legend_handles_labels()
-if handles:
-    axes[0].legend(handles, legend_labels, loc="best", title="label")
+    for i, (display_name, current_tables) in enumerate(
+        zip(present_labels, loaded_tables)
+    ):
+        plot_radial_profile(
+            current_tables,
+            value_column="ds",
+            title_label="Comparison",
+            ax_list=axes,
+            label_text=display_name,
+            label_index=i,
+            n_labels=len(present_labels),
+            marker=MARKERS[i % len(MARKERS)],
+            multiply_by_radius=multiply_by_radius,
+            use_spline=use_spline,
+            use_log_y=use_log_y,
+            reference_line_y=reference_line_y,
+        )
 
-fig.suptitle("Comparison of ΔΣ Profiles", y=0.996)
-fig.tight_layout()
-plt.show()
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    if handles:
+        axes[0].legend(handles, legend_labels, loc="best", title="label")
 
-
-# %%
-
-# Ratio comparison style.
-RATIO_MULTIPLY_BY_RADIUS = False
-RATIO_USE_LOG_Y = False
-RATIO_USE_SPLINE = False
-RATIO_REFERENCE_LINE_Y = 1.0
+    fig.suptitle("Comparison of ΔΣ Profiles", y=0.996)
+    fig.tight_layout()
+    return fig, axes
 
 
 def _build_ratio_table(current_table, reference_table):
+    """Build a per-bin ratio table (current / reference) with propagated errors."""
     current_sorted = current_table.copy()
     reference_sorted = reference_table.copy()
 
@@ -222,8 +176,21 @@ def _build_ratio_table(current_table, reference_table):
     return ratio_table
 
 
-if loaded_tables and len(loaded_tables) > 1:
+def plot_ratio_comparison(
+    present_labels,
+    loaded_tables,
+    n_bins,
+    multiply_by_radius,
+    use_spline,
+    use_log_y,
+    reference_line_y,
+):
+    """Plot ratio ΔΣ / ΔΣ_ref across all non-reference labels."""
+    if not loaded_tables or len(loaded_tables) <= 1:
+        return None
+
     reference_tables = loaded_tables[0]
+    fig_height = max(4.0, 3.3 * n_bins)
     ratio_fig, ratio_axes = plt.subplots(
         n_bins, 1, figsize=(8.6, fig_height), sharex=True, sharey=False
     )
@@ -249,10 +216,10 @@ if loaded_tables and len(loaded_tables) > 1:
             label_index=ratio_index,
             n_labels=len(present_labels) - 1,
             marker=MARKERS[ratio_index % len(MARKERS)],
-            multiply_by_radius=RATIO_MULTIPLY_BY_RADIUS,
-            use_spline=RATIO_USE_SPLINE,
-            use_log_y=RATIO_USE_LOG_Y,
-            reference_line_y=RATIO_REFERENCE_LINE_Y,
+            multiply_by_radius=multiply_by_radius,
+            use_spline=use_spline,
+            use_log_y=use_log_y,
+            reference_line_y=reference_line_y,
             y_label=r"$\Delta\Sigma / \Delta\Sigma_{\mathrm{ref}}$",
             title_suffix="Ratio Profiles",
         )
@@ -261,16 +228,13 @@ if loaded_tables and len(loaded_tables) > 1:
     if handles:
         ratio_axes[0].legend(handles, legend_labels, loc="best", title="label")
 
-    ratio_fig.suptitle(
-        f"ΔΣ Ratio relative to {present_labels[0]}",
-        y=0.996,
-    )
+    ratio_fig.suptitle(f"ΔΣ Ratio relative to {present_labels[0]}", y=0.996)
     ratio_fig.tight_layout()
-    plt.show()
+    return ratio_fig, ratio_axes
 
 
-# %%
 def calculate_comparison_statistics(present_labels, loaded_tables):
+    """Compute and print pairwise chi-square statistics across all configurations."""
     if len(loaded_tables) <= 1:
         return
 
@@ -278,7 +242,6 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
     print(f"{'Statistical Comparison (Chi-Square)':^70}")
     print("=" * 70)
 
-    # Calculate chi2 for all unique pairs (n*(n-1)/2 combinations)
     for i in range(len(present_labels)):
         for j in range(i + 1, len(present_labels)):
             label_1, tables_1 = present_labels[i], loaded_tables[i]
@@ -316,7 +279,8 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
                     ndof_total += ndof_bin
                     red_chi2 = chi2_bin / ndof_bin
                     print(
-                        f"  Bin {bin_idx}: chi2 = {chi2_bin:7.2f} | ndof = {ndof_bin:2d} | red_chi2 = {red_chi2:6.2f}"
+                        f"  Bin {bin_idx}: chi2 = {chi2_bin:7.2f} | "
+                        f"ndof = {ndof_bin:2d} | red_chi2 = {red_chi2:6.2f}"
                     )
                 else:
                     print(f"  Bin {bin_idx}: No valid data points.")
@@ -324,10 +288,81 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
             if ndof_total > 0:
                 print("-" * 70)
                 print(
-                    f"  OVERALL: chi2 = {chi2_total:7.2f} | ndof = {ndof_total:3d} | red_chi2 = {chi2_total / ndof_total:6.2f}"
+                    f"  OVERALL: chi2 = {chi2_total:7.2f} | ndof = {ndof_total:3d} | "
+                    f"red_chi2 = {chi2_total / ndof_total:6.2f}"
                 )
             print("-" * 70)
 
 
+# %% Global Configuration
+
+# List of (label, version) pairs to compare.
+CONFIGS_TO_COMPARE = [
+    ("s16a_logm_50_100", "Y3"),
+    ("s16a_redm_hsc", "Y3"),
+    ("pdr3_redm_hsc", "Y3"),
+    ("cosine_4bin", "Y3"),
+    ("camira_4bin", "Y3"),
+]
+
+MARKERS = ["o", "x", "s", "^", "D"]
+
+OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_multi_main.png"
+OUTPUT_RATIO_FIG = project_root / "output/plots_for_agents/visual_multi_ratio.png"
+
+
+# %% [Stage 1: Load comparison data]
+present_labels, loaded_tables, label_time_texts = load_comparison_data(
+    CONFIGS_TO_COMPARE, project_root
+)
+
+
+# %% [Stage 2: Plot main comparison]
+MAIN_MULTIPLY_BY_RADIUS = True
+MAIN_USE_LOG_Y = not MAIN_MULTIPLY_BY_RADIUS
+MAIN_USE_SPLINE = False
+MAIN_REFERENCE_LINE_Y = 0.0
+
+if loaded_tables:
+    n_bins = len(loaded_tables[0])
+    fig, axes = plot_main_comparison(
+        present_labels=present_labels,
+        loaded_tables=loaded_tables,
+        n_bins=n_bins,
+        multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
+        use_spline=MAIN_USE_SPLINE,
+        use_log_y=MAIN_USE_LOG_Y,
+        reference_line_y=MAIN_REFERENCE_LINE_Y,
+    )
+    fig.savefig(OUTPUT_MAIN_FIG, dpi=300, bbox_inches="tight")
+    plt.show()
+    plt.close(fig)
+
+
+# %% [Stage 3: Plot ratio comparison]
+RATIO_MULTIPLY_BY_RADIUS = False
+RATIO_USE_LOG_Y = False
+RATIO_USE_SPLINE = False
+RATIO_REFERENCE_LINE_Y = 1.0
+
+if loaded_tables:
+    n_bins = len(loaded_tables[0])
+    ratio_result = plot_ratio_comparison(
+        present_labels=present_labels,
+        loaded_tables=loaded_tables,
+        n_bins=n_bins,
+        multiply_by_radius=RATIO_MULTIPLY_BY_RADIUS,
+        use_spline=RATIO_USE_SPLINE,
+        use_log_y=RATIO_USE_LOG_Y,
+        reference_line_y=RATIO_REFERENCE_LINE_Y,
+    )
+    if ratio_result is not None:
+        ratio_fig, ratio_axes = ratio_result
+        ratio_fig.savefig(OUTPUT_RATIO_FIG, dpi=300, bbox_inches="tight")
+        plt.show()
+        plt.close(ratio_fig)
+
+
+# %% [Stage 4: Statistical comparison]
 if loaded_tables:
     calculate_comparison_statistics(present_labels, loaded_tables)

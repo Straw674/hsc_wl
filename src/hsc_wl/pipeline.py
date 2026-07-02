@@ -460,12 +460,14 @@ def compute_cluster_catalog_dsigma(
         penalty_factor = float(n_lens) / top_n
         logger.warning(
             "n_lens (%d) < top_n (%d). Diluting signal by %.3f to penalize.",
-            n_lens, top_n, penalty_factor
+            n_lens,
+            top_n,
+            penalty_factor,
         )
         ds_data = ds_data * penalty_factor
         ds_err = ds_err * np.sqrt(penalty_factor)
         jk_cov = jk_cov * penalty_factor
-        
+
         # Override n_lens to top_n so abundance matching uses the expected number density
         n_lens = top_n
 

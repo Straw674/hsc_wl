@@ -1,105 +1,127 @@
-# %%
+# %% [Initialization]
 import sys
 from pathlib import Path
 
-current_dir = Path.cwd().resolve()
-marker = "pyproject.toml"
-root_path = None  # Initialize root_path
+# Dynamically locate the project root using pyproject.toml as a marker
+project_root = Path(__file__).resolve().parent
+while (
+    project_root != project_root.parent
+    and not (project_root / "pyproject.toml").exists()
+):
+    project_root = project_root.parent
 
-while True:
-    # Check if current_dir is valid and hasn't gone above the filesystem root
-    if not current_dir or current_dir == current_dir.parent:
-        print("Error: pyproject.toml not found in parent directories.")
-        # Handle the error appropriately, maybe raise an exception or exit
-        # For now, just break to avoid infinite loop if marker is truly missing
-        break
+if not (project_root / "pyproject.toml").exists():
+    raise RuntimeError(
+        "Could not find project root (containing pyproject.toml) in any parent directory."
+    )
 
-    if (current_dir / marker).exists():
-        root_path = current_dir
-        break
-    else:
-        current_dir = current_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-if root_path:
-    root_path_str = str(root_path)
+from initial import *  # noqa: F401,F403
 
-    if root_path_str not in sys.path:
-        sys.path.append(root_path_str)
+# %% Local Functions
 
-    try:
-        from initial import *
-    except ModuleNotFoundError as e:
-        print(f"Error importing 'initial': {e}")
 
-else:
-    print("Could not proceed without finding the project root.")
+def load_profile_tables(root_path, label, version):
+    """Load dsigma result tables for a given (label, version) configuration."""
+    result_dir = root_path / f"output/{label}/{version}/dsigma"
+    return load_result_tables(result_dir), result_dir
 
-# %%
 
-label = "cosine_4bin"  # "huang2022_logm_50_100", "s16a_logm_50_100", or "s16a_redm_hsc"
-version = "Y3"  # "Y1" or "Y3"
+def validate_columns(tables, plot_random, plot_raw):
+    """Ensure expected columns are present in the loaded tables."""
+    expected_cols = ["rp", "ds", "ds_err"]
+    if plot_random:
+        expected_cols.append("ds_r")
+    if plot_raw:
+        expected_cols.append("ds_raw")
 
-# Whether to plot random and raw\
+    missing_cols = [c for c in expected_cols if c not in tables[0].colnames]
+    if missing_cols:
+        raise KeyError(f"Missing expected columns: {missing_cols}")
+
+
+def save_figure(fig, output_path):
+    """Save a matplotlib figure to the given path, then close it."""
+    if fig is None:
+        return
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+
+
+# %% Global Configuration
+
+LABEL = "cosine_4bin"  # "huang2022_logm_50_100", "s16a_logm_50_100", or "s16a_redm_hsc"
+VERSION = "Y3"  # "Y1" or "Y3"
+
+# Whether to plot random and raw profiles
 PLOT_RANDOM = True
 PLOT_RAW = False
 
-if label.startswith("huang2022"):
+if LABEL.startswith("huang2022"):
     PLOT_RANDOM = False
 
-# Main profile style.
+# Main profile style
 MAIN_MULTIPLY_BY_RADIUS = True
 MAIN_USE_LOG_Y = not MAIN_MULTIPLY_BY_RADIUS
 MAIN_USE_SPLINE = False
 MAIN_REFERENCE_LINE_Y = 0.0
 
-# Random-subtraction profile style.
-if PLOT_RANDOM:
-    RANDOM_MULTIPLY_BY_RADIUS = False
-    RANDOM_USE_LOG_Y = False
-    RANDOM_USE_SPLINE = False
-    RANDOM_REFERENCE_LINE_Y = 0.0
+# Random-subtraction profile style
+RANDOM_MULTIPLY_BY_RADIUS = False
+RANDOM_USE_LOG_Y = False
+RANDOM_USE_SPLINE = False
+RANDOM_REFERENCE_LINE_Y = 0.0
+
+OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_single_main.png"
+OUTPUT_RAW_FIG = project_root / "output/plots_for_agents/visual_single_raw.png"
+OUTPUT_RANDOM_FIG = project_root / "output/plots_for_agents/visual_single_random.png"
 
 
-result_dir = root_path / f"output/{label}/{version}/dsigma"
-tables = load_result_tables(result_dir)
+# %% [Stage 1: Load data and validate columns]
+tables, result_dir = load_profile_tables(project_root, LABEL, VERSION)
+validate_columns(tables, PLOT_RANDOM, PLOT_RAW)
 
-expected_cols = ["rp", "ds", "ds_err"]
-if PLOT_RANDOM:
-    expected_cols.append("ds_r")
-if PLOT_RAW:
-    expected_cols.append("ds_raw")
 
-missing_cols = [c for c in expected_cols if c not in tables[0].colnames]
-if missing_cols:
-    raise KeyError(f"Missing expected columns: {missing_cols}")
-
+# %% [Stage 2: Plot main profile]
 basic_fig = plot_radial_profile(
     tables,
     value_column="ds",
-    title_label=f"{label} - corrected (main)",
+    title_label=f"{LABEL} - corrected (main)",
     multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
     use_spline=MAIN_USE_SPLINE,
     use_log_y=MAIN_USE_LOG_Y,
     reference_line_y=MAIN_REFERENCE_LINE_Y,
 )
+save_figure(basic_fig, OUTPUT_MAIN_FIG)
+plt.show()
 
+
+# %% [Stage 3: Plot raw profile (optional)]
 if PLOT_RAW:
     raw_fig = plot_radial_profile(
         tables,
         value_column="ds_raw",
-        title_label=f"{label} - raw",
+        title_label=f"{LABEL} - raw",
         multiply_by_radius=MAIN_MULTIPLY_BY_RADIUS,
         use_spline=MAIN_USE_SPLINE,
         use_log_y=MAIN_USE_LOG_Y,
         reference_line_y=MAIN_REFERENCE_LINE_Y,
     )
+    save_figure(raw_fig, OUTPUT_RAW_FIG)
+    plt.show()
+
+
+# %% [Stage 4: Plot random profile (optional)]
 if PLOT_RANDOM:
     rds_fig = plot_radial_profile(
         tables,
         value_column="ds_r",
-        title_label=f"{label} - random",
+        title_label=f"{LABEL} - random",
         multiply_by_radius=RANDOM_MULTIPLY_BY_RADIUS,
         use_spline=RANDOM_USE_SPLINE,
         use_log_y=RANDOM_USE_LOG_Y,
         reference_line_y=RANDOM_REFERENCE_LINE_Y,
     )
+    save_figure(rds_fig, OUTPUT_RANDOM_FIG)
+    plt.show()

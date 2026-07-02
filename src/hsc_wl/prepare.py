@@ -1,8 +1,7 @@
 """Reusable data-preparation utilities for the HSC weak-lensing pipeline.
 
 This module contains pure-computation functions extracted from
-``scripts/prepare_lens_and_random.py``.  It has **no** dependency on
-``initial.py`` and can be imported from anywhere.
+``scripts/prepare_lens_and_random.py``.
 """
 
 import logging
@@ -294,7 +293,6 @@ def build_bin_slices(
         # Present bins in their natural selection order (richest/most massive first)
         ordered_bins = raw_bins
 
-
         bin_slices = []
         for i, (lens_bin, low_edge, high_edge, bin_desc) in enumerate(
             ordered_bins, start=0
@@ -401,9 +399,7 @@ def prepare_lens_random_tables(
     if "logm_cmod" in lens.colnames:
         mask_logm = lens["logm_cmod"] >= 11.2
         lens = lens[mask_logm]
-        logger.info(
-            "Applied logm_cmod >= 11.2 mask: %d objects remain.", len(lens)
-        )
+        logger.info("Applied logm_cmod >= 11.2 mask: %d objects remain.", len(lens))
     else:
         logger.warning(
             "'logm_cmod' column not found in lens catalog; "
@@ -960,4 +956,3 @@ def run_prepare_pipeline(
     print("\n" + "=" * 30)
     print(f"Lenses saved to: {lens_file}")
     print(f"Randoms saved to: {random_file}")
-
