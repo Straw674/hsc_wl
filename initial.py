@@ -5,9 +5,13 @@
 
 import logging
 import math
+import multiprocessing
 import os
 from copy import deepcopy
 from itertools import combinations
+
+# Suppress NumExpr info logs (which print thread counts) before importing pandas
+logging.getLogger("numexpr").setLevel(logging.WARNING)
 
 import healpy as hp
 import healsparse as hsp
@@ -23,7 +27,7 @@ from astropy.table import Row, Table
 from astropy.wcs import WCS
 from selasviz import launch_explorer
 
-from src.visual import *
+from hsc_wl.visual import *
 
 # matplotlib settings
 plt.rcParams["figure.dpi"] = 300
@@ -34,4 +38,4 @@ plt.rcParams["font.serif"] = [desired_font] + plt.rcParams["font.serif"]
 # logging settings
 logging.basicConfig(level=logging.INFO)
 
-logging.info("Initialization complete.")
+

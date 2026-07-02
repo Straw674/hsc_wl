@@ -13,8 +13,8 @@ def load_result_tables(base_dir):
     bin_files = {}
 
     # Find all matching files in the directory
-    for path in base_dir.glob("hsc_hsc_lens*.*"):
-        match = re.search(r"hsc_hsc_lens(\d+)\.(fits|csv)$", path.name)
+    for path in base_dir.glob("hsc_hsc_*.*"):
+        match = re.search(r"hsc_hsc_(?:lens|bin)(\d+)\.(fits|csv)$", path.name)
         if match:
             idx = int(match.group(1))
             ext = match.group(2).lower()
@@ -233,14 +233,22 @@ def plot_radial_profile(
                 ax.grid(alpha=0.2, which="both")
             continue
 
-        base_color = palette[i % len(palette)]
-        current_color = _label_variant_color(base_color, label_index, n_labels)
+        if len(tables) == 1:
+            current_color = palette[label_index % len(palette)]
+        else:
+            base_color = palette[i % len(palette)]
+            current_color = _label_variant_color(base_color, label_index, n_labels)
+            
         current_label = label_text if i == 0 else None
+
+        # Apply a small horizontal offset on log-scale based on label_index to prevent marker overlap
+        offset_factor = 1.0 + (label_index - (n_labels - 1) / 2.0) * 0.04
+        rp_plot = rp * offset_factor
 
         if not use_spline:
             success = _plot_errorbar_style(
                 ax,
-                rp,
+                rp_plot,
                 plot_y,
                 plot_yerr,
                 current_color,
@@ -252,7 +260,7 @@ def plot_radial_profile(
         else:
             success = _plot_spline_style(
                 ax,
-                rp,
+                rp_plot,
                 plot_y,
                 plot_yerr,
                 current_color,

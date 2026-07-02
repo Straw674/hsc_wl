@@ -52,7 +52,7 @@ To reproduce the analysis or run the pipeline, follow this specific order:
     ```
 2.  **Lensing Profile Computation**:
     ```bash
-    .venv/bin/python scripts/hsc_wl.py
+    .venv/bin/python scripts/run_hsc_wl.py
     ```
 3.  **Visualization**:
     Use `scripts/visual_single.py` or `scripts/visual_multi.py` to inspect results.
