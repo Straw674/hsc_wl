@@ -249,7 +249,14 @@ def compute_cluster_catalog_dsigma(
     # ------------------------------------------------------------------
     lens_catalog = Table.from_pandas(cluster_df)
 
-    top_counts_factor = catalog_config.get("top_counts_factor", 1.0)
+    lens_cfg = lens_config_from_dict(catalog_config)
+
+    try:
+        from hsc_wl.coverage import resolve_area_and_factor
+
+        _, top_counts_factor = resolve_area_and_factor(lens_cfg)
+    except (FileNotFoundError, ImportError):
+        top_counts_factor = catalog_config.get("top_counts_factor", 1.0)
 
     binning = resolve_binning(
         BinningConfig(
@@ -262,8 +269,6 @@ def compute_cluster_catalog_dsigma(
         ),
         top_counts_factor,
     )
-
-    lens_cfg = lens_config_from_dict(catalog_config)
 
     bin_results = prepare_lens_random_tables(
         lens_catalog=lens_catalog,

@@ -19,9 +19,12 @@ To override a single parameter without mutating the registry, use
     cfg = replace(RUN_REGISTRY["cosine"], n_jackknife=50)
 """
 
+import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal, Optional
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "ColumnMapping",
@@ -33,6 +36,7 @@ __all__ = [
     "WLConfig",
     "RUN_REGISTRY",
     "resolve_binning",
+    "resolve_config",
     "get_latest_cluster_catalog",
     "replace",
 ]
@@ -90,6 +94,7 @@ class LensCatalogConfig:
     random_format: Optional[str] = None
     ra_range: Optional[tuple[float, float]] = None
     dec_range: Optional[tuple[float, float]] = None
+    area_deg2: Optional[float] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +221,34 @@ def resolve_binning(binning: BinningConfig, factor: float) -> BinningConfig:
     return replace(binning, top_counts=scaled)
 
 
+def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
+    """Resolve ``area_deg2`` and ``top_counts_factor`` from sky coverage.
+
+    Computes the effective area (lens-random footprint ∩ Y3 FDFC mask) and
+    the volume factor relative to the s16a reference (z 0.19–0.52,
+    s16a-random ∩ Y3 area).  Returns a **new** :class:`WLConfig` with the
+    resolved ``LensCatalogConfig``; the original registry entry is unchanged.
+
+    Falls back to the static ``top_counts_factor`` (default 1.0) if the
+    mask or random files are unavailable.
+    """
+    try:
+        from hsc_wl.coverage import resolve_area_and_factor
+
+        area, factor = resolve_area_and_factor(cfg.lens, root)
+        new_lens = replace(cfg.lens, area_deg2=area, top_counts_factor=factor)
+        return replace(cfg, lens=new_lens)
+    except (FileNotFoundError, ImportError) as exc:
+        logger.warning(
+            "Could not resolve area/factor for %s (%s); "
+            "falling back to static top_counts_factor=%.6f",
+            cfg.label,
+            exc,
+            cfg.lens.top_counts_factor,
+        )
+        return cfg
+
+
 # ---------------------------------------------------------------------------
 # Run registry
 # ---------------------------------------------------------------------------
@@ -287,8 +320,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
             "dec": "dec",
             "z": "z_lambda",
         },
-        redshift_range=(0.10, 0.60),
-        top_counts_factor=0.572439,
+        redshift_range=(0.19, 0.52),
     ),
     "pdr3_redm_hsc_5bands_offdiag": _cfg(
         "pdr3_redm_hsc_5bands_offdiag",
@@ -300,8 +332,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
             "dec": "dec",
             "z": "z_lambda",
         },
-        redshift_range=(0.10, 0.60),
-        top_counts_factor=0.572439,
+        redshift_range=(0.19, 0.52),
     ),
     "pdr3_redm_hsc_free_offdiag": _cfg(
         "pdr3_redm_hsc_free_offdiag",
@@ -313,8 +344,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
             "dec": "dec",
             "z": "z_lambda",
         },
-        redshift_range=(0.10, 0.60),
-        top_counts_factor=0.572439,
+        redshift_range=(0.19, 0.52),
     ),
     "s16a_redm_hsc": _cfg(
         "s16a_redm_hsc",
@@ -340,7 +370,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
             "z": "z_best",
         },
         redshift_range=(0.19, 0.52),
-        source=SourceConfig(version="Y1"),
     ),
     "s16a_redm_hsc_topn": _cfg(
         "s16a_redm_hsc_topn",
@@ -366,7 +395,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
             "z": "z_best",
         },
         redshift_range=(0.19, 0.52),
-        source=SourceConfig(version="Y1"),
         binning=_DEFAULT_BINNING_TOPN,
     ),
     "forced": _cfg(
@@ -383,36 +411,30 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     ),
     "camira": _cfg(
         "camira",
-        "data/camira_s23b_wide_sm_v3_filtered.dat",
-        "data/random_hectomap.fits",
+        "data/camira_s23b_wide_sm_v3.dat",
+        "data/random_y3_mask.fits",
         columns={
             "col_rank": "N_mem",
             "ra": "RA",
             "dec": "Dec",
             "z": "z_cl",
         },
-        redshift_range=(0.10, 0.80),
+        redshift_range=(0.19, 0.52),
         lens_format="pandas_dat",
-        ra_range=(210, 250),
-        dec_range=(42, 44.5),
-        top_counts_factor=1.154652,
         binning=_DEFAULT_BINNING_TOPN,
     ),
     "camira_4bin": _cfg(
         "camira_4bin",
-        "data/camira_s23b_wide_sm_v3_filtered.dat",
-        "data/random_hectomap.fits",
+        "data/camira_s23b_wide_sm_v3.dat",
+        "data/random_y3_mask.fits",
         columns={
             "col_rank": "N_mem",
             "ra": "RA",
             "dec": "Dec",
             "z": "z_cl",
         },
-        redshift_range=(0.10, 0.80),
+        redshift_range=(0.19, 0.52),
         lens_format="pandas_dat",
-        ra_range=(210, 250),
-        dec_range=(42, 44.5),
-        top_counts_factor=1.154652,
         binning=_DEFAULT_BINNING_4BIN,
     ),
     "cosine": _cfg(
@@ -425,9 +447,8 @@ RUN_REGISTRY: dict[str, WLConfig] = {
             "dec": "dec",
             "z": "z_cl",
         },
-        redshift_range=(0.10, 0.80),
+        redshift_range=(0.19, 0.52),
         lens_format="parquet",
-        top_counts_factor=1.154652,
         binning=_DEFAULT_BINNING_TOPN,
     ),
     "cosine_4bin": _cfg(
@@ -440,9 +461,8 @@ RUN_REGISTRY: dict[str, WLConfig] = {
             "dec": "dec",
             "z": "z_cl",
         },
-        redshift_range=(0.10, 0.80),
+        redshift_range=(0.19, 0.52),
         lens_format="parquet",
-        top_counts_factor=1.154652,
         binning=_DEFAULT_BINNING_4BIN,
     ),
 }
