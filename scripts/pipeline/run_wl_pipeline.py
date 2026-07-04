@@ -26,22 +26,40 @@ from initial import *  # noqa: F401,F403
 # %% [Global Configuration]
 # Either a single label or a list of labels to run sequentially.
 # Examples:
-#   RUN_LABEL = "pdr3_redm_hsc_no_mask"
-#   RUN_LABEL = ["cosine", "cosine_4bin"]
-RUN_LABEL = [
-    "pdr3_redm_hsc_no_mask",
-    "pdr3_redm_hsc_5bands_offdiag",
-    "pdr3_redm_hsc_free_offdiag",
-    "s16a_redm_hsc",
-    "s16a_logm_50_100",
-    "s16a_redm_hsc_topn",
-    "s16a_logm_50_100_topn",
-    "forced",
-    "camira",
-    "camira_4bin",
-    "cosine",
-    "cosine_4bin",
-]
+#   RUN_LABEL = "cosine_4bin"
+#   RUN_LABEL = ["redm_s16a_hectomap_4bin", "camira_hectomap_4bin"]
+#
+# Label convention: {catalog_id}_{nbins}
+#   catalog_id encodes the lens catalog and its sky footprint.
+#   nbins is either "1bin" (single top-N sample) or "4bin" (four richness bins).
+#
+# All available labels:
+#
+#   redMapper PDR3 (natural HectoMap footprint):
+#     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_1bin"
+#     "redm_pdr3_5band_free_4bin",  "redm_pdr3_5band_free_1bin"
+#     "redm_pdr3_3band_free_4bin",  "redm_pdr3_3band_free_1bin"
+#
+#   redMapper S16a:
+#     "redm_s16a_4bin",             "redm_s16a_1bin"
+#     "redm_s16a_hectomap_4bin",    "redm_s16a_hectomap_1bin"
+#
+#   logM S16a massive galaxies:
+#     "logm_s16a_4bin",             "logm_s16a_1bin"
+#     "logm_s16a_hectomap_4bin",    "logm_s16a_hectomap_1bin"
+#
+#   Forced-richness S16a:
+#     "forced_4bin",                "forced_1bin"
+#     "forced_hectomap_4bin",       "forced_hectomap_1bin"
+#
+#   CAMIRA S23b wide:
+#     "camira_4bin",                "camira_1bin"
+#     "camira_hectomap_4bin",       "camira_hectomap_1bin"
+#
+#   COSINE cluster finder (natural HectoMap footprint):
+#     "cosine_4bin",                "cosine_1bin"
+#
+RUN_LABEL = list(RUN_REGISTRY.keys())  # run all 24 configurations
 
 # %% Local Functions
 

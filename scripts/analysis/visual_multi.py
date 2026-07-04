@@ -44,12 +44,12 @@ def _get_result_time_text(base_dir: Path) -> str:
 
 
 def load_comparison_data(configs_to_compare, root_path):
-    """Load dsigma result tables for all (label, version) configurations.
+    """Load dsigma result tables for all (catalog_id, nbins, version) configurations.
 
     Returns
     -------
     present_labels : list[str]
-        Display names (e.g. ``"label (version)"``) in load order.
+        Display names (e.g. ``"catalog_id (nbins)"``) in load order.
     loaded_tables : list[list[Table]]
         Per-config list of bin tables.
     label_time_texts : list[str]
@@ -59,13 +59,13 @@ def load_comparison_data(configs_to_compare, root_path):
     loaded_tables = []
     label_time_texts = []
 
-    for label_name, version_name in configs_to_compare:
-        current_dir = root_path / f"output/{label_name}/{version_name}/dsigma"
+    for catalog_id, nbins, version_name in configs_to_compare:
+        current_dir = root_path / f"output/{catalog_id}/{nbins}/{version_name}/dsigma"
         if not current_dir.exists():
             print(f"Warning: {current_dir} does not exist. Skipping.")
             continue
         time_text = _get_result_time_text(current_dir)
-        display_name = f"{label_name} ({version_name})"
+        display_name = f"{catalog_id} ({nbins})"
         print(f"Loading data for {display_name} | file time: {time_text}")
         current_tables = load_result_tables(current_dir)
         present_labels.append(display_name)
@@ -318,16 +318,57 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 
 # %% Global Configuration
 
-# List of (label, version) pairs to compare.
+# List of (catalog_id, nbins, version_name) triples to compare.
+# To compare 4-bin configurations, change "1bin" to "4bin".
+#
+# All available configurations (1bin):
+#
+#   redMapper PDR3 (only HectoMap footprint):
+#     ("redm_pdr3_3band_fixed", "1bin", "Y3"),
+#     ("redm_pdr3_5band_free",  "1bin", "Y3"),
+#     ("redm_pdr3_3band_free",  "1bin", "Y3"),
+#
+#   redMapper S16a:
+#     ("redm_s16a",          "1bin", "Y3"),
+#     ("redm_s16a_hectomap", "1bin", "Y3"),
+#
+#   logM S16a massive galaxies:
+#     ("logm_s16a",          "1bin", "Y3"),
+#     ("logm_s16a_hectomap", "1bin", "Y3"),
+#
+#   Forced-richness S16a:
+#     ("forced",             "1bin", "Y3"),
+#     ("forced_hectomap",    "1bin", "Y3"),
+#
+#   CAMIRA S23b wide:
+#     ("camira",             "1bin", "Y3"),
+#     ("camira_hectomap",    "1bin", "Y3"),
+#
+#   COSINE cluster finder (only HectoMap footprint):
+#     ("cosine",             "1bin", "Y3"),
+#
+
 CONFIGS_TO_COMPARE = [
-    ("s16a_logm_50_100", "Y3"),
-    # ("s16a_redm_hsc", "Y3"),
-    ("camira_4bin", "Y3"),
-    # ("cosine_4bin", "Y3"),
-    # ("pdr3_redm_hsc_no_mask", "Y3"),
-    # ("pdr3_redm_hsc_5bands_offdiag", "Y3"),
-    # ("pdr3_redm_hsc_free_offdiag", "Y3"),
+    ("redm_s16a_hectomap", "1bin", "Y3"),
+    ("logm_s16a_hectomap", "1bin", "Y3"),
+    ("redm_pdr3_3band_fixed", "1bin", "Y3"),
+    ("cosine", "1bin", "Y3"),
+    ("camira_hectomap", "1bin", "Y3"),
 ]
+
+# Contrast full footprint and HectoMap footprint configurations, unified on 1bin (Y3).
+# CONFIGS_TO_COMPARE = [
+#     ("camira", "1bin", "Y3"),
+#     ("camira_hectomap", "1bin", "Y3"),
+# ]
+# CONFIGS_TO_COMPARE = [
+#     ("redm_s16a", "1bin", "Y3"),
+#     ("redm_s16a_hectomap", "1bin", "Y3"),
+# ]
+# CONFIGS_TO_COMPARE = [
+#     ("logm_s16a", "1bin", "Y3"),
+#     ("logm_s16a_hectomap", "1bin", "Y3"),
+# ]
 
 MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
 
@@ -350,13 +391,13 @@ OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_multi_main.png"
 OUTPUT_RATIO_FIG = project_root / "output/plots_for_agents/visual_multi_ratio.png"
 
 
-# %% [Stage 1: Load comparison data]
+# [Stage 1: Load comparison data]
 present_labels, loaded_tables, label_time_texts = load_comparison_data(
     CONFIGS_TO_COMPARE, project_root
 )
 
 
-# %% [Stage 2: Plot main comparison]
+# [Stage 2: Plot main comparison]
 MAIN_MULTIPLY_BY_RADIUS = True
 MAIN_USE_LOG_Y = not MAIN_MULTIPLY_BY_RADIUS
 MAIN_USE_SPLINE = False
@@ -379,7 +420,7 @@ if loaded_tables:
     plt.close(fig)
 
 
-# %% [Stage 3: Plot ratio comparison]
+# %%[Stage 3: Plot ratio comparison]
 RATIO_MULTIPLY_BY_RADIUS = False
 RATIO_USE_LOG_Y = False
 RATIO_USE_SPLINE = False

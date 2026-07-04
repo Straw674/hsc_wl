@@ -16,7 +16,19 @@ To override a single parameter without mutating the registry, use
 :func:`dataclasses.replace`::
 
     from dataclasses import replace
-    cfg = replace(RUN_REGISTRY["cosine"], n_jackknife=50)
+    cfg = replace(RUN_REGISTRY["cosine_1bin"], n_jackknife=50)
+
+Run labels follow the convention ``{catalog_id}_{nbins}`` where:
+
+- ``catalog_id`` encodes both the lens catalog and its sky footprint.
+  Catalogs that naturally cover the full survey area (e.g. s16a redMapper,
+  CAMIRA) have an optional ``_hectomap`` suffix for the RA 200-250 /
+  Dec 42-44.5 sub-region.  Catalogs that are inherently confined to a
+  single footprint (pdr3 redMapper, COSINE) carry no footprint suffix.
+- ``nbins`` is either ``1bin`` (single top-N bin, ``top_n`` mode) or
+  ``4bin`` (four richness/mass bins, ``top_counts`` mode).
+
+Output is written to ``output/{catalog_id}/{nbins}/``.
 """
 
 import logging
@@ -117,14 +129,14 @@ class BinningConfig:
     """How lenses are partitioned into bins.
 
     ``mode`` is one of ``"edges"``, ``"top_counts"``, ``"top_n"``.
-    The ``top_counts`` / ``edges_*`` fields hold the *raw* user-specified
+    The ``top_counts`` / ``top_n`` fields hold the *raw* user-specified
     values; the per-catalog ``top_counts_factor`` is applied separately by
     :func:`resolve_binning`.
     """
 
     mode: Literal["edges", "top_counts", "top_n"] = "top_counts"
     top_counts: tuple[int, ...] = (53, 196, 660, 1159)
-    top_n: int = 800
+    top_n: int = 500
     edges_richness: tuple[float, ...] = (6.0, 10.0, 20.0, 35.0, 120.0)
     edges_mass: tuple[float, ...] = (10.63, 10.8, 11.0, 11.2, 11.6)
     selection_order: Literal["asc", "desc"] = "desc"
@@ -207,18 +219,23 @@ def resolve_binning(binning: BinningConfig, factor: float) -> BinningConfig:
     """Apply the per-catalog ``top_counts_factor`` scaling.
 
     Returns a new :class:`BinningConfig` with the *effective* (scaled)
-    ``top_counts``.  No-op for non-``top_counts`` modes or when ``factor``
-    is ``1.0``.
+    ``top_counts`` (for ``top_counts`` mode) or ``top_n`` (for ``top_n``
+    mode).  No-op for ``edges`` mode or when ``factor`` is ``1.0``.
     """
-    if binning.mode != "top_counts" or factor == 1.0:
+    if factor == 1.0:
         return binning
-    scaled = tuple(int(round(c * factor)) for c in binning.top_counts)
-    if any(c <= 0 for c in scaled):
-        raise ValueError(
-            f"Scaled top_counts must be positive (factor={factor}, "
-            f"raw={binning.top_counts}, scaled={scaled})."
-        )
-    return replace(binning, top_counts=scaled)
+    if binning.mode == "top_counts":
+        scaled = tuple(int(round(c * factor)) for c in binning.top_counts)
+        if any(c <= 0 for c in scaled):
+            raise ValueError(
+                f"Scaled top_counts must be positive (factor={factor}, "
+                f"raw={binning.top_counts}, scaled={scaled})."
+            )
+        return replace(binning, top_counts=scaled)
+    if binning.mode == "top_n":
+        scaled_n = max(1, int(round(binning.top_n * factor)))
+        return replace(binning, top_n=scaled_n)
+    return binning
 
 
 def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
@@ -250,26 +267,96 @@ def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
 
 
 # ---------------------------------------------------------------------------
-# Run registry
+# Run registry – shared constants
 # ---------------------------------------------------------------------------
 
 _EDGES_RICHNESS = (6.0, 10.0, 20.0, 35.0, 120.0)
 _EDGES_MASS = (10.63, 10.8, 11.0, 11.2, 11.6)
-_TOP_COUNTS_TOPN = (53, 196, 660, 1159)
+_TOP_COUNTS_4BIN = (53, 196, 660, 1159)
 
+# 4-bin mode: lenses are split into four richness/mass bins by top_counts.
 _DEFAULT_BINNING_4BIN = BinningConfig(
     mode="top_counts",
-    top_counts=_TOP_COUNTS_TOPN,
+    top_counts=_TOP_COUNTS_4BIN,
     edges_richness=_EDGES_RICHNESS,
     edges_mass=_EDGES_MASS,
 )
-_DEFAULT_BINNING_TOPN = BinningConfig(
+# 1-bin mode: all lenses treated as a single top-N sample.
+_DEFAULT_BINNING_1BIN = BinningConfig(
     mode="top_n",
-    top_counts=_TOP_COUNTS_TOPN,
-    top_n=800,
+    top_counts=_TOP_COUNTS_4BIN,
+    top_n=500,
     edges_richness=_EDGES_RICHNESS,
     edges_mass=_EDGES_MASS,
 )
+
+# ---------------------------------------------------------------------------
+# Lens catalog paths
+# ---------------------------------------------------------------------------
+
+# redMapper PDR3 – three photometric variants
+_PATH_REDM_PDR3_3BAND_FIXED = (
+    "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_no_mask/run/"
+    "hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit"
+)
+_PATH_REDM_PDR3_5BAND_FREE = (
+    "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_5bands_offdiag/run/"
+    "hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit"
+)
+_PATH_REDM_PDR3_3BAND_FREE = (
+    "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_free_offdiag/run/"
+    "hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit"
+)
+
+# redMapper S16a
+_PATH_REDM_S16A = (
+    "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/"
+    "redmapper_hsc_s16a_cluster_bsm.fits"
+)
+
+# Stellar-mass selected S16a galaxies
+_PATH_LOGM_S16A = "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits"
+
+# Forced-richness S16a massive galaxies
+_PATH_FORCED = (
+    "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits"
+)
+
+# CAMIRA S23b wide
+_PATH_CAMIRA = "data/camira_s23b_wide_sm_v3.dat"
+
+# ---------------------------------------------------------------------------
+# Random catalog paths
+# ---------------------------------------------------------------------------
+
+_RAND_HECTOMAP = "data/random_hectomap.fits"
+_RAND_S16A = "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits"
+_RAND_Y3 = "data/random_y3_mask.fits"
+
+# ---------------------------------------------------------------------------
+# Column mappings
+# ---------------------------------------------------------------------------
+
+_COLS_REDM = {"col_rank": "lambda", "ra": "ra", "dec": "dec", "z": "z_lambda"}
+_COLS_LOGM = {"col_rank": "logm_50_100", "ra": "ra", "dec": "dec", "z": "z_best"}
+_COLS_FORCED = {"col_rank": "lam", "ra": "ra", "dec": "dec", "z": "z_best"}
+_COLS_CAMIRA = {"col_rank": "N_mem", "ra": "RA", "dec": "Dec", "z": "z_cl"}
+_COLS_COSINE = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
+
+# ---------------------------------------------------------------------------
+# Sky footprint boxes  (unpacked as **kwargs into _cfg)
+# ---------------------------------------------------------------------------
+
+# HectoMap sub-region: RA 200-250 deg, Dec 42-44.5 deg
+_BOX_HECTOMAP = {"ra_range": (200, 250), "dec_range": (42, 44.5)}
+
+# Reference redshift range shared by all catalogs
+_Z_RANGE = (0.19, 0.52)
+
+
+# ---------------------------------------------------------------------------
+# Compact WLConfig constructor
+# ---------------------------------------------------------------------------
 
 
 def _cfg(
@@ -288,7 +375,16 @@ def _cfg(
     binning=None,
     save_root=None,
 ):
-    """Compact constructor for :class:`WLConfig` registry entries."""
+    """Compact constructor for :class:`WLConfig` registry entries.
+
+    ``save_root`` defaults to ``output/{catalog_id}/{nbins}`` where
+    ``catalog_id`` and ``nbins`` are derived by splitting *label* at its
+    last underscore (e.g. ``"redm_s16a_4bin"`` → ``"redm_s16a"`` /
+    ``"4bin"``).
+    """
+    if save_root is None:
+        catalog_id, nbins = label.rsplit("_", 1)
+        save_root = f"output/{catalog_id}/{nbins}"
     return WLConfig(
         label=label,
         lens=LensCatalogConfig(
@@ -305,164 +401,267 @@ def _cfg(
         ),
         source=source or SourceConfig(),
         binning=binning or _DEFAULT_BINNING_4BIN,
-        save_root=save_root or f"output/{label}",
+        save_root=save_root,
     )
 
 
+# ---------------------------------------------------------------------------
+# Run registry
+#
+# Label convention : {catalog_id}_{nbins}
+# Output convention: output/{catalog_id}/{nbins}/
+#
+# Catalog IDs
+#   redm_pdr3_3band_fixed  – redMapper PDR3, 3-band colours, fixed off-diag cov
+#   redm_pdr3_5band_free   – redMapper PDR3, 5-band colours, free off-diag cov
+#   redm_pdr3_3band_free   – redMapper PDR3, 3-band colours, free off-diag cov
+#   redm_s16a              – redMapper S16a, full footprint
+#   redm_s16a_hectomap     – redMapper S16a, HectoMap sub-region
+#   logm_s16a              – S16a massive galaxies ranked by log stellar mass
+#   logm_s16a_hectomap     – same, HectoMap sub-region
+#   forced                 – S16a massive galaxies with forced redMapper richness
+#   forced_hectomap        – same, HectoMap sub-region
+#   camira                 – CAMIRA S23b wide, full footprint
+#   camira_hectomap        – CAMIRA S23b wide, HectoMap sub-region
+#   cosine                 – COSINE cluster finder (natural HectoMap footprint)
+# ---------------------------------------------------------------------------
+
 RUN_REGISTRY: dict[str, WLConfig] = {
-    "pdr3_redm_hsc_no_mask": _cfg(
-        "pdr3_redm_hsc_no_mask",
-        "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_no_mask/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit",
-        "data/random_hectomap.fits",
-        columns={
-            "col_rank": "lambda",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_lambda",
-        },
-        redshift_range=(0.19, 0.52),
-    ),
-    "pdr3_redm_hsc_5bands_offdiag": _cfg(
-        "pdr3_redm_hsc_5bands_offdiag",
-        "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_5bands_offdiag/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit",
-        "data/random_hectomap.fits",
-        columns={
-            "col_rank": "lambda",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_lambda",
-        },
-        redshift_range=(0.19, 0.52),
-    ),
-    "pdr3_redm_hsc_free_offdiag": _cfg(
-        "pdr3_redm_hsc_free_offdiag",
-        "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_free_offdiag/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit",
-        "data/random_hectomap.fits",
-        columns={
-            "col_rank": "lambda",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_lambda",
-        },
-        redshift_range=(0.19, 0.52),
-    ),
-    "s16a_redm_hsc": _cfg(
-        "s16a_redm_hsc",
-        "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
-        "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
-        columns={
-            "col_rank": "lambda",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_lambda",
-        },
-        redshift_range=(0.19, 0.52),
+    # -----------------------------------------------------------------------
+    # redMapper PDR3 – three photometric variants
+    # All three catalogs are naturally confined to the HectoMap footprint.
+    # -----------------------------------------------------------------------
+    # 3-band colours, fixed off-diagonal covariance (previously: pdr3_redm_hsc_no_mask)
+    "redm_pdr3_3band_fixed_4bin": _cfg(
+        "redm_pdr3_3band_fixed_4bin",
+        _PATH_REDM_PDR3_3BAND_FIXED,
+        _RAND_HECTOMAP,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
         binning=_DEFAULT_BINNING_4BIN,
     ),
-    "s16a_logm_50_100": _cfg(
-        "s16a_logm_50_100",
-        "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits",
-        "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
-        columns={
-            "col_rank": "logm_50_100",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_best",
-        },
-        redshift_range=(0.19, 0.52),
+    "redm_pdr3_3band_fixed_1bin": _cfg(
+        "redm_pdr3_3band_fixed_1bin",
+        _PATH_REDM_PDR3_3BAND_FIXED,
+        _RAND_HECTOMAP,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
     ),
-    "s16a_redm_hsc_topn": _cfg(
-        "s16a_redm_hsc_topn",
-        "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
-        "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
-        columns={
-            "col_rank": "lambda",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_lambda",
-        },
-        redshift_range=(0.19, 0.52),
-        binning=_DEFAULT_BINNING_TOPN,
+    # 5-band colours, free off-diagonal covariance (previously: pdr3_redm_hsc_5bands_offdiag)
+    "redm_pdr3_5band_free_4bin": _cfg(
+        "redm_pdr3_5band_free_4bin",
+        _PATH_REDM_PDR3_5BAND_FREE,
+        _RAND_HECTOMAP,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
     ),
-    "s16a_logm_50_100_topn": _cfg(
-        "s16a_logm_50_100_topn",
-        "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits",
-        "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
-        columns={
-            "col_rank": "logm_50_100",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_best",
-        },
-        redshift_range=(0.19, 0.52),
-        binning=_DEFAULT_BINNING_TOPN,
+    "redm_pdr3_5band_free_1bin": _cfg(
+        "redm_pdr3_5band_free_1bin",
+        _PATH_REDM_PDR3_5BAND_FREE,
+        _RAND_HECTOMAP,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
     ),
-    "forced": _cfg(
-        "forced",
-        "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits",
-        "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits",
-        columns={
-            "col_rank": "lam",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_best",
-        },
-        redshift_range=(0.19, 0.52),
+    # 3-band colours, free off-diagonal covariance (previously: pdr3_redm_hsc_free_offdiag)
+    "redm_pdr3_3band_free_4bin": _cfg(
+        "redm_pdr3_3band_free_4bin",
+        _PATH_REDM_PDR3_3BAND_FREE,
+        _RAND_HECTOMAP,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
     ),
-    "camira": _cfg(
-        "camira",
-        "data/camira_s23b_wide_sm_v3.dat",
-        "data/random_y3_mask.fits",
-        columns={
-            "col_rank": "N_mem",
-            "ra": "RA",
-            "dec": "Dec",
-            "z": "z_cl",
-        },
-        redshift_range=(0.19, 0.52),
-        lens_format="pandas_dat",
-        binning=_DEFAULT_BINNING_TOPN,
+    "redm_pdr3_3band_free_1bin": _cfg(
+        "redm_pdr3_3band_free_1bin",
+        _PATH_REDM_PDR3_3BAND_FREE,
+        _RAND_HECTOMAP,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
     ),
+    # -----------------------------------------------------------------------
+    # redMapper S16a – full footprint and HectoMap sub-region
+    # -----------------------------------------------------------------------
+    # Full footprint (previously: s16a_redm_hsc / s16a_redm_hsc_topn)
+    "redm_s16a_4bin": _cfg(
+        "redm_s16a_4bin",
+        _PATH_REDM_S16A,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "redm_s16a_1bin": _cfg(
+        "redm_s16a_1bin",
+        _PATH_REDM_S16A,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # HectoMap sub-region (previously: s16a_redm_hsc_hectomap / s16a_redm_hsc_topn_hectomap)
+    "redm_s16a_hectomap_4bin": _cfg(
+        "redm_s16a_hectomap_4bin",
+        _PATH_REDM_S16A,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "redm_s16a_hectomap_1bin": _cfg(
+        "redm_s16a_hectomap_1bin",
+        _PATH_REDM_S16A,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # Stellar-mass selected S16a galaxies (log M ranking)
+    # -----------------------------------------------------------------------
+    # Full footprint (previously: s16a_logm_50_100 / s16a_logm_50_100_topn)
+    "logm_s16a_4bin": _cfg(
+        "logm_s16a_4bin",
+        _PATH_LOGM_S16A,
+        _RAND_S16A,
+        columns=_COLS_LOGM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "logm_s16a_1bin": _cfg(
+        "logm_s16a_1bin",
+        _PATH_LOGM_S16A,
+        _RAND_S16A,
+        columns=_COLS_LOGM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # HectoMap sub-region (previously: s16a_logm_50_100_hectomap / s16a_logm_50_100_topn_hectomap)
+    "logm_s16a_hectomap_4bin": _cfg(
+        "logm_s16a_hectomap_4bin",
+        _PATH_LOGM_S16A,
+        _RAND_S16A,
+        columns=_COLS_LOGM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "logm_s16a_hectomap_1bin": _cfg(
+        "logm_s16a_hectomap_1bin",
+        _PATH_LOGM_S16A,
+        _RAND_S16A,
+        columns=_COLS_LOGM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # Forced-richness S16a massive galaxies
+    # -----------------------------------------------------------------------
+    # Full footprint (previously: forced)
+    "forced_4bin": _cfg(
+        "forced_4bin",
+        _PATH_FORCED,
+        _RAND_S16A,
+        columns=_COLS_FORCED,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "forced_1bin": _cfg(
+        "forced_1bin",
+        _PATH_FORCED,
+        _RAND_S16A,
+        columns=_COLS_FORCED,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # HectoMap sub-region
+    "forced_hectomap_4bin": _cfg(
+        "forced_hectomap_4bin",
+        _PATH_FORCED,
+        _RAND_S16A,
+        columns=_COLS_FORCED,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "forced_hectomap_1bin": _cfg(
+        "forced_hectomap_1bin",
+        _PATH_FORCED,
+        _RAND_S16A,
+        columns=_COLS_FORCED,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # CAMIRA S23b wide – full footprint and HectoMap sub-region
+    # -----------------------------------------------------------------------
+    # Full footprint (previously: camira_4bin / camira)
     "camira_4bin": _cfg(
         "camira_4bin",
-        "data/camira_s23b_wide_sm_v3.dat",
-        "data/random_y3_mask.fits",
-        columns={
-            "col_rank": "N_mem",
-            "ra": "RA",
-            "dec": "Dec",
-            "z": "z_cl",
-        },
-        redshift_range=(0.19, 0.52),
+        _PATH_CAMIRA,
+        _RAND_Y3,
+        columns=_COLS_CAMIRA,
+        redshift_range=_Z_RANGE,
         lens_format="pandas_dat",
         binning=_DEFAULT_BINNING_4BIN,
     ),
-    "cosine": _cfg(
-        "cosine",
-        get_latest_cluster_catalog(),
-        "data/random_hectomap.fits",
-        columns={
-            "col_rank": "true_richness",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_cl",
-        },
-        redshift_range=(0.19, 0.52),
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_TOPN,
+    "camira_1bin": _cfg(
+        "camira_1bin",
+        _PATH_CAMIRA,
+        _RAND_Y3,
+        columns=_COLS_CAMIRA,
+        redshift_range=_Z_RANGE,
+        lens_format="pandas_dat",
+        binning=_DEFAULT_BINNING_1BIN,
     ),
+    # HectoMap sub-region (previously: camira_4bin_hectomap / camira_hectomap)
+    "camira_hectomap_4bin": _cfg(
+        "camira_hectomap_4bin",
+        _PATH_CAMIRA,
+        _RAND_Y3,
+        columns=_COLS_CAMIRA,
+        redshift_range=_Z_RANGE,
+        lens_format="pandas_dat",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "camira_hectomap_1bin": _cfg(
+        "camira_hectomap_1bin",
+        _PATH_CAMIRA,
+        _RAND_Y3,
+        columns=_COLS_CAMIRA,
+        redshift_range=_Z_RANGE,
+        lens_format="pandas_dat",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # COSINE cluster finder (natural HectoMap footprint)
+    # -----------------------------------------------------------------------
+    # (previously: cosine_4bin / cosine)
     "cosine_4bin": _cfg(
         "cosine_4bin",
         get_latest_cluster_catalog(),
-        "data/random_hectomap.fits",
-        columns={
-            "col_rank": "true_richness",
-            "ra": "ra",
-            "dec": "dec",
-            "z": "z_cl",
-        },
-        redshift_range=(0.19, 0.52),
+        _RAND_HECTOMAP,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "cosine_1bin": _cfg(
+        "cosine_1bin",
+        get_latest_cluster_catalog(),
+        _RAND_HECTOMAP,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
     ),
 }
