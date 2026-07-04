@@ -19,8 +19,12 @@ where:
 Design notes:
 - No lru_cache: mask loading is fast (~0.1 s) and caching complicates
   interactive workflows where the mask file may change between runs.
-- No RA/Dec box cut: area is defined solely by the mask footprint of the
-  lens survey, not by an arbitrary rectangular clip.
+- RA/Dec box cuts: when a lens config defines ``ra_range`` / ``dec_range``
+  the random catalog is clipped to that box before pixelising.  The
+  effective area is then ``box ∩ lens-random footprint ∩ Y3 mask``, i.e.
+  the intersection of the rectangular cut, the lens survey's actual
+  coverage, and the Y3 source-coverage mask.  Configs without box cuts
+  use the full random footprint.
 """
 
 from __future__ import annotations
@@ -106,19 +110,38 @@ def _pixset_from_radec(
     return np.unique(ipix)
 
 
-def _random_pixset(random_path: str, nside: int = NSIDE) -> np.ndarray:
-    """Load a random catalog's footprint as a sorted pixel set."""
+def _random_pixset(
+    random_path: str,
+    nside: int = NSIDE,
+    ra_range: tuple[float, float] | None = None,
+    dec_range: tuple[float, float] | None = None,
+) -> np.ndarray:
+    """Load a random catalog's footprint as a sorted pixel set.
+
+    When *ra_range* / *dec_range* are given the random points are first
+    clipped to the rectangular box; the returned pixel set then reflects
+    the box-limited lens-survey footprint (still to be intersected with
+    the Y3 source mask downstream).
+    """
     t = Table.read(random_path)
     ra_col = next((c for c in t.colnames if c.lower() == "ra"), "ra")
     dec_col = next((c for c in t.colnames if c.lower() == "dec"), "dec")
     ra = np.asarray(t[ra_col], float)
     dec = np.asarray(t[dec_col], float)
+    keep = np.ones(len(ra), dtype=bool)
+    if ra_range is not None:
+        keep &= (ra >= ra_range[0]) & (ra <= ra_range[1])
+    if dec_range is not None:
+        keep &= (dec >= dec_range[0]) & (dec <= dec_range[1])
+    ra = ra[keep]
+    dec = dec[keep]
     pix = _pixset_from_radec(ra, dec, nside)
     logger.info(
-        "[coverage] random footprint: %s  %d pixels (%.3f deg2)",
+        "[coverage] random footprint: %s  %d pixels (%.4f deg2)%s",
         Path(random_path).name,
         len(pix),
         len(pix) * hp.nside2pixarea(nside, degrees=True),
+        f"  box=[RA {ra_range}, Dec {dec_range}]" if ra_range or dec_range else "",
     )
     return pix
 
@@ -175,17 +198,20 @@ def effective_area_deg2(
     root: Path | None = None,
     nside: int = NSIDE,
 ) -> float:
-    """Effective area = lens-random footprint ∩ Y3 mask.
+    """Effective area = box ∩ lens-random footprint ∩ Y3 mask.
 
     The lens footprint is determined by pixelising the random catalog
-    associated with ``lens_cfg``, then intersecting with the Y3
-    full-depth-full-colour mask pixels.  No RA/Dec box clipping is
-    applied; the area reflects the full overlap of the two footprints.
+    associated with ``lens_cfg``.  When ``lens_cfg.ra_range`` /
+    ``lens_cfg.dec_range`` are set the random points are first clipped to
+    that rectangular box.  The (box-limited) lens footprint is then
+    intersected with the Y3 (s19a FDFC) source-coverage mask, yielding the
+    true lens+source overlap area.
 
     Parameters
     ----------
     lens_cfg : LensCatalogConfig
-        Lens configuration (provides ``random_path``).
+        Lens configuration (provides ``random_path``, ``ra_range``,
+        ``dec_range``).
     root : Path or None
         Project root for resolving relative paths.
     nside : int
@@ -198,10 +224,22 @@ def effective_area_deg2(
     """
     root = _find_root(root)
     rand_path = _resolve_path(lens_cfg.random_path, root)
-    rand_pix = _random_pixset(str(rand_path), nside)
+    rand_pix = _random_pixset(
+        str(rand_path),
+        nside,
+        ra_range=lens_cfg.ra_range,
+        dec_range=lens_cfg.dec_range,
+    )
     y3_pix = _y3_mask_pixset(root, nside)
     overlap = np.intersect1d(rand_pix, y3_pix, assume_unique=True)
-    return len(overlap) * hp.nside2pixarea(nside, degrees=True)
+    area = len(overlap) * hp.nside2pixarea(nside, degrees=True)
+    if lens_cfg.ra_range or lens_cfg.dec_range:
+        logger.info(
+            "[coverage] box ∩ random ∩ Y3 = %d pixels (%.4f deg2)",
+            len(overlap),
+            area,
+        )
+    return area
 
 
 def volume_factor(

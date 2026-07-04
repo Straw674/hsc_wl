@@ -323,17 +323,44 @@ def prepare_lens_random_tables(
     if len(random_catalog) == 0:
         raise ValueError("No random points found in the input catalog.")
 
-    col_rank = catalog_config.columns.col_rank
-    bin_slices = build_bin_slices(lens, col_rank, binning)
-
-    rng = np.random.default_rng(rng_seed)
-
+    # Find random RA/Dec column names
     random_ra_col = next(
         (c for c in random_catalog.colnames if c.lower() == "ra"), "ra"
     )
     random_dec_col = next(
         (c for c in random_catalog.colnames if c.lower() == "dec"), "dec"
     )
+
+    # Filter random catalog by RA/Dec box and mask footprint
+    random_catalog = random_catalog.copy()
+    if catalog_config.ra_range is not None:
+        ra_min, ra_max = catalog_config.ra_range
+        random_catalog = random_catalog[
+            (random_catalog[random_ra_col] >= ra_min)
+            & (random_catalog[random_ra_col] <= ra_max)
+        ]
+    if catalog_config.dec_range is not None:
+        dec_min, dec_max = catalog_config.dec_range
+        random_catalog = random_catalog[
+            (random_catalog[random_dec_col] >= dec_min)
+            & (random_catalog[random_dec_col] <= dec_max)
+        ]
+
+    random_catalog = filter_lens_by_mask(
+        random_catalog,
+        ra_col=random_ra_col,
+        dec_col=random_dec_col,
+    )
+
+    if len(random_catalog) == 0:
+        raise ValueError(
+            f"No random points left after applying RA/Dec cuts {catalog_config.ra_range}/{catalog_config.dec_range} and mask."
+        )
+
+    col_rank = catalog_config.columns.col_rank
+    bin_slices = build_bin_slices(lens, col_rank, binning)
+
+    rng = np.random.default_rng(rng_seed)
 
     lens_tables = []
     random_tables = []
@@ -533,9 +560,13 @@ def show_alignment_plot(
     if bin_desc is None:
         title_high = "+inf" if high_edge == float("inf") else f"{high_edge}"
         fig.suptitle(f"{bin_name} lambda in [{low_edge}, {title_high})")
+        fig.tight_layout()
+        plt.close(fig)
+        return
     else:
         fig.suptitle(f"{bin_name} {bin_desc}")
     fig.tight_layout()
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
