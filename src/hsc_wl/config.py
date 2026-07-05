@@ -25,6 +25,9 @@ Run labels follow the convention ``{catalog_id}_{nbins}`` where:
   CAMIRA) have an optional ``_hectomap`` suffix for the RA 200-250 /
   Dec 42-44.5 sub-region.  Catalogs that are inherently confined to a
   single footprint (pdr3 redMapper, COSINE) carry no footprint suffix.
+  A further ``_s16a`` sub-variant additionally restricts the footprint to
+  the s16a random survey area (s16a random ∩ HectoMAP box ∩ Y3 mask),
+  enabling fair comparison across all lens catalogs on the same sky patch.
 - ``nbins`` is either ``1bin`` (single top-N bin, ``top_n`` mode) or
   ``4bin`` (four richness/mass bins, ``top_counts`` mode).
 
@@ -412,24 +415,32 @@ def _cfg(
 # Output convention: output/{catalog_id}/{nbins}/
 #
 # Catalog IDs
-#   redm_pdr3_3band_fixed  – redMapper PDR3, 3-band colours, fixed off-diag cov
-#   redm_pdr3_5band_free   – redMapper PDR3, 5-band colours, free off-diag cov
-#   redm_pdr3_3band_free   – redMapper PDR3, 3-band colours, free off-diag cov
-#   redm_s16a              – redMapper S16a, full footprint
-#   redm_s16a_hectomap     – redMapper S16a, HectoMap sub-region
-#   logm_s16a              – S16a massive galaxies ranked by log stellar mass
-#   logm_s16a_hectomap     – same, HectoMap sub-region
-#   forced                 – S16a massive galaxies with forced redMapper richness
-#   forced_hectomap        – same, HectoMap sub-region
-#   camira                 – CAMIRA S23b wide, full footprint
-#   camira_hectomap        – CAMIRA S23b wide, HectoMap sub-region
-#   cosine                 – COSINE cluster finder (natural HectoMap footprint)
+#   redm_pdr3_3band_fixed        – redMapper PDR3, 3-band colours, fixed off-diag cov
+#   redm_pdr3_3band_fixed_s16a   – same, restricted to s16a random ∩ HectoMAP box
+#   redm_pdr3_5band_free         – redMapper PDR3, 5-band colours, free off-diag cov
+#   redm_pdr3_5band_free_s16a    – same, restricted to s16a random ∩ HectoMAP box
+#   redm_pdr3_3band_free         – redMapper PDR3, 3-band colours, free off-diag cov
+#   redm_pdr3_3band_free_s16a    – same, restricted to s16a random ∩ HectoMAP box
+#   redm_s16a                    – redMapper S16a, full footprint
+#   redm_s16a_hectomap           – redMapper S16a, HectoMap sub-region
+#   logm_s16a                    – S16a massive galaxies ranked by log stellar mass
+#   logm_s16a_hectomap           – same, HectoMap sub-region
+#   forced                       – S16a massive galaxies with forced redMapper richness
+#   forced_hectomap              – same, HectoMap sub-region
+#   camira                       – CAMIRA S23b wide, full footprint
+#   camira_hectomap              – CAMIRA S23b wide, HectoMap sub-region
+#   camira_hecto_s16a            – CAMIRA, HectoMAP box ∩ s16a random footprint
+#   cosine                       – COSINE cluster finder (natural HectoMap footprint)
+#   cosine_s16a                  – same, restricted to s16a random ∩ HectoMAP box
 # ---------------------------------------------------------------------------
 
 RUN_REGISTRY: dict[str, WLConfig] = {
     # -----------------------------------------------------------------------
     # redMapper PDR3 – three photometric variants
     # All three catalogs are naturally confined to the HectoMap footprint.
+    # The _s16a variants further restrict the footprint to the s16a random
+    # survey area (s16a random ∩ HectoMAP box ∩ Y3 mask) for direct
+    # comparison with s16a-based and COSINE catalogs.
     # -----------------------------------------------------------------------
     # 3-band colours, fixed off-diagonal covariance (previously: pdr3_redm_hsc_no_mask)
     "redm_pdr3_3band_fixed_4bin": _cfg(
@@ -448,6 +459,25 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    # 3-band fixed, s16a footprint ∩ HectoMAP box
+    "redm_pdr3_3band_fixed_s16a_4bin": _cfg(
+        "redm_pdr3_3band_fixed_s16a_4bin",
+        _PATH_REDM_PDR3_3BAND_FIXED,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "redm_pdr3_3band_fixed_s16a_1bin": _cfg(
+        "redm_pdr3_3band_fixed_s16a_1bin",
+        _PATH_REDM_PDR3_3BAND_FIXED,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
     # 5-band colours, free off-diagonal covariance (previously: pdr3_redm_hsc_5bands_offdiag)
     "redm_pdr3_5band_free_4bin": _cfg(
         "redm_pdr3_5band_free_4bin",
@@ -465,6 +495,25 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    # 5-band free, s16a footprint ∩ HectoMAP box
+    "redm_pdr3_5band_free_s16a_4bin": _cfg(
+        "redm_pdr3_5band_free_s16a_4bin",
+        _PATH_REDM_PDR3_5BAND_FREE,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "redm_pdr3_5band_free_s16a_1bin": _cfg(
+        "redm_pdr3_5band_free_s16a_1bin",
+        _PATH_REDM_PDR3_5BAND_FREE,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
     # 3-band colours, free off-diagonal covariance (previously: pdr3_redm_hsc_free_offdiag)
     "redm_pdr3_3band_free_4bin": _cfg(
         "redm_pdr3_3band_free_4bin",
@@ -481,6 +530,25 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         columns=_COLS_REDM,
         redshift_range=_Z_RANGE,
         binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # 3-band free, s16a footprint ∩ HectoMAP box
+    "redm_pdr3_3band_free_s16a_4bin": _cfg(
+        "redm_pdr3_3band_free_s16a_4bin",
+        _PATH_REDM_PDR3_3BAND_FREE,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "redm_pdr3_3band_free_s16a_1bin": _cfg(
+        "redm_pdr3_3band_free_s16a_1bin",
+        _PATH_REDM_PDR3_3BAND_FREE,
+        _RAND_S16A,
+        columns=_COLS_REDM,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
     # redMapper S16a – full footprint and HectoMap sub-region
@@ -642,6 +710,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         binning=_DEFAULT_BINNING_1BIN,
         **_BOX_HECTOMAP,
     ),
+    # HectoMAP box ∩ s16a random footprint – for direct comparison with
+    # s16a-based and COSINE catalogs on the same sky patch.
+    "camira_hecto_s16a_4bin": _cfg(
+        "camira_hecto_s16a_4bin",
+        _PATH_CAMIRA,
+        _RAND_S16A,
+        columns=_COLS_CAMIRA,
+        redshift_range=_Z_RANGE,
+        lens_format="pandas_dat",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "camira_hecto_s16a_1bin": _cfg(
+        "camira_hecto_s16a_1bin",
+        _PATH_CAMIRA,
+        _RAND_S16A,
+        columns=_COLS_CAMIRA,
+        redshift_range=_Z_RANGE,
+        lens_format="pandas_dat",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
     # -----------------------------------------------------------------------
     # COSINE cluster finder (natural HectoMap footprint)
     # -----------------------------------------------------------------------
@@ -663,5 +753,27 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
+    # and PDR3 catalogs on the same sky patch.
+    "cosine_s16a_4bin": _cfg(
+        "cosine_s16a_4bin",
+        get_latest_cluster_catalog(),
+        _RAND_S16A,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "cosine_s16a_1bin": _cfg(
+        "cosine_s16a_1bin",
+        get_latest_cluster_catalog(),
+        _RAND_S16A,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
     ),
 }

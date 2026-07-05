@@ -35,10 +35,13 @@ from initial import *  # noqa: F401,F403
 #
 # All available labels:
 #
-#   redMapper PDR3 (natural HectoMap footprint):
+#   redMapper PDR3 (natural HectoMap footprint / s16a-constrained footprint):
 #     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_1bin"
+#     "redm_pdr3_3band_fixed_s16a_4bin", "redm_pdr3_3band_fixed_s16a_1bin"
 #     "redm_pdr3_5band_free_4bin",  "redm_pdr3_5band_free_1bin"
+#     "redm_pdr3_5band_free_s16a_4bin",  "redm_pdr3_5band_free_s16a_1bin"
 #     "redm_pdr3_3band_free_4bin",  "redm_pdr3_3band_free_1bin"
+#     "redm_pdr3_3band_free_s16a_4bin",  "redm_pdr3_3band_free_s16a_1bin"
 #
 #   redMapper S16a:
 #     "redm_s16a_4bin",             "redm_s16a_1bin"
@@ -52,14 +55,16 @@ from initial import *  # noqa: F401,F403
 #     "forced_4bin",                "forced_1bin"
 #     "forced_hectomap_4bin",       "forced_hectomap_1bin"
 #
-#   CAMIRA S23b wide:
+#   CAMIRA S23b wide (full / hectomap / hectomap + s16a footprint):
 #     "camira_4bin",                "camira_1bin"
 #     "camira_hectomap_4bin",       "camira_hectomap_1bin"
+#     "camira_hecto_s16a_4bin",     "camira_hecto_s16a_1bin"
 #
-#   COSINE cluster finder (natural HectoMap footprint):
+#   COSINE cluster finder (natural HectoMap / s16a-constrained footprint):
 #     "cosine_4bin",                "cosine_1bin"
+#     "cosine_s16a_4bin",           "cosine_s16a_1bin"
 #
-RUN_LABEL = list(RUN_REGISTRY.keys())  # run all 24 configurations
+RUN_LABEL = list(RUN_REGISTRY.keys())  # run all 34 configurations
 
 # %% Local Functions
 

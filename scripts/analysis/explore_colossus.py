@@ -201,9 +201,50 @@ def evaluate_best_fit_components(
 
 # %% Global Configuration
 
-DSIGMA_FITS = "output/cosine/Y3/dsigma/hsc_hsc_lens0.fits"
+# Available labels in RUN_REGISTRY:
+#
+#   redMapper PDR3 (3-band fixed, 5-band free, 3-band free):
+#     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_1bin",
+#     "redm_pdr3_3band_fixed_s16a_4bin", "redm_pdr3_3band_fixed_s16a_1bin",
+#     "redm_pdr3_5band_free_4bin", "redm_pdr3_5band_free_1bin",
+#     "redm_pdr3_5band_free_s16a_4bin", "redm_pdr3_5band_free_s16a_1bin",
+#     "redm_pdr3_3band_free_4bin", "redm_pdr3_3band_free_1bin",
+#     "redm_pdr3_3band_free_s16a_4bin", "redm_pdr3_3band_free_s16a_1bin"
+#
+#   redMapper S16a (full, hectomap):
+#     "redm_s16a_4bin", "redm_s16a_1bin",
+#     "redm_s16a_hectomap_4bin", "redm_s16a_hectomap_1bin"
+#
+#   logM S16a (full, hectomap):
+#     "logm_s16a_4bin", "logm_s16a_1bin",
+#     "logm_s16a_hectomap_4bin", "logm_s16a_hectomap_1bin"
+#
+#   Forced-richness S16a (full, hectomap):
+#     "forced_4bin", "forced_1bin",
+#     "forced_hectomap_4bin", "forced_hectomap_1bin"
+#
+#   CAMIRA S23b (full, hectomap, hectomap+s16a):
+#     "camira_4bin", "camira_1bin",
+#     "camira_hectomap_4bin", "camira_hectomap_1bin",
+#     "camira_hecto_s16a_4bin", "camira_hecto_s16a_1bin"
+#
+#   COSINE (full, hectomap+s16a):
+#     "cosine_4bin", "cosine_1bin",
+#     "cosine_s16a_4bin", "cosine_s16a_1bin"
+#
+LABEL = "redm_pdr3_3band_free_4bin"  # Must match a run label in RUN_REGISTRY
+VERSION = "Y3"  # "Y1" or "Y3"
+BIN_INDEX = 0  # Index of the lens bin to fit (0, 1, 2, 3...)
+
 COSMOLOGY_NAME = "planck18"
 MASS_DEF = "200m"
+
+# Parse catalog_id and nbins from the unified run label
+catalog_id, nbins = LABEL.rsplit("_", 1)
+
+DSIGMA_FITS = (
+    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin{BIN_INDEX}.fits"
+)
 
 OUTPUT_FIG = project_root / "output/plots_for_agents/explore_colossus.png"
 

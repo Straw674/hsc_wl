@@ -128,21 +128,51 @@ def visualize_summary(custom_sum):
 
 # %% Global Configuration
 
-LABEL = "pdr3_redm_hsc"
+# Available labels in RUN_REGISTRY (Must be a 4bin configuration):
+#
+#   redMapper PDR3 (3-band fixed, 5-band free, 3-band free):
+#     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_s16a_4bin",
+#     "redm_pdr3_5band_free_4bin", "redm_pdr3_5band_free_s16a_4bin",
+#     "redm_pdr3_3band_free_4bin", "redm_pdr3_3band_free_s16a_4bin"
+#
+#   redMapper S16a (full, hectomap):
+#     "redm_s16a_4bin", "redm_s16a_hectomap_4bin"
+#
+#   logM S16a (full, hectomap):
+#     "logm_s16a_4bin", "logm_s16a_hectomap_4bin"
+#
+#   Forced-richness S16a (full, hectomap):
+#     "forced_4bin", "forced_hectomap_4bin"
+#
+#   CAMIRA S23b (full, hectomap, hectomap+s16a):
+#     "camira_4bin", "camira_hectomap_4bin", "camira_hecto_s16a_4bin"
+#
+#   COSINE (full, hectomap+s16a):
+#     "cosine_4bin", "cosine_s16a_4bin"
+#
+LABEL = "redm_pdr3_3band_free_4bin"  # Must be a 4bin configuration
 VERSION = "Y3"  # "Y1" or "Y3"
+
+# Parse catalog_id and nbins from the unified run label
+catalog_id, nbins = LABEL.rsplit("_", 1)
+if nbins != "4bin":
+    raise ValueError(f"Scatter fitting requires a 4bin configuration, got {nbins}")
 
 # Path to simulation data (relative to project_root)
 SIM_PATH = "libs/jianbing/data/simulation/sim_mdpl2_cen_dsig.fits"
 
 # 4 FITS files in order (bin_id=1 corresponds to the 1st file / richest bin).
 FITS_FILES = [
-    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_bin0.fits",
-    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_bin1.fits",
-    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_bin2.fits",
-    f"output/{LABEL}/{VERSION}/dsigma/hsc_hsc_bin3.fits",
+    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin0.fits",
+    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin1.fits",
+    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin2.fits",
+    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin3.fits",
 ]
 
-OUTPUT_PKL = project_root / f"output/{LABEL}/{VERSION}/pkl/{LABEL}_{VERSION}_sum.pkl"
+OUTPUT_PKL = (
+    project_root
+    / f"output/{catalog_id}/{nbins}/{VERSION}/pkl/{catalog_id}_{nbins}_{VERSION}_sum.pkl"
+)
 
 plt.rcParams["mathtext.fontset"] = "stix"
 

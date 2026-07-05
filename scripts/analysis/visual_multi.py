@@ -323,10 +323,13 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 #
 # All available configurations (1bin):
 #
-#   redMapper PDR3 (only HectoMap footprint):
-#     ("redm_pdr3_3band_fixed", "1bin", "Y3"),
-#     ("redm_pdr3_5band_free",  "1bin", "Y3"),
-#     ("redm_pdr3_3band_free",  "1bin", "Y3"),
+#   redMapper PDR3 (HectoMap / s16a-constrained footprint):
+#     ("redm_pdr3_3band_fixed",      "1bin", "Y3"),
+#     ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
+#     ("redm_pdr3_5band_free",       "1bin", "Y3"),
+#     ("redm_pdr3_5band_free_s16a",  "1bin", "Y3"),
+#     ("redm_pdr3_3band_free",       "1bin", "Y3"),
+#     ("redm_pdr3_3band_free_s16a",  "1bin", "Y3"),
 #
 #   redMapper S16a:
 #     ("redm_s16a",          "1bin", "Y3"),
@@ -340,21 +343,33 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 #     ("forced",             "1bin", "Y3"),
 #     ("forced_hectomap",    "1bin", "Y3"),
 #
-#   CAMIRA S23b wide:
+#   CAMIRA S23b wide (full / hectomap / hectomap + s16a footprint):
 #     ("camira",             "1bin", "Y3"),
 #     ("camira_hectomap",    "1bin", "Y3"),
+#     ("camira_hecto_s16a",  "1bin", "Y3"),
 #
-#   COSINE cluster finder (only HectoMap footprint):
+#   COSINE cluster finder (natural HectoMap / s16a-constrained footprint):
 #     ("cosine",             "1bin", "Y3"),
+#     ("cosine_s16a",        "1bin", "Y3"),
 #
 
 CONFIGS_TO_COMPARE = [
     ("redm_s16a_hectomap", "1bin", "Y3"),
     ("logm_s16a_hectomap", "1bin", "Y3"),
-    ("redm_pdr3_3band_fixed", "1bin", "Y3"),
-    ("cosine", "1bin", "Y3"),
-    ("camira_hectomap", "1bin", "Y3"),
+    ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
+    # ("redm_pdr3_5band_free_s16a", "1bin", "Y3"),
+    # ("redm_pdr3_3band_free_s16a", "1bin", "Y3"),
+    ("cosine_s16a", "1bin", "Y3"),
+    ("camira_hecto_s16a", "1bin", "Y3"),
 ]
+
+# CONFIGS_TO_COMPARE = [
+#     ("redm_pdr3_3band_fixed", "1bin", "Y3"),
+#     ("redm_s16a", "1bin", "Y3"),
+#     ("logm_s16a", "1bin", "Y3"),
+#     ("camira", "1bin", "Y3"),
+#     ("cosine", "1bin", "Y3"),
+# ]
 
 # Contrast full footprint and HectoMap footprint configurations, unified on 1bin (Y3).
 # CONFIGS_TO_COMPARE = [
@@ -364,7 +379,7 @@ CONFIGS_TO_COMPARE = [
 # CONFIGS_TO_COMPARE = [
 #     ("redm_s16a", "1bin", "Y3"),
 #     ("redm_s16a_hectomap", "1bin", "Y3"),
-# ]
+# # ]
 # CONFIGS_TO_COMPARE = [
 #     ("logm_s16a", "1bin", "Y3"),
 #     ("logm_s16a_hectomap", "1bin", "Y3"),

@@ -26,7 +26,7 @@ from initial import *  # noqa: F401,F403
 
 
 def load_scatter_summaries(labels, root_path):
-    """Load scatter summary pickles for each (lens_label, source_label) pair.
+    """Load scatter summary pickles for each (run_label, version) pair.
 
     Returns
     -------
@@ -35,10 +35,11 @@ def load_scatter_summaries(labels, root_path):
     """
     data_dict = {}
     for label in labels:
-        lens_label, source_label = label
+        run_label, version = label
+        catalog_id, nbins = run_label.rsplit("_", 1)
         pkl_path = (
             root_path
-            / f"output/{lens_label}/{source_label}/pkl/{lens_label}_{source_label}_sum.pkl"
+            / f"output/{catalog_id}/{nbins}/{version}/pkl/{catalog_id}_{nbins}_{version}_sum.pkl"
         )
         if not pkl_path.exists():
             print(f"Warning: {pkl_path} does not exist. Skipping.")
@@ -127,11 +128,34 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
 
 # %% Global Configuration
 
-# (lens_label, source_label) pairs to compare.
+# Available labels in RUN_REGISTRY (Must be a 4bin configuration):
+#
+#   redMapper PDR3 (3-band fixed, 5-band free, 3-band free):
+#     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_s16a_4bin",
+#     "redm_pdr3_5band_free_4bin", "redm_pdr3_5band_free_s16a_4bin",
+#     "redm_pdr3_3band_free_4bin", "redm_pdr3_3band_free_s16a_4bin"
+#
+#   redMapper S16a (full, hectomap):
+#     "redm_s16a_4bin", "redm_s16a_hectomap_4bin"
+#
+#   logM S16a (full, hectomap):
+#     "logm_s16a_4bin", "logm_s16a_hectomap_4bin"
+#
+#   Forced-richness S16a (full, hectomap):
+#     "forced_4bin", "forced_hectomap_4bin"
+#
+#   CAMIRA S23b (full, hectomap, hectomap+s16a):
+#     "camira_4bin", "camira_hectomap_4bin", "camira_hecto_s16a_4bin"
+#
+#   COSINE (full, hectomap+s16a):
+#     "cosine_4bin", "cosine_s16a_4bin"
+#
 LABELS = [
-    ("s16a_logm_50_100", "Y3"),
-    ("s16a_redm_hsc", "Y3"),
-    ("pdr3_redm_hsc", "Y3"),
+    ("redm_s16a_hectomap_4bin", "Y3"),
+    ("logm_s16a_hectomap_4bin", "Y3"),
+    ("redm_pdr3_3band_fixed_s16a_4bin", "Y3"),
+    ("cosine_s16a_4bin", "Y3"),
+    ("camira_hecto_s16a_4bin", "Y3"),
 ]
 
 # Optional: display names for labels in the legend

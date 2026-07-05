@@ -25,7 +25,8 @@ from initial import *  # noqa: F401,F403
 
 def load_profile_tables(root_path, label, version):
     """Load dsigma result tables for a given (label, version) configuration."""
-    result_dir = root_path / f"output/{label}/{version}/dsigma"
+    catalog_id, nbins = label.rsplit("_", 1)
+    result_dir = root_path / f"output/{catalog_id}/{nbins}/{version}/dsigma"
     return load_result_tables(result_dir), result_dir
 
 
@@ -51,7 +52,38 @@ def save_figure(fig, output_path):
 
 # %% Global Configuration
 
-LABEL = "cosine_4bin"  # "huang2022_logm_50_100", "s16a_logm_50_100", or "s16a_redm_hsc"
+# Available labels in RUN_REGISTRY:
+#
+#   redMapper PDR3 (3-band fixed, 5-band free, 3-band free):
+#     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_1bin",
+#     "redm_pdr3_3band_fixed_s16a_4bin", "redm_pdr3_3band_fixed_s16a_1bin",
+#     "redm_pdr3_5band_free_4bin", "redm_pdr3_5band_free_1bin",
+#     "redm_pdr3_5band_free_s16a_4bin", "redm_pdr3_5band_free_s16a_1bin",
+#     "redm_pdr3_3band_free_4bin", "redm_pdr3_3band_free_1bin",
+#     "redm_pdr3_3band_free_s16a_4bin", "redm_pdr3_3band_free_s16a_1bin"
+#
+#   redMapper S16a (full, hectomap):
+#     "redm_s16a_4bin", "redm_s16a_1bin",
+#     "redm_s16a_hectomap_4bin", "redm_s16a_hectomap_1bin"
+#
+#   logM S16a (full, hectomap):
+#     "logm_s16a_4bin", "logm_s16a_1bin",
+#     "logm_s16a_hectomap_4bin", "logm_s16a_hectomap_1bin"
+#
+#   Forced-richness S16a (full, hectomap):
+#     "forced_4bin", "forced_1bin",
+#     "forced_hectomap_4bin", "forced_hectomap_1bin"
+#
+#   CAMIRA S23b (full, hectomap, hectomap+s16a):
+#     "camira_4bin", "camira_1bin",
+#     "camira_hectomap_4bin", "camira_hectomap_1bin",
+#     "camira_hecto_s16a_4bin", "camira_hecto_s16a_1bin"
+#
+#   COSINE (full, hectomap+s16a):
+#     "cosine_4bin", "cosine_1bin",
+#     "cosine_s16a_4bin", "cosine_s16a_1bin"
+#
+LABEL = "cosine_s16a_4bin"
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Whether to plot random and raw profiles

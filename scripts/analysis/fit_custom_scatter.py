@@ -144,7 +144,40 @@ def plot_map_fit_decomposition(
 
 # %% Global Configuration
 
-DSIGMA_FITS = "output/cosine/Y3/dsigma/hsc_hsc_bin0.fits"
+# Available labels in RUN_REGISTRY:
+#
+#   redMapper PDR3 (3-band fixed, 5-band free, 3-band free):
+#     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_1bin",
+#     "redm_pdr3_3band_fixed_s16a_4bin", "redm_pdr3_3band_fixed_s16a_1bin",
+#     "redm_pdr3_5band_free_4bin", "redm_pdr3_5band_free_1bin",
+#     "redm_pdr3_5band_free_s16a_4bin", "redm_pdr3_5band_free_s16a_1bin",
+#     "redm_pdr3_3band_free_4bin", "redm_pdr3_3band_free_1bin",
+#     "redm_pdr3_3band_free_s16a_4bin", "redm_pdr3_3band_free_s16a_1bin"
+#
+#   redMapper S16a (full, hectomap):
+#     "redm_s16a_4bin", "redm_s16a_1bin",
+#     "redm_s16a_hectomap_4bin", "redm_s16a_hectomap_1bin"
+#
+#   logM S16a (full, hectomap):
+#     "logm_s16a_4bin", "logm_s16a_1bin",
+#     "logm_s16a_hectomap_4bin", "logm_s16a_hectomap_1bin"
+#
+#   Forced-richness S16a (full, hectomap):
+#     "forced_4bin", "forced_1bin",
+#     "forced_hectomap_4bin", "forced_hectomap_1bin"
+#
+#   CAMIRA S23b (full, hectomap, hectomap+s16a):
+#     "camira_4bin", "camira_1bin",
+#     "camira_hectomap_4bin", "camira_hectomap_1bin",
+#     "camira_hecto_s16a_4bin", "camira_hecto_s16a_1bin"
+#
+#   COSINE (full, hectomap+s16a):
+#     "cosine_4bin", "cosine_1bin",
+#     "cosine_s16a_4bin", "cosine_s16a_1bin"
+#
+LABEL = "redm_pdr3_3band_free_4bin"  # Must match a run label in RUN_REGISTRY
+VERSION = "Y3"  # "Y1" or "Y3"
+BIN_INDEX = 0  # Index of the lens bin to fit (0, 1, 2, 3...)
 
 # Cosmologies: 'planck18-only', 'planck18', 'planck15-only', 'planck15', 'planck13-only', 'planck13',
 # 'WMAP9-only', 'WMAP9-ML', 'WMAP9', 'WMAP7-only', 'WMAP7-ML', 'WMAP7', 'WMAP5-only', 'WMAP5-ML', 'WMAP5',
@@ -166,7 +199,7 @@ BIAS_MODEL = "tinker10"
 # 'rodriguezpuebla16', 'comparat17', 'diemer20', 'seppi20', 'yung24', 'yung25', 'fernandezgarcia26', 'fiorilli26'
 MASS_FUNC_MODEL = "tinker08"
 
-# Survey configuration
+# Fallback survey configuration if config or prepared catalog is missing
 AREA_SQ_DEG = 51.4198
 Z_MIN = 0.1
 Z_MAX = 0.8
@@ -178,6 +211,36 @@ OUTPUT_FIG = project_root / "output/plots_for_agents/fit_custom_scatter.png"
 # %% [Stage 1: Load data and setup cosmology]
 cosmo = cosmology.setCosmology(COSMOLOGY_NAME)
 h = cosmo.h
+
+# Parse catalog_id and nbins from the unified run label
+catalog_id, nbins = LABEL.rsplit("_", 1)
+DSIGMA_FITS = (
+    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin{BIN_INDEX}.fits"
+)
+
+# Resolve run configuration for sky area and redshift range
+from hsc_wl.config import RUN_REGISTRY, resolve_config
+
+cfg = RUN_REGISTRY[LABEL]
+resolved_cfg = resolve_config(cfg, project_root)
+
+if resolved_cfg.lens.area_deg2 is not None:
+    AREA_SQ_DEG = resolved_cfg.lens.area_deg2
+Z_MIN, Z_MAX = resolved_cfg.lens.redshift_range
+
+# Read prepared lenses FITS table to get the correct N_OBJ
+lenses_path = (
+    project_root
+    / f"output/{catalog_id}/{nbins}/prepare/{catalog_id}_{nbins}_lenses.fits"
+)
+if lenses_path.exists():
+    lenses_table = Table.read(lenses_path)
+    N_OBJ = len(lenses_table)
+    logging.info(f"Loaded prepared lenses from {lenses_path}, N_OBJ = {N_OBJ}")
+else:
+    logging.info(
+        f"Prepared lenses not found at {lenses_path}, using fallback N_OBJ = {N_OBJ}"
+    )
 
 n_obs = compute_survey_number_density(AREA_SQ_DEG, Z_MIN, Z_MAX, N_OBJ, COSMOLOGY_NAME)
 
