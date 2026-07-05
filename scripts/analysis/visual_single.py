@@ -83,7 +83,7 @@ def save_figure(fig, output_path):
 #     "cosine_4bin", "cosine_1bin",
 #     "cosine_s16a_4bin", "cosine_s16a_1bin"
 #
-LABEL = "cosine_s16a_4bin"
+LABEL = "logm_s16a_4bin"
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Whether to plot random and raw profiles
@@ -110,12 +110,12 @@ OUTPUT_RAW_FIG = project_root / "output/plots_for_agents/visual_single_raw.png"
 OUTPUT_RANDOM_FIG = project_root / "output/plots_for_agents/visual_single_random.png"
 
 
-# %% [Stage 1: Load data and validate columns]
+# [Stage 1: Load data and validate columns]
 tables, result_dir = load_profile_tables(project_root, LABEL, VERSION)
 validate_columns(tables, PLOT_RANDOM, PLOT_RAW)
 
 
-# %% [Stage 2: Plot main profile]
+# [Stage 2: Plot main profile]
 basic_fig = plot_radial_profile(
     tables,
     value_column="ds",
@@ -129,7 +129,7 @@ save_figure(basic_fig, OUTPUT_MAIN_FIG)
 plt.show()
 
 
-# %% [Stage 3: Plot raw profile (optional)]
+# [Stage 3: Plot raw profile (optional)]
 if PLOT_RAW:
     raw_fig = plot_radial_profile(
         tables,
@@ -144,7 +144,7 @@ if PLOT_RAW:
     plt.show()
 
 
-# %% [Stage 4: Plot random profile (optional)]
+#  [Stage 4: Plot random profile (optional)]
 if PLOT_RANDOM:
     rds_fig = plot_radial_profile(
         tables,
