@@ -784,7 +784,15 @@ def stack_one_bin(
         return None
 
     logger.info("[jackknife] fields")
-    assign_jackknife_fields_with_fallback(table_l, table_r, cfg.n_jackknife)
+    try:
+        assign_jackknife_fields_with_fallback(table_l, table_r, cfg.n_jackknife)
+    except (ValueError, RuntimeError) as err:
+        logger.warning(
+            "Skipping %s due to jackknife assignment failure: %s",
+            bin_name,
+            err,
+        )
+        return None
 
     z_lo, z_hi = cfg.lens.redshift_range
     mask_l = (z_lo <= table_l["z"]) & (table_l["z"] < z_hi)
