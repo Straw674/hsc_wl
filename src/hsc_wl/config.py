@@ -328,6 +328,9 @@ _PATH_FORCED = (
 # CAMIRA S23b wide
 _PATH_CAMIRA = "data/camira_s23b_wide_sm_v3.dat"
 
+# redMapper SDSS R16 cluster catalog
+_PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
+
 # ---------------------------------------------------------------------------
 # Random catalog paths
 # ---------------------------------------------------------------------------
@@ -341,6 +344,7 @@ _RAND_Y3 = "data/random_y3_mask.fits"
 # ---------------------------------------------------------------------------
 
 _COLS_REDM = {"col_rank": "lambda", "ra": "ra", "dec": "dec", "z": "z_lambda"}
+_COLS_R16 = {"col_rank": "lambda", "ra": "RAJ2000", "dec": "DEJ2000", "z": "zlambda"}
 _COLS_LOGM = {"col_rank": "logm_50_100", "ra": "ra", "dec": "dec", "z": "z_best"}
 _COLS_FORCED = {"col_rank": "lam", "ra": "ra", "dec": "dec", "z": "z_best"}
 _COLS_CAMIRA = {"col_rank": "N_mem", "ra": "RA", "dec": "Dec", "z": "z_cl"}
@@ -352,6 +356,9 @@ _COLS_COSINE = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_c
 
 # HectoMap sub-region: RA 200-250 deg, Dec 42-44.5 deg
 _BOX_HECTOMAP = {"ra_range": (200, 250), "dec_range": (42, 44.5)}
+
+# redMapper R16 HectoMap sub-region: RA 210-250 deg, Dec 42-44.5 deg
+_BOX_R16_HECTOMAP = {"ra_range": (210, 250), "dec_range": (42, 44.5)}
 
 # Reference redshift range shared by all catalogs
 _Z_RANGE = (0.19, 0.52)
@@ -430,6 +437,9 @@ def _cfg(
 #   camira                       – CAMIRA S23b wide, full footprint
 #   camira_hectomap              – CAMIRA S23b wide, HectoMap sub-region
 #   camira_hecto_s16a            – CAMIRA, HectoMAP box ∩ s16a random footprint
+#   redm_r16                     – redMapper SDSS R16, full footprint (Y3 mask)
+#   redm_r16_hectomap            – redMapper SDSS R16, HectoMap sub-region (RA 210-250)
+#   redm_r16_hecto_s16a          – redMapper SDSS R16, HectoMAP box ∩ s16a random footprint
 #   cosine                       – COSINE cluster finder (natural HectoMap footprint)
 #   cosine_s16a                  – same, restricted to s16a random ∩ HectoMAP box
 # ---------------------------------------------------------------------------
@@ -731,6 +741,64 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="pandas_dat",
         binning=_DEFAULT_BINNING_1BIN,
         **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # redMapper SDSS R16 – full footprint (Y3 mask) and HectoMap sub-regions
+    # -----------------------------------------------------------------------
+    # Full footprint (Y3 mask)
+    "redm_r16_4bin": _cfg(
+        "redm_r16_4bin",
+        _PATH_R16,
+        _RAND_Y3,
+        columns=_COLS_R16,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "redm_r16_1bin": _cfg(
+        "redm_r16_1bin",
+        _PATH_R16,
+        _RAND_Y3,
+        columns=_COLS_R16,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # HectoMap sub-region
+    "redm_r16_hectomap_4bin": _cfg(
+        "redm_r16_hectomap_4bin",
+        _PATH_R16,
+        _RAND_Y3,
+        columns=_COLS_R16,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_R16_HECTOMAP,
+    ),
+    "redm_r16_hectomap_1bin": _cfg(
+        "redm_r16_hectomap_1bin",
+        _PATH_R16,
+        _RAND_Y3,
+        columns=_COLS_R16,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_R16_HECTOMAP,
+    ),
+    # HectoMAP box ∩ s16a random footprint
+    "redm_r16_hecto_s16a_4bin": _cfg(
+        "redm_r16_hecto_s16a_4bin",
+        _PATH_R16,
+        _RAND_S16A,
+        columns=_COLS_R16,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_R16_HECTOMAP,
+    ),
+    "redm_r16_hecto_s16a_1bin": _cfg(
+        "redm_r16_hecto_s16a_1bin",
+        _PATH_R16,
+        _RAND_S16A,
+        columns=_COLS_R16,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_R16_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
     # COSINE cluster finder (natural HectoMap footprint)
