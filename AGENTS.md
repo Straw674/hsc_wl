@@ -76,3 +76,8 @@ Python scripts in `scripts/` are generally used as interactive scripts. Follow t
   - **Inline Snippets (Best Practice for Quick Tests)**: For very short, one-off tests (e.g., < 10 lines), prefer executing the code directly in the terminal using `uv run python -c "..."` or via shell heredocs (`uv run python << 'EOF' ... EOF`). This keeps the workspace clean and provides rapid feedback.
   - **Scratch Files**: For more complex or exploratory scripts that require iterative modification, debugging, or longer-term reference, save them in the `scratch/` directory. **Do not** place temporary test files in the main `scripts/` or `src/` directories.
   - **Environment**: Whether running inline snippets or scratch files, **always** execute them using the virtual environment's Python (e.g., `uv run python` or `.venv/bin/python`).
+- **Cleanup**: Any one-off or temporary scripts created in the `scratch/` directory must be deleted after task execution is completed to keep the workspace clean.
+
+## Git Workflow
+
+- **Task Completion Commit**: After completing a task, the agent must propose a git commit plan (using `git commit -m` with a clear message) listing the specific files to be committed. Once the user approves, commit the changes. Crucially, the commit must only contain files directly related to the current task. Avoid indiscriminate commands like `git add .` to prevent staging unrelated or temporary files.
