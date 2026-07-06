@@ -60,6 +60,11 @@ from initial import *  # noqa: F401,F403
 #     "camira_hectomap_4bin",       "camira_hectomap_1bin"
 #     "camira_hecto_s16a_4bin",     "camira_hecto_s16a_1bin"
 #
+#   redMapper SDSS R16 (full / hectomap / s16a-hectomap footprint):
+#     "redm_r16_4bin",              "redm_r16_1bin"
+#     "redm_r16_hectomap_4bin",     "redm_r16_hectomap_1bin"
+#     "redm_r16_hecto_s16a_4bin",   "redm_r16_hecto_s16a_1bin"
+#
 #   COSINE cluster finder (natural HectoMap / s16a-constrained footprint):
 #     "cosine_4bin",                "cosine_1bin"
 #     "cosine_s16a_4bin",           "cosine_s16a_1bin"

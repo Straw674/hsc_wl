@@ -147,6 +147,9 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
 #   CAMIRA S23b (full, hectomap, hectomap+s16a):
 #     "camira_4bin", "camira_hectomap_4bin", "camira_hecto_s16a_4bin"
 #
+#   redMapper SDSS R16 (full, hectomap, hectomap+s16a):
+#     "redm_r16_4bin", "redm_r16_hectomap_4bin", "redm_r16_hecto_s16a_4bin"
+#
 #   COSINE (full, hectomap+s16a):
 #     "cosine_4bin", "cosine_s16a_4bin"
 #

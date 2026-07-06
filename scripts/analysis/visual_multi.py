@@ -348,6 +348,11 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 #     ("camira_hectomap",    "1bin", "Y3"),
 #     ("camira_hecto_s16a",  "1bin", "Y3"),
 #
+#   redMapper SDSS R16 (full / hectomap / s16a-hectomap footprint):
+#     ("redm_r16",            "1bin", "Y3"),
+#     ("redm_r16_hectomap",    "1bin", "Y3"),
+#     ("redm_r16_hecto_s16a",  "1bin", "Y3"),
+#
 #   COSINE cluster finder (natural HectoMap / s16a-constrained footprint):
 #     ("cosine",             "1bin", "Y3"),
 #     ("cosine_s16a",        "1bin", "Y3"),
@@ -357,6 +362,7 @@ CONFIGS_TO_COMPARE = [
     ("redm_s16a_hectomap", "1bin", "Y3"),
     ("logm_s16a_hectomap", "1bin", "Y3"),
     ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
+    ("redm_r16_hecto_s16a", "1bin", "Y3"),
     # ("redm_pdr3_5band_free_s16a", "1bin", "Y3"),
     # ("redm_pdr3_3band_free_s16a", "1bin", "Y3"),
     ("cosine_s16a", "1bin", "Y3"),

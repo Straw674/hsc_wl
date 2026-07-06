@@ -79,6 +79,11 @@ def save_figure(fig, output_path):
 #     "camira_hectomap_4bin", "camira_hectomap_1bin",
 #     "camira_hecto_s16a_4bin", "camira_hecto_s16a_1bin"
 #
+#   redMapper SDSS R16 (full, hectomap, hectomap+s16a):
+#     "redm_r16_4bin", "redm_r16_1bin",
+#     "redm_r16_hectomap_4bin", "redm_r16_hectomap_1bin",
+#     "redm_r16_hecto_s16a_4bin", "redm_r16_hecto_s16a_1bin"
+#
 #   COSINE (full, hectomap+s16a):
 #     "cosine_4bin", "cosine_1bin",
 #     "cosine_s16a_4bin", "cosine_s16a_1bin"
