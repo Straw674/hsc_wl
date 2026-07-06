@@ -277,6 +277,107 @@ def apply_lens_range_filters(lens: Table, cfg: LensCatalogConfig) -> Table:
 # ---------------------------------------------------------------------------
 
 
+def filter_random_by_footprint(
+    random_catalog: Table,
+    catalog_config: LensCatalogConfig,
+    root: Path | None = None,
+    nside: int = 1024,
+) -> tuple[Table, set[int]]:
+    """Filter the random catalog by box and Y3 mask, returning the catalog and its pixel set."""
+    if len(random_catalog) == 0:
+        raise ValueError("No random points found in the input catalog.")
+
+    # Find random RA/Dec column names
+    random_ra_col = next(
+        (c for c in random_catalog.colnames if c.lower() == "ra"), "ra"
+    )
+    random_dec_col = next(
+        (c for c in random_catalog.colnames if c.lower() == "dec"), "dec"
+    )
+
+    random_catalog = random_catalog.copy()
+    if catalog_config.ra_range is not None:
+        ra_min, ra_max = catalog_config.ra_range
+        random_catalog = random_catalog[
+            (random_catalog[random_ra_col] >= ra_min)
+            & (random_catalog[random_ra_col] <= ra_max)
+        ]
+    if catalog_config.dec_range is not None:
+        dec_min, dec_max = catalog_config.dec_range
+        random_catalog = random_catalog[
+            (random_catalog[random_dec_col] >= dec_min)
+            & (random_catalog[random_dec_col] <= dec_max)
+        ]
+
+    random_catalog = filter_lens_by_mask(
+        random_catalog,
+        root=root,
+        ra_col=random_ra_col,
+        dec_col=random_dec_col,
+        nside=nside,
+    )
+
+    if len(random_catalog) == 0:
+        raise ValueError(
+            f"No random points left after applying RA/Dec cuts {catalog_config.ra_range}/{catalog_config.dec_range} and mask."
+        )
+
+    # Build unique HEALPix pixel index set
+    import healpy as hp
+
+    rand_ra = np.asarray(random_catalog[random_ra_col], float)
+    rand_dec = np.asarray(random_catalog[random_dec_col], float)
+    rand_pix = hp.ang2pix(
+        nside, np.radians(90.0 - rand_dec), np.radians(rand_ra), nest=False
+    )
+    rand_pix_set = set(rand_pix.tolist())
+
+    return random_catalog, rand_pix_set
+
+
+def filter_lens_by_footprint(
+    lens_catalog: Table,
+    catalog_config: LensCatalogConfig,
+    rand_pix_set: set[int],
+    root: Path | None = None,
+    nside: int = 1024,
+) -> Table:
+    """Filter the lens catalog by quality, range cuts, Y3 mask, and random pixel footprint."""
+    lens = apply_lens_quality_filters(lens_catalog.copy())
+    lens = apply_lens_range_filters(lens, catalog_config)
+
+    # Filter by Y3 mask
+    lens = filter_lens_by_mask(
+        lens,
+        root=root,
+        ra_col=catalog_config.columns.ra,
+        dec_col=catalog_config.columns.dec,
+        nside=nside,
+    )
+
+    # Filter by random footprint pixel set
+    import healpy as hp
+
+    lens_ra = np.asarray(lens[catalog_config.columns.ra], float)
+    lens_dec = np.asarray(lens[catalog_config.columns.dec], float)
+    lens_pix = hp.ang2pix(
+        nside, np.radians(90.0 - lens_dec), np.radians(lens_ra), nest=False
+    )
+    inside_overlap = np.isin(lens_pix, list(rand_pix_set))
+
+    n_before = len(lens)
+    lens = lens[inside_overlap]
+    n_after = len(lens)
+    logger.info(
+        "[coverage] Filtered lens by random footprint: %d / %d lenses remain (removed %d)",
+        n_after,
+        n_before,
+        n_before - n_after,
+    )
+
+    return lens
+
+
 def prepare_lens_random_tables(
     lens_catalog: Table,
     random_catalog: Table,
@@ -310,18 +411,19 @@ def prepare_lens_random_tables(
     -------
     dict or None
         Keys: ``global_lens_table``, ``global_random_table``,
-        ``bin_metadata``.  ``None`` when no valid objects remain.
+        ```bin_metadata``.  ``None`` when no valid objects remain.
     """
-    lens = apply_lens_quality_filters(lens_catalog.copy())
-    lens = apply_lens_range_filters(lens, catalog_config)
-    lens = filter_lens_by_mask(
-        lens,
-        ra_col=catalog_config.columns.ra,
-        dec_col=catalog_config.columns.dec,
+    root = _find_root(None)
+
+    # 1. Filter random catalog and get its footprint pixel set
+    random_catalog, rand_pix_set = filter_random_by_footprint(
+        random_catalog, catalog_config, root=root
     )
 
-    if len(random_catalog) == 0:
-        raise ValueError("No random points found in the input catalog.")
+    # 2. Filter lens catalog by quality, range, Y3 mask, and random footprint
+    lens = filter_lens_by_footprint(
+        lens_catalog, catalog_config, rand_pix_set, root=root
+    )
 
     # Find random RA/Dec column names
     random_ra_col = next(
@@ -330,32 +432,6 @@ def prepare_lens_random_tables(
     random_dec_col = next(
         (c for c in random_catalog.colnames if c.lower() == "dec"), "dec"
     )
-
-    # Filter random catalog by RA/Dec box and mask footprint
-    random_catalog = random_catalog.copy()
-    if catalog_config.ra_range is not None:
-        ra_min, ra_max = catalog_config.ra_range
-        random_catalog = random_catalog[
-            (random_catalog[random_ra_col] >= ra_min)
-            & (random_catalog[random_ra_col] <= ra_max)
-        ]
-    if catalog_config.dec_range is not None:
-        dec_min, dec_max = catalog_config.dec_range
-        random_catalog = random_catalog[
-            (random_catalog[random_dec_col] >= dec_min)
-            & (random_catalog[random_dec_col] <= dec_max)
-        ]
-
-    random_catalog = filter_lens_by_mask(
-        random_catalog,
-        ra_col=random_ra_col,
-        dec_col=random_dec_col,
-    )
-
-    if len(random_catalog) == 0:
-        raise ValueError(
-            f"No random points left after applying RA/Dec cuts {catalog_config.ra_range}/{catalog_config.dec_range} and mask."
-        )
 
     col_rank = catalog_config.columns.col_rank
     bin_slices = build_bin_slices(lens, col_rank, binning)
@@ -609,19 +685,13 @@ def run_prepare_pipeline(cfg: WLConfig, root: Path | None = None):
     else:
         random = Table.read(random_path)
 
-    lens = apply_lens_quality_filters(lens)
-    lens = apply_lens_range_filters(lens, lens_cfg)
-    lens = filter_lens_by_mask(
-        lens,
-        root=root,
-        ra_col=lens_cfg.columns.ra,
-        dec_col=lens_cfg.columns.dec,
-    )
+    # Let's resolve binning first
+    binning = resolve_binning(cfg.binning, lens_cfg.top_counts_factor)
 
-    col_rank = lens_cfg.columns.col_rank
+    # Print summary information before run
     print("-" * 80)
     print(f"Using source: {cfg.label}")
-    print(f"Column used for ranking: {col_rank}")
+    print(f"Column used for ranking: {lens_cfg.columns.col_rank}")
     print("-" * 80)
     print(f"Redshift range: {lens_cfg.redshift_range}")
     print(
@@ -631,10 +701,6 @@ def run_prepare_pipeline(cfg: WLConfig, root: Path | None = None):
     )
     print(f"Lens file: {lens_path}")
     print(f"Random file: {random_path}")
-    print(f"Lens columns: {lens.colnames}")
-    print(f"Random columns: {random.colnames}")
-
-    binning = resolve_binning(cfg.binning, lens_cfg.top_counts_factor)
 
     print("-" * 80)
     if binning.mode == "edges":
