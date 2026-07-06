@@ -1,0 +1,484 @@
+# %% [Initialization]
+
+import sys
+from pathlib import Path
+
+# Dynamically locate the project root using pyproject.toml as a marker
+project_root = Path(__file__).resolve().parent
+while (
+    project_root != project_root.parent
+    and not (project_root / "pyproject.toml").exists()
+):
+    project_root = project_root.parent
+
+if not (project_root / "pyproject.toml").exists():
+    raise RuntimeError(
+        "Could not find project root (containing pyproject.toml) in any parent directory."
+    )
+
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from initial import *  # noqa: F401,F403
+
+# %% Local Functions
+
+
+def load_lens_data(labels: list[str], root: Path) -> dict[str, Table]:
+    """Load prepared lens tables for the given configurations.
+
+    Parameters
+    ----------
+    labels : list of str
+        Run labels to load, e.g. ["redm_s16a_hectomap_1bin", ...].
+    root : Path
+        Project root path.
+
+    Returns
+    -------
+    dict
+        Dictionary mapping run label to the loaded astropy Table.
+    """
+    from hsc_wl.config import RUN_REGISTRY
+
+    dfs = {}
+    for label in labels:
+        if label in RUN_REGISTRY:
+            cfg = RUN_REGISTRY[label]
+            save_root = cfg.resolved_save_root(root)
+            file_path = save_root / f"prepare/{label}_lenses.fits"
+        else:
+            # Fallback to standard convention if not found in registry
+            catalog_id, nbins = label.rsplit("_", 1)
+            file_path = (
+                root / f"output/{catalog_id}/{nbins}/prepare/{label}_lenses.fits"
+            )
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"Prepared lens catalog not found at {file_path}")
+
+        print(f"Loading prepared lenses from {file_path.name}...")
+        tbl = Table.read(file_path)
+        # Add rank column based on order (the preparation pipeline sorts them by richness/mass)
+        tbl["rank"] = np.arange(1, len(tbl) + 1)
+        dfs[label] = tbl
+
+    return dfs
+
+
+def compute_pairwise_matches(dfs: dict[str, Table]) -> pd.DataFrame:
+    """Compute pairwise matching statistics within 0.5 Mpc/h physical radius.
+
+    Parameters
+    ----------
+    dfs : dict of label -> Table
+        Loaded lens catalogs.
+
+    Returns
+    -------
+    pd.DataFrame
+        Table of pairwise match counts.
+    """
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord
+    from astropy.cosmology import Planck18
+
+    catalog_names = list(dfs.keys())
+    n_cats = len(catalog_names)
+    matrix = np.zeros((n_cats, n_cats), dtype=int)
+
+    coords = {
+        name: SkyCoord(
+            ra=np.asarray(dfs[name]["ra"]) * u.deg,
+            dec=np.asarray(dfs[name]["dec"]) * u.deg,
+        )
+        for name in catalog_names
+    }
+
+    h = Planck18.h
+
+    for i in range(n_cats):
+        for j in range(n_cats):
+            if i == j:
+                matrix[i, j] = len(dfs[catalog_names[i]])
+                continue
+
+            c1 = coords[catalog_names[i]]
+            c2 = coords[catalog_names[j]]
+
+            # Match each object in c1 to the nearest neighbor in c2
+            idx, d2d, _ = c1.match_to_catalog_sky(c2)
+
+            # Compute matching radius for each object in c1 based on its redshift
+            z1 = np.clip(
+                np.asarray(dfs[catalog_names[i]]["z"], dtype=float), 1e-4, None
+            )
+            da1 = Planck18.angular_diameter_distance(
+                z1
+            ).value  # angular diameter distance in Mpc
+
+            # 0.5 Mpc/h in degrees: (0.5 / h) / da1 * (180 / pi)
+            match_radius_deg = (0.5 / h) / da1 * (180.0 / np.pi)
+
+            # Compare distance in degrees
+            matched = d2d.deg < match_radius_deg
+            matrix[i, j] = np.sum(matched)
+
+    df_match = pd.DataFrame(matrix, index=catalog_names, columns=catalog_names)
+    return df_match
+
+
+def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
+    """Plot pairwise matching statistics as a heatmap grid using matplotlib.
+
+    Saves results as a PNG file and displays the image.
+    """
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(11, 9))
+
+    data = df_match.values
+    labels = list(df_match.index)
+    n = len(labels)
+
+    # Calculate row-normalized match fraction (percentage)
+    # Row i is the source catalog, cell (i, j) is the fraction of row i matched to column j
+    row_totals = np.diag(data)
+    # Avoid division by zero just in case
+    row_totals_safe = np.where(row_totals == 0, 1, row_totals)
+    data_pct = (data / row_totals_safe[:, None]) * 100.0
+
+    # Use a sequential colormap ('YlGnBu') representing matching percentage
+    im = ax.imshow(data_pct, cmap="YlGnBu", aspect="equal", vmin=0, vmax=100)
+
+    # Add colorbar
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label("Match Fraction (%)", fontsize=11)
+
+    # Set ticks and labels
+    ax.set_xticks(np.arange(n))
+    ax.set_yticks(np.arange(n))
+    ax.set_xticklabels(labels, rotation=45, ha="right", rotation_mode="anchor")
+    ax.set_yticklabels(labels)
+
+    # Adjust ticks parameter and remove spines for a clean grid look
+    ax.tick_params(top=False, bottom=True, labeltop=False, labelbottom=True)
+    ax.spines[:].set_visible(False)
+
+    # Create white grid boundaries between cells
+    ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color="white", linestyle="-", linewidth=2.5)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    # Annotate matching count and percentage inside cells
+    for i in range(n):
+        for j in range(n):
+            val = data[i, j]
+            pct = data_pct[i, j]
+            total = row_totals[i]
+
+            # Text layout: Count / Total \n (Pct%)
+            if i == j:
+                text = f"{val}\n(100.0%)"
+            else:
+                text = f"{val}/{total}\n({pct:.1f}%)"
+
+            # Contrasting text color based on cell brightness
+            text_color = "white" if pct > 60.0 else "black"
+            ax.text(
+                j,
+                i,
+                text,
+                ha="center",
+                va="center",
+                color=text_color,
+                fontweight="bold",
+                fontsize=8.5,
+            )
+
+    ax.set_title(
+        "Pairwise Lens Match Fractions (0.5 Mpc/h Physical Radius)\nRow Normalized: Fraction of Row Catalog Matched in Column Catalog",
+        fontsize=12,
+        pad=18,
+    )
+    fig.tight_layout()
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Matching heatmap saved to {save_path}")
+    plt.show()
+    plt.close(fig)
+
+
+def plot_bokeh_spatial(
+    dfs: dict[str, Table],
+    colors: list[str],
+    markers: list[str],
+    save_path: Path,
+):
+    """Generate an interactive Bokeh plot allowing zoom and hover inspection.
+
+    Saves results as a self-contained, screen-filling HTML file.
+    """
+    from bokeh.models import ColumnDataSource, HoverTool, Range1d
+    from bokeh.plotting import figure, output_file, save
+
+    # Prepare output file
+    output_file(filename=str(save_path), title="Lens Spatial Distribution Explorer")
+
+    # Determine adaptive coordinates and spans
+    all_dec = np.concatenate([np.asarray(t["dec"]) for t in dfs.values()])
+    all_ra = np.concatenate([np.asarray(t["ra"]) for t in dfs.values()])
+
+    if len(all_dec) == 0:
+        dec_mean = 0.0
+        ra_min, ra_max = 0.0, 360.0
+        dec_min, dec_max = -90.0, 90.0
+    else:
+        dec_mean = np.mean(all_dec)
+        ra_min, ra_max = np.min(all_ra), np.max(all_ra)
+        dec_min, dec_max = np.min(all_dec), np.max(all_dec)
+
+    cos_dec = np.cos(np.radians(dec_mean))
+
+    ra_span = ra_max - ra_min
+    dec_span = dec_max - dec_min
+
+    if ra_span == 0:
+        ra_span = 1.0
+    if dec_span == 0:
+        dec_span = 1.0
+
+    ra_padding = ra_span * 0.05
+    dec_padding = dec_span * 0.05
+
+    # Coordinates range for Bokeh
+    # RA increases to the left (inverted) per astronomical convention
+    x_start = ra_max + ra_padding
+    x_end = ra_min - ra_padding
+    y_start = dec_min - dec_padding
+    y_end = dec_max + dec_padding
+
+    # Calculate screen aspect ratio so scales match visually
+    ra_span_padded = x_start - x_end
+    dec_span_padded = y_end - y_start
+    aspect = (ra_span_padded * cos_dec) / dec_span_padded
+
+    # Constrain aspect ratio to reasonable limits
+    plot_width = 1200
+    if aspect > 3.0:
+        plot_height = 400
+    elif aspect < 0.3:
+        plot_height = 1000
+    else:
+        plot_height = int(plot_width / aspect)
+
+    p = figure(
+        title="Interactive Lens Spatial Distribution Explorer",
+        width=plot_width,
+        height=plot_height + 80,  # add padding for title/toolbar
+        sizing_mode="scale_both",
+        match_aspect=True,
+        tools="pan,wheel_zoom,box_zoom,reset,save",
+        x_axis_label="Right Ascension (deg)",
+        y_axis_label="Declination (deg)",
+        toolbar_location="above",
+    )
+
+    # Invert x-axis (RA increases to the left)
+    p.x_range = Range1d(start=x_start, end=x_end)
+    p.y_range = Range1d(start=y_start, end=y_end)
+
+    # Apply premium dark theme styling
+    p.background_fill_color = "#1e1e1e"
+    p.border_fill_color = "#181818"
+    p.grid.grid_line_color = "#3a3a3a"
+    p.grid.grid_line_alpha = 0.5
+    p.title.text_color = "#ffffff"
+    p.title.text_font_size = "14pt"
+    p.xaxis.axis_label_text_color = "#cccccc"
+    p.yaxis.axis_label_text_color = "#cccccc"
+    p.xaxis.major_label_text_color = "#aaaaaa"
+    p.yaxis.major_label_text_color = "#aaaaaa"
+
+    # Draw each catalog's markers
+    for idx, name in enumerate(dfs.keys()):
+        tbl = dfs[name]
+        color = colors[idx % len(colors)]
+        marker_name = markers[idx % len(markers)]
+
+        # Prepare source data
+        source = ColumnDataSource(
+            data={
+                "ra": np.asarray(tbl["ra"], dtype=float),
+                "dec": np.asarray(tbl["dec"], dtype=float),
+                "z": np.asarray(tbl["z"], dtype=float),
+                "rank": np.arange(1, len(tbl) + 1, dtype=int),
+                "catalog": [name] * len(tbl),
+                "total": [len(tbl)] * len(tbl),
+            }
+        )
+
+        # Plot based on marker style (use larger hollow markers so overlapping can be seen)
+        size = 12 + idx * 3  # Increase size per catalog to nest them
+        # Map simple marker names to bokeh methods
+        if marker_name == "o":
+            renderer = p.scatter(
+                x="ra",
+                y="dec",
+                source=source,
+                size=size,
+                color=color,
+                fill_color=None,
+                line_width=2.5,
+                legend_label=f"{name} (N={len(tbl)})",
+            )
+        elif marker_name == "s":
+            renderer = p.scatter(
+                x="ra",
+                y="dec",
+                source=source,
+                size=size,
+                marker="square",
+                color=color,
+                fill_color=None,
+                line_width=2.5,
+                legend_label=f"{name} (N={len(tbl)})",
+            )
+        elif marker_name == "v":
+            renderer = p.scatter(
+                x="ra",
+                y="dec",
+                source=source,
+                size=size,
+                marker="triangle",
+                color=color,
+                fill_color=None,
+                line_width=2.5,
+                legend_label=f"{name} (N={len(tbl)})",
+            )
+        elif marker_name == "D":
+            renderer = p.scatter(
+                x="ra",
+                y="dec",
+                source=source,
+                size=size,
+                marker="diamond",
+                color=color,
+                fill_color=None,
+                line_width=2.5,
+                legend_label=f"{name} (N={len(tbl)})",
+            )
+        else:
+            renderer = p.scatter(
+                x="ra",
+                y="dec",
+                source=source,
+                size=size - 3,
+                marker="cross",
+                color=color,
+                line_width=2,
+                legend_label=f"{name} (N={len(tbl)})",
+            )
+
+        # Configure individual hover tool for this renderer
+        hover = HoverTool(
+            renderers=[renderer],
+            tooltips=[
+                ("Catalog", "@catalog"),
+                ("Rank", "#@rank of @total"),
+                ("RA", "@ra{0.0000} deg"),
+                ("Dec", "@dec{0.0000} deg"),
+                ("Redshift z", "@z{0.0000}"),
+            ],
+        )
+        p.add_tools(hover)
+
+    # Customize layout and legend
+    p.legend.location = "top_left"
+    p.legend.click_policy = "hide"  # Hide/show catalog by clicking legend
+    p.legend.title = "Catalogs (Click to Toggle)"
+    p.legend.background_fill_color = "#1e1e1e"
+    p.legend.background_fill_alpha = 0.85
+    p.legend.label_text_color = "#ffffff"
+    p.legend.title_text_color = "#cccccc"
+    p.legend.border_line_color = "#3a3a3a"
+
+    # Save to file
+    save(p)
+
+    # Post-process HTML to make the layout center and fill the viewport
+    html_content = save_path.read_text(encoding="utf-8")
+    style_injection = """
+    <style>
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background-color: #181818 !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            overflow: hidden !important;
+        }
+        .bk-root {
+            width: 98vw !important;
+            height: 95vh !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+    </style>
+    """
+    html_content = html_content.replace("</head>", f"{style_injection}</head>")
+    save_path.write_text(html_content, encoding="utf-8")
+    print(f"Interactive Bokeh HTML saved and post-processed at {save_path}")
+
+
+# %% Global Configuration
+
+LABELS_TO_COMPARE = [
+    "redm_s16a_hectomap_1bin",
+    "logm_s16a_hectomap_1bin",
+    "redm_pdr3_3band_fixed_s16a_1bin",
+    "cosine_s16a_1bin",
+    "camira_hecto_s16a_1bin",
+    "redm_r16_hecto_s16a_1bin",
+]
+
+# Color palette: Paul Tol Bright/Muted adapted
+PALETTE = [
+    "#4477AA",  # Blue
+    "#EE6677",  # Red
+    "#228833",  # Green
+    "#AA3377",  # Purple
+    "#EE7733",  # Orange
+    "#BBBBBB",  # Gray
+]
+
+# Plotting marker config (increasing size order so they layer neatly)
+MARKERS = ["o", "s", "v", "D", "x"]
+
+OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
+OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
+
+# %% [Stage 1: Load and Match Catalogs]
+
+dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
+
+print("\n--- Pairwise Cluster Matching Statistics (0.5 Mpc/h) ---")
+match_df = compute_pairwise_matches(dfs_dict)
+with pd.option_context("display.max_columns", None, "display.width", 1000):
+    print(match_df)
+
+# %% [Stage 2: Plot Matching Heatmap]
+
+plot_matching_heatmap(match_df, save_path=OUTPUT_MATCH_HEATMAP)
+
+# %% [Stage 3: Plot Bokeh Interactive Visualization]
+
+plot_bokeh_spatial(
+    dfs_dict, colors=PALETTE, markers=MARKERS, save_path=OUTPUT_BOKEH_HTML
+)
