@@ -22,12 +22,13 @@ Run labels follow the convention ``{catalog_id}_{nbins}`` where:
 
 - ``catalog_id`` encodes both the lens catalog and its sky footprint.
   Catalogs that naturally cover the full survey area (e.g. s16a redMapper,
-  CAMIRA) have an optional ``_hectomap`` suffix for the RA 200-250 /
-  Dec 42-44.5 sub-region.  Catalogs that are inherently confined to a
-  single footprint (pdr3 redMapper, COSINE) carry no footprint suffix.
-  A further ``_s16a`` sub-variant additionally restricts the footprint to
-  the s16a random survey area (s16a random ∩ HectoMAP box ∩ Y3 mask),
-  enabling fair comparison across all lens catalogs on the same sky patch.
+  CAMIRA, SDSS r16 redMaPPer) have an optional ``_hectomap`` suffix for the
+  HectoMAP sub-region (RA 200-250 / Dec 42-44.5; or RA 210-250 / Dec 42-44.5 for
+  SDSS r16).  Catalogs that are inherently confined to a single footprint
+  (pdr3 redMapper, COSINE) carry no footprint suffix.  A further ``_s16a``
+  sub-variant additionally restricts the footprint to the s16a random survey
+  area (s16a random ∩ HectoMAP box ∩ Y3 mask), enabling fair comparison
+  across all lens catalogs on the same sky patch.
 - ``nbins`` is either ``1bin`` (single top-N bin, ``top_n`` mode) or
   ``4bin`` (four richness/mass bins, ``top_counts`` mode).
 

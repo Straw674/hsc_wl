@@ -359,14 +359,15 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 #
 
 CONFIGS_TO_COMPARE = [
+    # ("logm_s16a_hectomap", "1bin", "Y3"),
+    ("camira", "1bin", "Y3"),
     ("redm_s16a_hectomap", "1bin", "Y3"),
-    ("logm_s16a_hectomap", "1bin", "Y3"),
     ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
-    ("redm_r16_hecto_s16a", "1bin", "Y3"),
     # ("redm_pdr3_5band_free_s16a", "1bin", "Y3"),
     # ("redm_pdr3_3band_free_s16a", "1bin", "Y3"),
     ("cosine_s16a", "1bin", "Y3"),
     ("camira_hecto_s16a", "1bin", "Y3"),
+    ("redm_r16_hecto_s16a", "1bin", "Y3"),
 ]
 
 # CONFIGS_TO_COMPARE = [
@@ -378,18 +379,35 @@ CONFIGS_TO_COMPARE = [
 # ]
 
 # Contrast full footprint and HectoMap footprint configurations, unified on 1bin (Y3).
+
 # CONFIGS_TO_COMPARE = [
 #     ("camira", "1bin", "Y3"),
 #     ("camira_hectomap", "1bin", "Y3"),
+#     ("camira_hecto_s16a", "1bin", "Y3"),
 # ]
 # CONFIGS_TO_COMPARE = [
 #     ("redm_s16a", "1bin", "Y3"),
 #     ("redm_s16a_hectomap", "1bin", "Y3"),
-# # ]
+# ]
 # CONFIGS_TO_COMPARE = [
 #     ("logm_s16a", "1bin", "Y3"),
 #     ("logm_s16a_hectomap", "1bin", "Y3"),
 # ]
+
+# CONFIGS_TO_COMPARE = [
+#     ("redm_pdr3_3band_fixed", "1bin", "Y3"),
+#     ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
+# ]
+
+# CONFIGS_TO_COMPARE = [
+#     ("cosine", "1bin", "Y3"),
+#     ("cosine_s16a", "1bin", "Y3"),
+# ]
+# CONFIGS_TO_COMPARE = [
+#     ("redm_r16_hectomap", "1bin", "Y3"),
+#     ("redm_r16_hecto_s16a", "1bin", "Y3"),
+# ]
+
 
 MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
 
