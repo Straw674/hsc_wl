@@ -428,13 +428,26 @@ def build_scatter_model(
 
     # --- Abundance matching threshold spline ---
     logger.info("Pre-computing Abundance Matching threshold spline...")
+
+    # Safely cap n_obs if it exceeds the maximum possible integrated HMF density
+    func_max = lambda m: dndlnm_spline_obj(m) * np.log(10)
+    n_pred_max, _ = integrate.quad(func_max, 13.0, 16.0, limit=100)
+    if n_obs >= n_pred_max:
+        logger.warning(
+            "Observed number density n_obs (%.2e) exceeds maximum HMF density (%.2e). Capping at %.2e.",
+            n_obs,
+            n_pred_max,
+            n_pred_max * 0.95,
+        )
+        n_obs = n_pred_max * 0.95
+
     scatter_grid = np.linspace(0.01, 5.0, 100)
     th_grid = []
     for s in scatter_grid:
 
         def _diff(th, _s=s):
-            func = (
-                lambda m: dndlnm_spline_obj(m)
+            func = lambda m: (
+                dndlnm_spline_obj(m)
                 * np.log(10)
                 * 0.5
                 * erfc((th - m) / (np.sqrt(2) * _s))
@@ -531,6 +544,7 @@ def fit_scatter_map(model_state, ds_colossus, jk_cov_inv_colossus):
             return 0.5 * residual @ jk_cov_inv_colossus @ residual
         except Exception:
             import traceback
+
             logger.error(f"Fit crashed at theta={theta}:\n{traceback.format_exc()}")
             return 1e30
 
@@ -557,9 +571,13 @@ def fit_scatter_map(model_state, ds_colossus, jk_cov_inv_colossus):
 
     try:
         from joblib import Parallel, delayed
-        results = Parallel(n_jobs=-1)(delayed(_run_single_opt)(x0) for x0 in starting_points)
+
+        results = Parallel(n_jobs=-1)(
+            delayed(_run_single_opt)(x0) for x0 in starting_points
+        )
     except ImportError:
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
             results = list(executor.map(_run_single_opt, starting_points))
 

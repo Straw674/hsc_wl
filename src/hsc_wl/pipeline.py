@@ -564,6 +564,14 @@ def compute_cluster_catalog_dsigma(
         convert_dsigma_to_colossus_units(rp_mpc, ds_data, ds_err, jk_cov, h)
     )
 
+    # Filter to only fit within 3 Mpc/h (3000 kpc/h)
+    mask = rp_kpc_h <= 3000.0
+    rp_kpc_h = rp_kpc_h[mask]
+    ds_colossus = ds_colossus[mask]
+    ds_err_colossus = ds_err_colossus[mask]
+    jk_cov_colossus = jk_cov_colossus[mask][:, mask]
+    jk_cov_inv_colossus = np.linalg.inv(jk_cov_colossus)
+
     z_lens = z_median if np.isfinite(z_median) else 0.3
 
     model_state = build_scatter_model(
