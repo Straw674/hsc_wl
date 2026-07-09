@@ -69,7 +69,9 @@ from initial import *  # noqa: F401,F403
 #     "cosine_4bin",                "cosine_1bin"
 #     "cosine_s16a_4bin",           "cosine_s16a_1bin"
 #
-RUN_LABEL = list(RUN_REGISTRY.keys())  # run all 34 configurations
+
+# RUN_LABEL = list(RUN_REGISTRY.keys())  # run all 34 configurations
+RUN_LABEL = ["cosine_1bin", "cosine_4bin"]
 
 # %% Local Functions
 

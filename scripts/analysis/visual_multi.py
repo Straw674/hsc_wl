@@ -370,6 +370,13 @@ CONFIGS_TO_COMPARE = [
     ("redm_r16_hecto_s16a", "1bin", "Y3"),
 ]
 
+CONFIGS_TO_COMPARE = [
+    # ("redm_r16", "1bin", "Y3"),
+    ("camira", "1bin", "Y3"),
+    ("cosine", "1bin", "Y3"),
+    ("redm_pdr3_3band_fixed", "1bin", "Y3"),
+]
+
 # CONFIGS_TO_COMPARE = [
 #     ("redm_pdr3_3band_fixed", "1bin", "Y3"),
 #     ("redm_s16a", "1bin", "Y3"),
@@ -404,6 +411,7 @@ CONFIGS_TO_COMPARE = [
 #     ("cosine_s16a", "1bin", "Y3"),
 # ]
 # CONFIGS_TO_COMPARE = [
+#     ("redm_r16", "1bin", "Y3"),
 #     ("redm_r16_hectomap", "1bin", "Y3"),
 #     ("redm_r16_hecto_s16a", "1bin", "Y3"),
 # ]
