@@ -1,25 +1,9 @@
-## Environment & Dependencies
-
-- **Dependency Management**: All dependencies should be managed via `uv`, with configurations in `pyproject.toml`.
-- **Python Execution**: **Always** use the virtual environment's python (e.g., `.venv/bin/python`) for executing scripts. Do not use the system `python` or `python3` command.
-
-## Core Philosophy
-
-- **Functional Programming**: Prefer functional programming (FP) style. Prefer small, pure, composable functions. Avoid side effects and shared mutable state. Use Object-Oriented Programming (OOP) only when strictly necessary (e.g., API clients or complex state machines).
-
 ## Coding Style & Conventions
 
-- **Language Requirements**:
-  - **User Communication**: Use **Chinese** for non-persistent, direct chat responses to the user, such as artifact files which are presented to the user directly.
-  - **Internal Reasoning**: Use **English** for all internal thoughts (e.g., `<thought>` blocks), reasoning, and planning.
-  - **Code & Project Files**: Strictly use **English** for all source code, variable/function naming, docstrings, inline code comments, and persistent project documentation (e.g., `README.md`, Markdown files, and logs).
 - **Data Processing**: Use `pandas.DataFrame` standardly for organizing tabular data. Save formats should prioritize Parquet (`.parquet`) for tabular data, with FITS (`.fits`) as a secondary option.
-  - **Caveat for Pandas (Precision Loss)**: When dealing with massive integer IDs (e.g., > $10^{15}$), never extract a row containing mixed types into a `pd.Series` (e.g., `row = df.iloc[i]`) before fetching the ID. Pandas will implicitly cast the entire row to `float64`, permanently truncating the precision of the large integer. Always extract the ID directly from the column first: `id = df["object_id"].iloc[i]`.
 - **Data Import**: Always use the functions provided in the `src/data` module when importing data.
+- **Caveat for Pandas (Precision Loss)**: When dealing with massive integer IDs (e.g., > $10^{15}$), never extract a row containing mixed types into a `pd.Series` (e.g., `row = df.iloc[i]`) before fetching the ID. Pandas will implicitly cast the entire row to `float64`, permanently truncating the precision of the large integer. Always extract the ID directly from the column first: `id = df["object_id"].iloc[i]`.
 - **Raw Strings for LaTeX / Escape Sequences**: Python 3.12+ raises `SyntaxWarning` for unrecognized escape sequences (e.g., `\m`, `\d`, `\s`) inside standard strings. Always use raw strings (`r"..."`) when writing LaTeX or strings containing backslashes.
-- **Progress Reporting & Logging**: Avoid using dynamic progress bar libraries (such as `tqdm` or `rich.progress`) or carriage returns (`\r`) for step updates. These libraries can fail or produce cluttered, unreadable, and corrupted logs in headless, non-interactive, or automated run environments. Instead, report progress using standard, static log or print statements at discrete, coarse-grained intervals (e.g., logging at 10%, 25%, 50%, etc., or printing once per major phase).
-- **Code Formatting & Import Sorting**: After modifying any Python file, run `uv run ruff check --select I --fix <file_path>` to sort imports and `uv run ruff format <file_path>` to format the code.
-
 ## Project Structure
 
 The project should minimally maintain the following standard directories:
@@ -68,16 +52,3 @@ Python scripts in `scripts/` are generally used as interactive scripts. Follow t
 - **Interactive Visualization**: For all data visualizations, scripts must **both** display the image (`plt.show()`) for interactive inspection in VS Code AND save the figure (`plt.savefig()`).
   - **Save Path**: The saved plots should be placed in `output/plots_for_agents/`. This serves as an unmanaged scratchpad for the AI to view the output.
   - **Headless AI Testing**: When the AI executes scripts for testing or verification, it MUST run the command in `Agg` mode (e.g., `MPLBACKEND=Agg .venv/bin/python ...`) to prevent UI windows from popping up on the user's machine. The AI can then use its tools to inspect the saved plot in `output/plots_for_agents/`.
-  - **RA/Dec Plotting Conventions**: Whenever plotting RA and Dec coordinates, always account for the sky projection to prevent stretching distortion. Explicitly set the aspect ratio (e.g., `ax.set_aspect(1.0 / np.cos(np.radians(dec)))` in matplotlib) so that 1 physical degree of RA and 1 physical degree of Dec are drawn with correct relative proportions. Additionally, RA should always be plotted in the reverse direction (increasing to the left) to match standard astronomical conventions (e.g., using `ax.invert_xaxis()` or setting limits as `ax.set_xlim(ra_max, ra_min)`).
-
-## Temporary & Test Scripts
-
-- **Storage & Execution**:
-  - **Inline Snippets (Best Practice for Quick Tests)**: For very short, one-off tests (e.g., < 10 lines), prefer executing the code directly in the terminal using `uv run python -c "..."` or via shell heredocs (`uv run python << 'EOF' ... EOF`). This keeps the workspace clean and provides rapid feedback.
-  - **Scratch Files**: For more complex or exploratory scripts that require iterative modification, debugging, or longer-term reference, save them in the `scratch/` directory. **Do not** place temporary test files in the main `scripts/` or `src/` directories.
-  - **Environment**: Whether running inline snippets or scratch files, **always** execute them using the virtual environment's Python (e.g., `uv run python` or `.venv/bin/python`).
-- **Cleanup**: Any one-off or temporary scripts created in the `scratch/` directory must be deleted after task execution is completed to keep the workspace clean.
-
-## Git Workflow
-
-- **Task Completion Commit**: After completing a task, the agent must propose a git commit plan (using `git commit -m` with a clear message) listing the specific files to be committed. Once the user approves, commit the changes. Crucially, the commit must only contain files directly related to the current task. Avoid indiscriminate commands like `git add .` to prevent staging unrelated or temporary files.
