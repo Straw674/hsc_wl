@@ -329,6 +329,11 @@ _PATH_FORCED = (
 # CAMIRA S23b wide
 _PATH_CAMIRA = "data/camira_s23b_wide_sm_v3.dat"
 
+# AMICO cluster finder
+_PATH_AMICO = get_latest_cluster_catalog(
+    "/Users/xinq/cluster_finder/output/amico/cluster"
+)
+
 # redMapper SDSS R16 cluster catalog
 _PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
 
@@ -350,6 +355,7 @@ _COLS_LOGM = {"col_rank": "logm_50_100", "ra": "ra", "dec": "dec", "z": "z_best"
 _COLS_FORCED = {"col_rank": "lam", "ra": "ra", "dec": "dec", "z": "z_best"}
 _COLS_CAMIRA = {"col_rank": "N_mem", "ra": "RA", "dec": "Dec", "z": "z_cl"}
 _COLS_COSINE = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
+_COLS_AMICO = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 
 # ---------------------------------------------------------------------------
 # Sky footprint boxes  (unpacked as **kwargs into _cfg)
@@ -360,6 +366,9 @@ _BOX_HECTOMAP = {"ra_range": (200, 250), "dec_range": (42, 44.5)}
 
 # redMapper R16 HectoMap sub-region: RA 210-250 deg, Dec 42-44.5 deg
 _BOX_R16_HECTOMAP = {"ra_range": (210, 250), "dec_range": (42, 44.5)}
+
+# AMICO search support: RA 215-250 deg, Dec 42.2-44.5 deg
+_BOX_AMICO = {"ra_range": (215, 250), "dec_range": (42.2, 44.5)}
 
 # Reference redshift range shared by all catalogs
 _Z_RANGE = (0.19, 0.52)
@@ -443,6 +452,7 @@ def _cfg(
 #   redm_r16_hecto_s16a          – redMapper SDSS R16, HectoMAP box ∩ s16a random footprint
 #   cosine                       – COSINE cluster finder (natural HectoMap footprint)
 #   cosine_s16a                  – same, restricted to s16a random ∩ HectoMAP box
+#   amico                        – AMICO cluster finder (RA 215-250 / Dec 42.2-44.5)
 # ---------------------------------------------------------------------------
 
 RUN_REGISTRY: dict[str, WLConfig] = {
@@ -844,5 +854,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
         **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # AMICO cluster finder (natural RA 215-250 / Dec 42.2-44.5 footprint)
+    # -----------------------------------------------------------------------
+    "amico_4bin": _cfg(
+        "amico_4bin",
+        _PATH_AMICO,
+        _RAND_HECTOMAP,
+        columns=_COLS_AMICO,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_AMICO,
+    ),
+    "amico_1bin": _cfg(
+        "amico_1bin",
+        _PATH_AMICO,
+        _RAND_HECTOMAP,
+        columns=_COLS_AMICO,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_AMICO,
     ),
 }

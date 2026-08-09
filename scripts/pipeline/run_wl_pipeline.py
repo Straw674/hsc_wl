@@ -69,9 +69,12 @@ from initial import *  # noqa: F401,F403
 #     "cosine_4bin",                "cosine_1bin"
 #     "cosine_s16a_4bin",           "cosine_s16a_1bin"
 #
+#   AMICO cluster finder (RA 215-250 / Dec 42.2-44.5 footprint):
+#     "amico_4bin",                 "amico_1bin"
+#
 
-# RUN_LABEL = list(RUN_REGISTRY.keys())  # run all 34 configurations
-RUN_LABEL = ["cosine_1bin", "cosine_4bin"]
+# RUN_LABEL = list(RUN_REGISTRY.keys())  # run all configurations
+RUN_LABEL = ["amico_1bin", "amico_4bin"]
 
 # %% Local Functions
 

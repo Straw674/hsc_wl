@@ -29,7 +29,7 @@ from dsigma.precompute import precompute
 from dsigma.stacking import excess_surface_density
 from dsigma.surveys import hsc as hsc_survey
 
-from hsc_wl.config import CorrectionConfig, SourceConfig, WLConfig
+from hsc_wl.config import CorrectionConfig, SourceConfig, WLConfig, resolve_config
 
 logger = logging.getLogger(__name__)
 
@@ -983,6 +983,7 @@ def run_pipeline(
         One profile per non-empty bin.
     """
     root = _find_root(root)
+    cfg = resolve_config(cfg, root)
     logger.info("=== run_pipeline: %s ===", cfg.label)
 
     source = load_source(cfg, root)
