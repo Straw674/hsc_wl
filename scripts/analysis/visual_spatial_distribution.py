@@ -211,6 +211,242 @@ def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
     plt.close(fig)
 
 
+def compute_consensus_breakdown(
+    dfs: dict[str, Table],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Compute multi-catalog consensus counts and percentages.
+
+    For each catalog, counts how many objects are matched in exactly k other
+    catalogs (k = 0, 1, ..., n_cats - 1) within 0.5 Mpc/h physical radius.
+
+    Parameters
+    ----------
+    dfs : dict of str -> Table
+        Loaded lens catalogs.
+
+    Returns
+    -------
+    tuple of (pd.DataFrame, pd.DataFrame)
+        df_counts: Table of raw counts.
+        df_pct: Table of percentages relative to each catalog's total.
+    """
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord
+    from astropy.cosmology import Planck18
+
+    catalog_names = list(dfs.keys())
+    n_cats = len(catalog_names)
+
+    coords = {
+        name: SkyCoord(
+            ra=np.asarray(dfs[name]["ra"]) * u.deg,
+            dec=np.asarray(dfs[name]["dec"]) * u.deg,
+        )
+        for name in catalog_names
+    }
+
+    radii_deg = {}
+    h = Planck18.h
+    for name in catalog_names:
+        z = np.clip(np.asarray(dfs[name]["z"], float), 1e-4, None)
+        da = Planck18.angular_diameter_distance(z).value
+        radii_deg[name] = (0.5 / h) / da * (180.0 / np.pi)
+
+    counts_matrix = np.zeros((n_cats, n_cats), dtype=int)
+
+    for i, name in enumerate(catalog_names):
+        c_self = coords[name]
+        r_self = radii_deg[name]
+        n_obj = len(dfs[name])
+
+        matched_counts = np.zeros(n_obj, dtype=int)
+        for j, other_name in enumerate(catalog_names):
+            if i == j:
+                continue
+            c_other = coords[other_name]
+            idx, d2d, _ = c_self.match_to_catalog_sky(c_other)
+            matched_counts += (d2d.deg < r_self).astype(int)
+
+        for k in range(n_cats):
+            counts_matrix[i, k] = np.sum(matched_counts == k)
+
+    col_labels = [
+        f"{k} Other Catalogs" if k == 1 else f"{k} Other Catalogs"
+        for k in range(n_cats)
+    ]
+    df_counts = pd.DataFrame(counts_matrix, index=catalog_names, columns=col_labels)
+
+    row_totals = counts_matrix.sum(axis=1)
+    row_totals_safe = np.where(row_totals == 0, 1, row_totals)
+    pct_matrix = (counts_matrix / row_totals_safe[:, None]) * 100.0
+    df_pct = pd.DataFrame(pct_matrix, index=catalog_names, columns=col_labels)
+
+    return df_counts, df_pct
+
+
+def plot_consensus_breakdown(
+    df_counts: pd.DataFrame,
+    df_pct: pd.DataFrame,
+    colors: list[str],
+    markers: list[str],
+    save_path: Path,
+):
+    """Plot consensus level breakdown as a dual-panel visualization.
+
+    Panel (a): Heatmap matrix showing count/total and percentage.
+    Panel (b): Consensus profile curves across catalogs.
+    """
+    import matplotlib.pyplot as plt
+
+    counts_matrix = df_counts.values
+    pct_matrix = df_pct.values
+    catalog_names = list(df_counts.index)
+    n_cats = len(catalog_names)
+    row_totals = counts_matrix.sum(axis=1)
+
+    fig, (ax1, ax2) = plt.subplots(
+        1, 2, figsize=(15, 6), gridspec_kw={"width_ratios": [1.1, 1.0]}
+    )
+
+    # Panel 1: Heatmap
+    vmax = max(50.0, float(np.max(pct_matrix)))
+    im = ax1.imshow(pct_matrix, cmap="YlGnBu", aspect="auto", vmin=0, vmax=vmax)
+    cbar = fig.colorbar(im, ax=ax1, shrink=0.85, pad=0.03)
+    cbar.set_label("Fraction of Catalog (%)", fontsize=10)
+
+    col_labels = [
+        f"{k} Others\n(Unique)"
+        if k == 0
+        else f"{k} Other"
+        if k == 1
+        else f"{k} Others\n(All {n_cats})"
+        if k == n_cats - 1
+        else f"{k} Others"
+        for k in range(n_cats)
+    ]
+    ax1.set_xticks(np.arange(n_cats))
+    ax1.set_yticks(np.arange(n_cats))
+    ax1.set_xticklabels(col_labels, fontsize=9.5)
+    ax1.set_yticklabels(catalog_names, fontsize=9.5)
+    ax1.set_xlabel(
+        "Number of Other Matched Catalogs (Consensus Level)",
+        fontsize=11,
+        labelpad=10,
+    )
+    ax1.set_ylabel("Source Catalog", fontsize=11)
+    ax1.set_title(
+        "(a) Consensus Matrix (Count / Total & %)",
+        fontsize=12,
+        pad=12,
+        fontweight="bold",
+    )
+
+    for i in range(n_cats):
+        for j in range(n_cats):
+            val = counts_matrix[i, j]
+            pct = pct_matrix[i, j]
+            tot = row_totals[i]
+            text = f"{val}/{tot}\n({pct:.1f}%)"
+            color = "white" if pct > 0.5 * vmax else "black"
+            ax1.text(
+                j,
+                i,
+                text,
+                ha="center",
+                va="center",
+                color=color,
+                fontweight="bold",
+                fontsize=8.5,
+            )
+
+    ax1.set_xticks(np.arange(n_cats + 1) - 0.5, minor=True)
+    ax1.set_yticks(np.arange(n_cats + 1) - 0.5, minor=True)
+    ax1.grid(which="minor", color="white", linestyle="-", linewidth=2)
+    ax1.tick_params(which="minor", bottom=False, left=False)
+    ax1.spines[:].set_visible(False)
+
+    # Panel 2: Consensus Profile Curves
+    x_vals = np.arange(n_cats)
+    for idx, name in enumerate(catalog_names):
+        c = colors[idx % len(colors)]
+        m = markers[idx % len(markers)]
+        lw = 2.4 if "amico" in name else 1.8
+        alpha = 1.0 if "amico" in name else 0.85
+        zorder = 5 if "amico" in name else 3
+        ax2.plot(
+            x_vals,
+            pct_matrix[idx],
+            label=name,
+            color=c,
+            marker=m,
+            markersize=8,
+            linewidth=lw,
+            alpha=alpha,
+            zorder=zorder,
+        )
+
+    ax2.set_xticks(x_vals)
+    ax2.set_xticklabels(
+        [
+            f"{k} (Unique)"
+            if k == 0
+            else f"{k} (All {n_cats})"
+            if k == n_cats - 1
+            else f"{k}"
+            for k in x_vals
+        ],
+        fontsize=9.5,
+    )
+    ax2.set_xlabel(
+        "Number of Other Matched Catalogs (Consensus Level)",
+        fontsize=11,
+        labelpad=10,
+    )
+    ax2.set_ylabel("Cluster Fraction (%)", fontsize=11)
+    ax2.set_title(
+        "(b) Consensus Profiles across Catalogs",
+        fontsize=12,
+        pad=12,
+        fontweight="bold",
+    )
+    ax2.grid(True, linestyle="--", alpha=0.5)
+    ax2.set_ylim(0, max(52.0, float(np.max(pct_matrix)) + 8.0))
+    ax2.legend(fontsize=8.5, loc="upper right", framealpha=0.9)
+
+    # Highlight unique zone & consensus zone
+    ax2.axvspan(-0.35, 0.35, color="red", alpha=0.07, label="_nolegend_")
+    ax2.text(
+        0,
+        ax2.get_ylim()[1] - 4,
+        "Unique\nZone",
+        ha="center",
+        va="top",
+        fontsize=8.5,
+        color="darkred",
+        style="italic",
+    )
+    ax2.axvspan(
+        n_cats - 1.35, n_cats - 0.65, color="green", alpha=0.07, label="_nolegend_"
+    )
+    ax2.text(
+        n_cats - 1,
+        ax2.get_ylim()[1] - 4,
+        f"{n_cats}-Way\nConsensus",
+        ha="center",
+        va="top",
+        fontsize=8.5,
+        color="darkgreen",
+        style="italic",
+    )
+
+    fig.tight_layout()
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Consensus breakdown plot saved to {save_path}")
+    plt.show()
+    plt.close(fig)
+
+
 def plot_bokeh_spatial(
     dfs: dict[str, Table],
     colors: list[str],
@@ -439,14 +675,23 @@ def plot_bokeh_spatial(
 
 # %% Global Configuration
 
+# LABELS_TO_COMPARE = [
+#     "redm_s16a_hectomap_1bin",
+#     "logm_s16a_hectomap_1bin",
+#     "redm_pdr3_3band_fixed_s16a_1bin",
+#     "cosine_s16a_1bin",
+#     "camira_hecto_s16a_1bin",
+#     "redm_r16_hecto_s16a_1bin",
+# ]
+
 LABELS_TO_COMPARE = [
-    "redm_s16a_hectomap_1bin",
-    "logm_s16a_hectomap_1bin",
-    "redm_pdr3_3band_fixed_s16a_1bin",
-    "cosine_s16a_1bin",
-    "camira_hecto_s16a_1bin",
-    "redm_r16_hecto_s16a_1bin",
+    ("redm_pdr3_5band_free_1bin"),
+    ("camira_hectomap_1bin"),
+    ("redm_r16_hectomap_1bin"),
+    ("amico_1bin"),
+    ("cosine_1bin"),
 ]
+
 
 # Color palette: Paul Tol Bright/Muted adapted
 PALETTE = [
@@ -462,6 +707,9 @@ PALETTE = [
 MARKERS = ["o", "s", "v", "D", "x"]
 
 OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
+OUTPUT_CONSENSUS_BREAKDOWN = (
+    project_root / "output/plots_for_agents/consensus_breakdown.png"
+)
 OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
 
 # %% [Stage 1: Load and Match Catalogs]
@@ -477,7 +725,27 @@ with pd.option_context("display.max_columns", None, "display.width", 1000):
 
 plot_matching_heatmap(match_df, save_path=OUTPUT_MATCH_HEATMAP)
 
-# %% [Stage 3: Plot Bokeh Interactive Visualization]
+# %% [Stage 3: Consensus Breakdown Analysis]
+
+print("\n--- Multi-Catalog Consensus Breakdown ---")
+consensus_counts_df, consensus_pct_df = compute_consensus_breakdown(dfs_dict)
+print("Raw Counts (Count of Clusters matching k other catalogs):")
+with pd.option_context("display.max_columns", None, "display.width", 1000):
+    print(consensus_counts_df)
+
+print("\nPercentages (% of Catalog):")
+with pd.option_context("display.max_columns", None, "display.width", 1000):
+    print(consensus_pct_df.round(1))
+
+plot_consensus_breakdown(
+    consensus_counts_df,
+    consensus_pct_df,
+    colors=PALETTE,
+    markers=MARKERS,
+    save_path=OUTPUT_CONSENSUS_BREAKDOWN,
+)
+
+# %% [Stage 4: Plot Bokeh Interactive Visualization]
 
 plot_bokeh_spatial(
     dfs_dict, colors=PALETTE, markers=MARKERS, save_path=OUTPUT_BOKEH_HTML
