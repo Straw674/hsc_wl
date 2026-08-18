@@ -320,61 +320,24 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 
 # List of (catalog_id, nbins, version_name) triples to compare.
 # To compare 4-bin configurations, change "1bin" to "4bin".
-#
-# All available configurations (1bin):
-#
-#   redMapper PDR3 (HectoMap / s16a-constrained footprint):
-#     ("redm_pdr3_3band_fixed",      "1bin", "Y3"),
-#     ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
-#     ("redm_pdr3_5band_free",       "1bin", "Y3"),
-#     ("redm_pdr3_5band_free_s16a",  "1bin", "Y3"),
-#     ("redm_pdr3_3band_free",       "1bin", "Y3"),
-#     ("redm_pdr3_3band_free_s16a",  "1bin", "Y3"),
-#
-#   redMapper S16a:
-#     ("redm_s16a",          "1bin", "Y3"),
+# For available catalog IDs and nbins, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
+# CONFIGS_TO_COMPARE = [
+#     # ("logm_s16a_hectomap", "1bin", "Y3"),
+#     ("camira", "1bin", "Y3"),
 #     ("redm_s16a_hectomap", "1bin", "Y3"),
-#
-#   logM S16a massive galaxies:
-#     ("logm_s16a",          "1bin", "Y3"),
-#     ("logm_s16a_hectomap", "1bin", "Y3"),
-#
-#   Forced-richness S16a:
-#     ("forced",             "1bin", "Y3"),
-#     ("forced_hectomap",    "1bin", "Y3"),
-#
-#   CAMIRA S23b wide (full / hectomap / hectomap + s16a footprint):
-#     ("camira",             "1bin", "Y3"),
-#     ("camira_hectomap",    "1bin", "Y3"),
-#     ("camira_hecto_s16a",  "1bin", "Y3"),
-#
-#   redMapper SDSS R16 (full / hectomap / s16a-hectomap footprint):
-#     ("redm_r16",            "1bin", "Y3"),
-#     ("redm_r16_hectomap",    "1bin", "Y3"),
-#     ("redm_r16_hecto_s16a",  "1bin", "Y3"),
-#
-#   COSINE cluster finder (natural HectoMap / s16a-constrained footprint):
-#     ("cosine",             "1bin", "Y3"),
-#     ("cosine_s16a",        "1bin", "Y3"),
-#
+#     ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
+#     # ("redm_pdr3_5band_free_s16a", "1bin", "Y3"),
+#     # ("redm_pdr3_3band_free_s16a", "1bin", "Y3"),
+#     ("cosine_s16a", "1bin", "Y3"),
+#     ("camira_hecto_s16a", "1bin", "Y3"),
+#     ("redm_r16_hecto_s16a", "1bin", "Y3"),
+# ]
 
 CONFIGS_TO_COMPARE = [
-    # ("logm_s16a_hectomap", "1bin", "Y3"),
     ("camira", "1bin", "Y3"),
-    ("redm_s16a_hectomap", "1bin", "Y3"),
-    ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
-    # ("redm_pdr3_5band_free_s16a", "1bin", "Y3"),
-    # ("redm_pdr3_3band_free_s16a", "1bin", "Y3"),
-    ("cosine_s16a", "1bin", "Y3"),
-    ("camira_hecto_s16a", "1bin", "Y3"),
-    ("redm_r16_hecto_s16a", "1bin", "Y3"),
-]
-
-CONFIGS_TO_COMPARE = [
-    # ("redm_r16", "1bin", "Y3"),
-    ("camira", "1bin", "Y3"),
+    ("redm_r16", "1bin", "Y3"),
+    ("amico", "1bin", "Y3"),
     ("cosine", "1bin", "Y3"),
-    ("redm_pdr3_3band_fixed", "1bin", "Y3"),
 ]
 
 # CONFIGS_TO_COMPARE = [

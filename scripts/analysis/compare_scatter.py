@@ -128,37 +128,15 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
 
 # %% Global Configuration
 
-# Available labels in RUN_REGISTRY (Must be a 4bin configuration):
-#
-#   redMapper PDR3 (3-band fixed, 5-band free, 3-band free):
-#     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_s16a_4bin",
-#     "redm_pdr3_5band_free_4bin", "redm_pdr3_5band_free_s16a_4bin",
-#     "redm_pdr3_3band_free_4bin", "redm_pdr3_3band_free_s16a_4bin"
-#
-#   redMapper S16a (full, hectomap):
-#     "redm_s16a_4bin", "redm_s16a_hectomap_4bin"
-#
-#   logM S16a (full, hectomap):
-#     "logm_s16a_4bin", "logm_s16a_hectomap_4bin"
-#
-#   Forced-richness S16a (full, hectomap):
-#     "forced_4bin", "forced_hectomap_4bin"
-#
-#   CAMIRA S23b (full, hectomap, hectomap+s16a):
-#     "camira_4bin", "camira_hectomap_4bin", "camira_hecto_s16a_4bin"
-#
-#   redMapper SDSS R16 (full, hectomap, hectomap+s16a):
-#     "redm_r16_4bin", "redm_r16_hectomap_4bin", "redm_r16_hecto_s16a_4bin"
-#
-#   COSINE (full, hectomap+s16a):
-#     "cosine_4bin", "cosine_s16a_4bin"
-#
+# Labels to compare (must be 4bin configurations, e.g. ("amico_4bin", "Y3")).
+# For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
 LABELS = [
     ("redm_s16a_hectomap_4bin", "Y3"),
     ("logm_s16a_hectomap_4bin", "Y3"),
     ("redm_pdr3_3band_fixed_s16a_4bin", "Y3"),
     ("cosine_s16a_4bin", "Y3"),
     ("camira_hecto_s16a_4bin", "Y3"),
+    ("amico_4bin", "Y3"),
 ]
 
 # Optional: display names for labels in the legend

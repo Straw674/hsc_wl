@@ -22,7 +22,7 @@ import pickle  # noqa: E402
 
 from jianbing import scatter, visual  # noqa: E402
 
-from initial import *  # noqa: F401,F403
+from initial import *  # noqa: F401, F403
 
 # %% Local Functions
 
@@ -128,32 +128,8 @@ def visualize_summary(custom_sum):
 
 # %% Global Configuration
 
-# Available labels in RUN_REGISTRY (Must be a 4bin configuration):
-#
-#   redMapper PDR3 (3-band fixed, 5-band free, 3-band free):
-#     "redm_pdr3_3band_fixed_4bin", "redm_pdr3_3band_fixed_s16a_4bin",
-#     "redm_pdr3_5band_free_4bin", "redm_pdr3_5band_free_s16a_4bin",
-#     "redm_pdr3_3band_free_4bin", "redm_pdr3_3band_free_s16a_4bin"
-#
-#   redMapper S16a (full, hectomap):
-#     "redm_s16a_4bin", "redm_s16a_hectomap_4bin"
-#
-#   logM S16a (full, hectomap):
-#     "logm_s16a_4bin", "logm_s16a_hectomap_4bin"
-#
-#   Forced-richness S16a (full, hectomap):
-#     "forced_4bin", "forced_hectomap_4bin"
-#
-#   CAMIRA S23b (full, hectomap, hectomap+s16a):
-#     "camira_4bin", "camira_hectomap_4bin", "camira_hecto_s16a_4bin"
-#
-#   redMapper SDSS R16 (full, hectomap, hectomap+s16a):
-#     "redm_r16_4bin", "redm_r16_hectomap_4bin", "redm_r16_hecto_s16a_4bin"
-#
-#   COSINE (full, hectomap+s16a):
-#     "cosine_4bin", "cosine_s16a_4bin"
-#
-LABEL = "redm_pdr3_3band_free_4bin"  # Must be a 4bin configuration
+# For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
+LABEL = "amico_4bin"  # Must be a 4bin configuration
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Parse catalog_id and nbins from the unified run label
