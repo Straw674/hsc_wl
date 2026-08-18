@@ -291,89 +291,27 @@ def plot_consensus_breakdown(
     markers: list[str],
     save_path: Path,
 ):
-    """Plot consensus level breakdown as a dual-panel visualization.
+    """Plot consensus level profiles across catalogs as a clean multi-line plot.
 
-    Panel (a): Heatmap matrix showing count/total and percentage.
-    Panel (b): Consensus profile curves across catalogs.
+    Shows the fraction of clusters in each catalog that match k other catalogs
+    (k = 0, 1, ..., n_cats - 1) within 0.5 Mpc/h physical radius.
     """
     import matplotlib.pyplot as plt
 
-    counts_matrix = df_counts.values
     pct_matrix = df_pct.values
-    catalog_names = list(df_counts.index)
+    catalog_names = list(df_pct.index)
     n_cats = len(catalog_names)
-    row_totals = counts_matrix.sum(axis=1)
 
-    fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(15, 6), gridspec_kw={"width_ratios": [1.1, 1.0]}
-    )
-
-    # Panel 1: Heatmap
-    vmax = max(50.0, float(np.max(pct_matrix)))
-    im = ax1.imshow(pct_matrix, cmap="YlGnBu", aspect="auto", vmin=0, vmax=vmax)
-    cbar = fig.colorbar(im, ax=ax1, shrink=0.85, pad=0.03)
-    cbar.set_label("Fraction of Catalog (%)", fontsize=10)
-
-    col_labels = [
-        f"{k} Others\n(Unique)"
-        if k == 0
-        else f"{k} Other"
-        if k == 1
-        else f"{k} Others\n(All {n_cats})"
-        if k == n_cats - 1
-        else f"{k} Others"
-        for k in range(n_cats)
-    ]
-    ax1.set_xticks(np.arange(n_cats))
-    ax1.set_yticks(np.arange(n_cats))
-    ax1.set_xticklabels(col_labels, fontsize=9.5)
-    ax1.set_yticklabels(catalog_names, fontsize=9.5)
-    ax1.set_xlabel(
-        "Number of Other Matched Catalogs (Consensus Level)",
-        fontsize=11,
-        labelpad=10,
-    )
-    ax1.set_ylabel("Source Catalog", fontsize=11)
-    ax1.set_title(
-        "(a) Consensus Matrix (Count / Total & %)",
-        fontsize=12,
-        pad=12,
-        fontweight="bold",
-    )
-
-    for i in range(n_cats):
-        for j in range(n_cats):
-            val = counts_matrix[i, j]
-            pct = pct_matrix[i, j]
-            tot = row_totals[i]
-            text = f"{val}/{tot}\n({pct:.1f}%)"
-            color = "white" if pct > 0.5 * vmax else "black"
-            ax1.text(
-                j,
-                i,
-                text,
-                ha="center",
-                va="center",
-                color=color,
-                fontweight="bold",
-                fontsize=8.5,
-            )
-
-    ax1.set_xticks(np.arange(n_cats + 1) - 0.5, minor=True)
-    ax1.set_yticks(np.arange(n_cats + 1) - 0.5, minor=True)
-    ax1.grid(which="minor", color="white", linestyle="-", linewidth=2)
-    ax1.tick_params(which="minor", bottom=False, left=False)
-    ax1.spines[:].set_visible(False)
-
-    # Panel 2: Consensus Profile Curves
+    fig, ax = plt.subplots(figsize=(8.5, 5.5))
     x_vals = np.arange(n_cats)
+
     for idx, name in enumerate(catalog_names):
         c = colors[idx % len(colors)]
         m = markers[idx % len(markers)]
         lw = 2.4 if "amico" in name else 1.8
         alpha = 1.0 if "amico" in name else 0.85
         zorder = 5 if "amico" in name else 3
-        ax2.plot(
+        ax.plot(
             x_vals,
             pct_matrix[idx],
             label=name,
@@ -385,59 +323,33 @@ def plot_consensus_breakdown(
             zorder=zorder,
         )
 
-    ax2.set_xticks(x_vals)
-    ax2.set_xticklabels(
+    ax.set_xticks(x_vals)
+    ax.set_xticklabels(
         [
-            f"{k} (Unique)"
+            f"{k}\n(Unique)"
             if k == 0
-            else f"{k} (All {n_cats})"
+            else f"{k}\n(All {n_cats})"
             if k == n_cats - 1
-            else f"{k}"
+            else str(k)
             for k in x_vals
         ],
-        fontsize=9.5,
+        fontsize=10.5,
     )
-    ax2.set_xlabel(
+    ax.set_xlabel(
         "Number of Other Matched Catalogs (Consensus Level)",
-        fontsize=11,
+        fontsize=11.5,
         labelpad=10,
     )
-    ax2.set_ylabel("Cluster Fraction (%)", fontsize=11)
-    ax2.set_title(
-        "(b) Consensus Profiles across Catalogs",
-        fontsize=12,
+    ax.set_ylabel("Cluster Fraction (%)", fontsize=11.5)
+    ax.set_title(
+        "Consensus Profiles across Catalogs (0.5 Mpc/h Matching)",
+        fontsize=12.5,
         pad=12,
         fontweight="bold",
     )
-    ax2.grid(True, linestyle="--", alpha=0.5)
-    ax2.set_ylim(0, max(52.0, float(np.max(pct_matrix)) + 8.0))
-    ax2.legend(fontsize=8.5, loc="upper right", framealpha=0.9)
-
-    # Highlight unique zone & consensus zone
-    ax2.axvspan(-0.35, 0.35, color="red", alpha=0.07, label="_nolegend_")
-    ax2.text(
-        0,
-        ax2.get_ylim()[1] - 4,
-        "Unique\nZone",
-        ha="center",
-        va="top",
-        fontsize=8.5,
-        color="darkred",
-        style="italic",
-    )
-    ax2.axvspan(
-        n_cats - 1.35, n_cats - 0.65, color="green", alpha=0.07, label="_nolegend_"
-    )
-    ax2.text(
-        n_cats - 1,
-        ax2.get_ylim()[1] - 4,
-        f"{n_cats}-Way\nConsensus",
-        ha="center",
-        va="top",
-        fontsize=8.5,
-        color="darkgreen",
-        style="italic",
-    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.set_ylim(0, max(45.0, float(np.max(pct_matrix)) + 6.0))
+    ax.legend(fontsize=9.5, loc="upper right", framealpha=0.9)
 
     fig.tight_layout()
     save_path.parent.mkdir(parents=True, exist_ok=True)
