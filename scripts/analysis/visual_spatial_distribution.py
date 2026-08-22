@@ -24,6 +24,62 @@ from initial import *  # noqa: F401,F403
 # %% Local Functions
 
 
+def load_chen2024_clusters(
+    root: Path,
+    ra_range: tuple[float, float] = (200.0, 250.0),
+    dec_range: tuple[float, float] = (42.0, 44.5),
+    redshift_range: tuple[float, float] = (0.19, 0.52),
+) -> Table:
+    """Load and filter the Chen et al. (2024) WL shear-selected cluster catalog.
+
+    Applies HectoMAP sky footprint, redshift range, and HSC Y3 shape catalog mask.
+
+    Parameters
+    ----------
+    root : Path
+        Project root path.
+    ra_range : tuple of (float, float), default (200.0, 250.0)
+        RA bounds in degrees.
+    dec_range : tuple of (float, float), default (42.0, 44.5)
+        Dec bounds in degrees.
+    redshift_range : tuple of (float, float), default (0.19, 0.52)
+        Redshift bounds.
+
+    Returns
+    -------
+    astropy.table.Table
+        Filtered Chen+2024 cluster table with columns [peak_id, ra, dec, z, snr, ...].
+    """
+    from hsc_wl.coverage import filter_lens_by_mask
+
+    parquet_path = root / "data/chen2024_shear_selected_clusters.parquet"
+    if not parquet_path.exists():
+        raise FileNotFoundError(
+            f"Chen 2024 catalog not found at {parquet_path}. "
+            "Ensure data/chen2024_shear_selected_clusters.parquet exists."
+        )
+
+    df = pd.read_parquet(parquet_path)
+
+    # Filter by spatial box and redshift
+    mask = (
+        (df["ra"] >= ra_range[0])
+        & (df["ra"] <= ra_range[1])
+        & (df["dec"] >= dec_range[0])
+        & (df["dec"] <= dec_range[1])
+        & (df["z_cl"] >= redshift_range[0])
+        & (df["z_cl"] <= redshift_range[1])
+    )
+    filtered_df = df[mask].sort_values(by="snr", ascending=False).reset_index(drop=True)
+    tbl = Table.from_pandas(filtered_df)
+
+    # Filter by Y3 shape mask
+    tbl = filter_lens_by_mask(tbl, root=root, ra_col="ra", dec_col="dec")
+    tbl["z"] = tbl["z_cl"]
+    tbl["rank"] = np.arange(1, len(tbl) + 1)
+    return tbl
+
+
 def load_lens_data(labels: list[str], root: Path) -> dict[str, Table]:
     """Load prepared lens tables for the given configurations.
 
@@ -364,6 +420,7 @@ def plot_bokeh_spatial(
     colors: list[str],
     markers: list[str],
     save_path: Path,
+    chen_table: Table | None = None,
 ):
     """Generate an interactive Bokeh plot allowing zoom and hover inspection.
 
@@ -376,8 +433,12 @@ def plot_bokeh_spatial(
     output_file(filename=str(save_path), title="Lens Spatial Distribution Explorer")
 
     # Determine adaptive coordinates and spans
-    all_dec = np.concatenate([np.asarray(t["dec"]) for t in dfs.values()])
-    all_ra = np.concatenate([np.asarray(t["ra"]) for t in dfs.values()])
+    all_dfs = list(dfs.values())
+    if chen_table is not None and len(chen_table) > 0:
+        all_dfs.append(chen_table)
+
+    all_dec = np.concatenate([np.asarray(t["dec"]) for t in all_dfs])
+    all_ra = np.concatenate([np.asarray(t["ra"]) for t in all_dfs])
 
     if len(all_dec) == 0:
         dec_mean = 0.0
@@ -450,7 +511,7 @@ def plot_bokeh_spatial(
     p.xaxis.major_label_text_color = "#aaaaaa"
     p.yaxis.major_label_text_color = "#aaaaaa"
 
-    # Draw each catalog's markers
+    # Draw each optical catalog's markers
     for idx, name in enumerate(dfs.keys()):
         tbl = dfs[name]
         color = colors[idx % len(colors)]
@@ -543,6 +604,51 @@ def plot_bokeh_spatial(
         )
         p.add_tools(hover)
 
+    # Draw Chen 2024 WL shear-selected clusters with an emphasized larger white hollow marker
+    if chen_table is not None and len(chen_table) > 0:
+        chen_source = ColumnDataSource(
+            data={
+                "ra": np.asarray(chen_table["ra"], dtype=float),
+                "dec": np.asarray(chen_table["dec"], dtype=float),
+                "z": np.asarray(chen_table["z"], dtype=float),
+                "snr": np.asarray(chen_table["snr"], dtype=float),
+                "peak_id": np.asarray(chen_table["peak_id"], dtype=int),
+                "richness": np.asarray(chen_table["richness"], dtype=float),
+                "opt_name": [str(x) for x in chen_table["opt_name"]],
+                "sep_mpc_h": np.asarray(chen_table["sep_mpc_h"], dtype=float),
+                "catalog": ["Chen+2024 WL Selected (Ground Truth)"] * len(chen_table),
+            }
+        )
+
+        # Prominent larger white hollow circle (size=26, line_width=3.0) to highlight WL ground truth
+        chen_renderer = p.scatter(
+            x="ra",
+            y="dec",
+            source=chen_source,
+            size=26,
+            marker="circle",
+            color="#FFFFFF",
+            fill_color=None,
+            line_width=3.0,
+            line_alpha=0.95,
+            legend_label=f"Chen+2024 WL Selected (N={len(chen_table)})",
+        )
+
+        chen_hover = HoverTool(
+            renderers=[chen_renderer],
+            tooltips=[
+                ("Catalog", "@catalog"),
+                ("Peak ID", "#@peak_id"),
+                ("WL Peak S/N", "@snr{0.00}"),
+                ("RA", "@ra{0.0000} deg"),
+                ("Dec", "@dec{0.0000} deg"),
+                ("Redshift z", "@z{0.0000}"),
+                ("Optical Match", "@opt_name (Richness: @richness{0.0})"),
+                ("Separation", "@sep_mpc_h{0.00} Mpc/h"),
+            ],
+        )
+        p.add_tools(chen_hover)
+
     # Customize layout and legend
     p.legend.location = "top_left"
     p.legend.click_policy = "hide"  # Hide/show catalog by clicking legend
@@ -627,6 +733,11 @@ OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution
 # %% [Stage 1: Load and Match Catalogs]
 
 dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
+chen_tbl = load_chen2024_clusters(project_root)
+
+print(
+    f"\nLoaded Chen+2024 WL shear-selected clusters in HectoMAP: N={len(chen_tbl)} (z in [0.19, 0.52], Y3 mask)"
+)
 
 print("\n--- Pairwise Cluster Matching Statistics (0.5 Mpc/h) ---")
 match_df = compute_pairwise_matches(dfs_dict)
@@ -660,5 +771,9 @@ plot_consensus_breakdown(
 # %% [Stage 4: Plot Bokeh Interactive Visualization]
 
 plot_bokeh_spatial(
-    dfs_dict, colors=PALETTE, markers=MARKERS, save_path=OUTPUT_BOKEH_HTML
+    dfs_dict,
+    colors=PALETTE,
+    markers=MARKERS,
+    save_path=OUTPUT_BOKEH_HTML,
+    chen_table=chen_tbl,
 )
