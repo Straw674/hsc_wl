@@ -616,11 +616,11 @@ def plot_bokeh_spatial(
                 "richness": np.asarray(chen_table["richness"], dtype=float),
                 "opt_name": [str(x) for x in chen_table["opt_name"]],
                 "sep_mpc_h": np.asarray(chen_table["sep_mpc_h"], dtype=float),
-                "catalog": ["Chen+2024 WL Selected (Ground Truth)"] * len(chen_table),
+                "catalog": ["Chen+2024 WL Shear-Selected"] * len(chen_table),
             }
         )
 
-        # Prominent larger white hollow circle (size=26, line_width=3.0) to highlight WL ground truth
+        # Prominent larger white hollow circle (size=26, line_width=3.0) to highlight WL shear-selected clusters
         chen_renderer = p.scatter(
             x="ra",
             y="dec",
