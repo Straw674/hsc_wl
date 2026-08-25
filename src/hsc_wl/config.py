@@ -334,6 +334,9 @@ _PATH_AMICO = get_latest_cluster_catalog(
     "/Users/xinq/cluster_finder/output/amico/cluster"
 )
 
+# PLS cluster finder (2D CoG PLS decomposition + Cylinder NMS)
+_PATH_PLS = "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog.parquet"
+
 # redMapper SDSS R16 cluster catalog
 _PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
 
@@ -366,6 +369,7 @@ _COLS_FORCED = {"col_rank": "lam", "ra": "ra", "dec": "dec", "z": "z_best"}
 _COLS_CAMIRA = {"col_rank": "N_mem", "ra": "RA", "dec": "Dec", "z": "z_cl"}
 _COLS_COSINE = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 _COLS_AMICO = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
+_COLS_PLS = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 
 # ---------------------------------------------------------------------------
 # Sky footprint boxes  (unpacked as **kwargs into _cfg)
@@ -462,6 +466,8 @@ def _cfg(
 #   redm_r16_hecto_s16a          – redMapper SDSS R16, HectoMAP box ∩ s16a random footprint
 #   cosine                       – COSINE cluster finder (natural HectoMap footprint)
 #   cosine_s16a                  – same, restricted to s16a random ∩ HectoMAP box
+#   pls                          – PLS cluster finder (2D CoG PLS decomposition + Cylinder NMS)
+#   pls_s16a                     – same, restricted to s16a random ∩ HectoMAP box
 #   amico                        – AMICO cluster finder (RA 215-250 / Dec 42.2-44.5)
 #   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
 #   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
@@ -862,6 +868,49 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         get_latest_cluster_catalog(),
         _RAND_S16A,
         columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # PLS cluster finder (2D CoG PLS decomposition + Cylinder NMS)
+    # -----------------------------------------------------------------------
+    "pls_4bin": _cfg(
+        "pls_4bin",
+        _PATH_PLS,
+        _RAND_HECTOMAP,
+        columns=_COLS_PLS,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "pls_1bin": _cfg(
+        "pls_1bin",
+        _PATH_PLS,
+        _RAND_HECTOMAP,
+        columns=_COLS_PLS,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
+    # and PDR3 catalogs on the same sky patch.
+    "pls_s16a_4bin": _cfg(
+        "pls_s16a_4bin",
+        _PATH_PLS,
+        _RAND_S16A,
+        columns=_COLS_PLS,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "pls_s16a_1bin": _cfg(
+        "pls_s16a_1bin",
+        _PATH_PLS,
+        _RAND_S16A,
+        columns=_COLS_PLS,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
