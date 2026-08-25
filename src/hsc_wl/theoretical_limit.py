@@ -30,6 +30,8 @@ __all__ = [
     "load_simulation_zero_scatter",
     "compute_colossus_zero_scatter",
     "get_theoretical_upper_limit",
+    "export_theoretical_limit_outputs",
+    "ensure_theoretical_limit_outputs",
 ]
 
 
@@ -283,3 +285,108 @@ def get_theoretical_upper_limit(
         raise ValueError(
             f"Unknown source: {source!r}. Must be 'simulation' or 'colossus'."
         )
+
+
+def export_theoretical_limit_outputs(
+    root_path: Path,
+    catalog_id: str = "ideal_mdpl2",
+    nbins: Literal["1bin", "4bin"] = "1bin",
+    version: str = "Y3",
+    top_n: int = 500,
+    rp_min: float = 0.10,
+    rp_max: float = 20.0,
+    n_rp_bins: int = 11,
+    overwrite: bool = True,
+) -> list[Path]:
+    """Export theoretical upper limit profiles to standard output FITS files.
+
+    Writes FITS files with HDU 'PROFILE' and 'JK_COV' under:
+    ``output/{catalog_id}/{nbins}/{version}/dsigma/hsc_hsc_bin{i}.fits``.
+
+    Parameters
+    ----------
+    root_path : Path
+        Project root path.
+    catalog_id : str
+        Catalog identifier, e.g. "ideal_mdpl2" or "ideal_colossus".
+    nbins : {"1bin", "4bin"}
+        Binning mode.
+    version : str
+        Source version (e.g. "Y3", "Y1").
+    top_n : int
+        Top-N count for 1-bin mode.
+    rp_min, rp_max, n_rp_bins : float, int
+        Radial binning matching RPConfig.
+    overwrite : bool
+        Whether to overwrite existing files.
+
+    Returns
+    -------
+    list of Path
+        List of written FITS file paths.
+    """
+    from astropy.io import fits as fits_io
+
+    source = "simulation" if "mdpl" in catalog_id.lower() else "colossus"
+    rp_edges = np.logspace(np.log10(rp_min), np.log10(rp_max), n_rp_bins + 1)
+    rp_lo = rp_edges[:-1]
+    rp_hi = rp_edges[1:]
+    rp_mid = np.sqrt(rp_lo * rp_hi)
+
+    tables = get_theoretical_upper_limit(
+        root_path=root_path,
+        nbins=nbins,
+        top_n=top_n,
+        source=source,
+        rp_eval=rp_mid,
+    )
+
+    out_dir = Path(root_path) / f"output/{catalog_id}/{nbins}/{version}/dsigma"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    written_paths = []
+    for i, tbl in enumerate(tables):
+        out_table = Table()
+        out_table["rp_min"] = rp_lo
+        out_table["rp_max"] = rp_hi
+        out_table["rp"] = rp_mid
+        out_table["ds"] = np.asarray(tbl["ds"], dtype=float)
+        out_table["ds_err"] = (
+            np.asarray(tbl["ds_err"], dtype=float)
+            if "ds_err" in tbl.colnames
+            else np.zeros_like(out_table["ds"])
+        )
+        out_table["ds_raw"] = out_table["ds"]
+        out_table["ds_r"] = np.zeros_like(out_table["ds"])
+        out_table["z_l"] = np.full_like(out_table["ds"], 0.35)
+
+        cov = np.diag(out_table["ds_err"] ** 2)
+
+        hdul = fits_io.HDUList(
+            [
+                fits_io.PrimaryHDU(),
+                fits_io.BinTableHDU(out_table, name="PROFILE"),
+                fits_io.ImageHDU(cov, name="JK_COV"),
+            ]
+        )
+        out_path = out_dir / f"hsc_hsc_bin{i}.fits"
+        hdul.writeto(out_path, overwrite=overwrite)
+        written_paths.append(out_path)
+
+    return written_paths
+
+
+def ensure_theoretical_limit_outputs(root_path: Path, overwrite: bool = False) -> None:
+    """Ensure standard theoretical upper limit FITS exist for ideal_mdpl2 and ideal_colossus."""
+    for cat_id in ["ideal_mdpl2", "ideal_colossus"]:
+        for nbins in ["1bin", "4bin"]:
+            for ver in ["Y3", "Y1"]:
+                out_dir = Path(root_path) / f"output/{cat_id}/{nbins}/{ver}/dsigma"
+                if overwrite or not (out_dir / "hsc_hsc_bin0.fits").exists():
+                    export_theoretical_limit_outputs(
+                        root_path=root_path,
+                        catalog_id=cat_id,
+                        nbins=nbins,
+                        version=ver,
+                        overwrite=True,
+                    )

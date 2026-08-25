@@ -453,6 +453,8 @@ def _cfg(
 #   cosine                       – COSINE cluster finder (natural HectoMap footprint)
 #   cosine_s16a                  – same, restricted to s16a random ∩ HectoMAP box
 #   amico                        – AMICO cluster finder (RA 215-250 / Dec 42.2-44.5)
+#   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
+#   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
 # ---------------------------------------------------------------------------
 
 RUN_REGISTRY: dict[str, WLConfig] = {

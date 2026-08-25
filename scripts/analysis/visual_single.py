@@ -60,7 +60,7 @@ VERSION = "Y3"  # "Y1" or "Y3"
 PLOT_RANDOM = True
 PLOT_RAW = False
 
-if LABEL.startswith("huang2022"):
+if LABEL.startswith("huang2022") or LABEL.startswith("ideal_"):
     PLOT_RANDOM = False
 
 # Main profile style
