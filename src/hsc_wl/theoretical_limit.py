@@ -20,6 +20,7 @@ from scipy.interpolate import interp1d
 
 from hsc_wl.scatter_fit import (
     build_scatter_model,
+    compute_2halo_base_dsigma,
     compute_stacked_dsigma,
     compute_survey_number_density,
 )
@@ -156,22 +157,25 @@ def load_simulation_zero_scatter(
 
 def compute_colossus_zero_scatter(
     rp_eval: np.ndarray,
+    nbins: Literal["1bin", "4bin"] = "1bin",
     area_deg2: float = 170.0,
     z_min: float = 0.19,
     z_max: float = 0.52,
     z_lens: float = 0.35,
     top_n: int = 500,
+    top_counts: tuple[int, ...] = (53, 196, 660, 1159),
     cosmology_name: str = "planck18",
-) -> Table:
+) -> list[Table]:
     """Compute the analytical Halo Model theoretical upper limit (sigma=0, f_mis=0).
 
-    Uses Colossus with Tinker HMF, Diemer concentration, and linear matter
-    correlation 2-halo term.
+    Supports both 1-bin (cumulative top-N) and 4-bin (differential counts).
 
     Parameters
     ----------
     rp_eval : np.ndarray
         Projected radii (physical Mpc) to evaluate on.
+    nbins : {"1bin", "4bin"}, default "1bin"
+        Binning mode.
     area_deg2 : float, default 170.0
         Survey area in square degrees.
     z_min, z_max : float
@@ -179,53 +183,122 @@ def compute_colossus_zero_scatter(
     z_lens : float, default 0.35
         Effective lens redshift.
     top_n : int, default 500
-        Number of top objects in the volume.
+        Number of top objects in the volume (1-bin mode).
+    top_counts : tuple of int, default (53, 196, 660, 1159)
+        Counts for 4-bin mode.
     cosmology_name : str, default "planck18"
         Colossus cosmology model.
 
     Returns
     -------
-    astropy.table.Table
-        Table containing ``["rp", "ds", "ds_err"]`` (ds_err is 0.0 for analytic model).
+    list of astropy.table.Table
+        List of Tables containing ``["rp", "ds", "ds_err"]``.
     """
     from colossus.cosmology import cosmology
+    from colossus.halo import concentration, profile_nfw
+    from colossus.lss import bias, mass_function
 
     cosmo = cosmology.setCosmology(cosmology_name)
     h = cosmo.h
 
-    n_obs = compute_survey_number_density(
-        area_sq_deg=area_deg2,
-        z_min=z_min,
-        z_max=z_max,
-        n_obj=top_n,
-        cosmology_name=cosmology_name,
-    )
-
     rp_mpc = np.asarray(rp_eval, dtype=float)
     rp_kpc_h = rp_mpc * 1000.0 * h
 
-    model_state = build_scatter_model(
-        rp_kpc_h=rp_kpc_h,
-        z_lens=z_lens,
-        n_obs=n_obs,
-        cosmology_name=cosmology_name,
+    if nbins == "1bin":
+        n_obs = compute_survey_number_density(
+            area_sq_deg=area_deg2,
+            z_min=z_min,
+            z_max=z_max,
+            n_obj=top_n,
+            cosmology_name=cosmology_name,
+        )
+
+        model_state = build_scatter_model(
+            rp_kpc_h=rp_kpc_h,
+            z_lens=z_lens,
+            n_obs=n_obs,
+            cosmology_name=cosmology_name,
+        )
+
+        ds_colossus = compute_stacked_dsigma(
+            scatter=0.001,
+            f_mis=0.0,
+            sigma_R=0.0,
+            model_state=model_state,
+        )
+
+        ds_phys = ds_colossus / (1e6 / h)
+        ds_err = np.zeros_like(ds_phys)
+
+        tbl = Table({"rp": rp_mpc, "ds": ds_phys, "ds_err": ds_err})
+        tbl.meta["label"] = f"Colossus Halo Model Top-{top_n} (sigma=0)"
+        return [tbl]
+
+    # 4-bin differential calculation
+    cum_counts = np.cumsum(top_counts)
+    cum_n_obs = [
+        compute_survey_number_density(area_deg2, z_min, z_max, c, cosmology_name)
+        for c in cum_counts
+    ]
+
+    logm_grid = np.linspace(12.0, 16.5, 200)
+    c_grid = [
+        concentration.concentration(10**m, "200m", z_lens, model="diemer19")
+        for m in logm_grid
+    ]
+    b_grid = [
+        bias.haloBias(10**m, model="tinker10", z=z_lens, mdef="200m") for m in logm_grid
+    ]
+    dndlnm_grid = [
+        mass_function.massFunction(
+            10**m, z_lens, mdef="200m", model="tinker08", q_out="dndlnM"
+        )
+        for m in logm_grid
+    ]
+
+    c_spline = interp1d(logm_grid, c_grid, kind="cubic", fill_value="extrapolate")
+    b_spline = interp1d(logm_grid, b_grid, kind="cubic", fill_value="extrapolate")
+    dndlnm_spline = interp1d(
+        logm_grid, dndlnm_grid, kind="cubic", fill_value="extrapolate"
     )
 
-    # Evaluate at quasi-zero scatter (1e-3) and zero miscentering
-    ds_colossus = compute_stacked_dsigma(
-        scatter=0.001,
-        f_mis=0.0,
-        sigma_R=0.0,
-        model_state=model_state,
-    )
+    logm_dense = np.linspace(12.0, 16.5, 500)
+    dlogm = logm_dense[1] - logm_dense[0]
+    dndlogm = dndlnm_spline(logm_dense) * np.log(10)
+    n_cum_dense = np.cumsum(dndlogm[::-1] * dlogm)[::-1]
 
-    # Convert from Colossus units (h M_sun / kpc^2) to physical (M_sun / pc^2)
-    ds_phys = ds_colossus / (1e6 / h)
-    ds_err = np.zeros_like(ds_phys)
+    th_logm = [16.5]
+    for n_target in cum_n_obs:
+        idx = int(np.argmin(np.abs(n_cum_dense - n_target)))
+        th_logm.append(float(logm_dense[idx]))
 
-    tbl = Table({"rp": rp_mpc, "ds": ds_phys, "ds_err": ds_err})
-    tbl.meta["label"] = f"Colossus Halo Model Top-{top_n} (sigma=0)"
-    return tbl
+    ds_xi = compute_2halo_base_dsigma(rp_kpc_h, z_lens)
+    tables = []
+
+    for b_idx in range(4):
+        m_hi, m_lo = th_logm[b_idx], th_logm[b_idx + 1]
+        mask = (logm_dense >= m_lo) & (logm_dense <= m_hi)
+        m_bin = logm_dense[mask]
+        w_bin = dndlogm[mask] * dlogm
+        w_bin /= np.sum(w_bin)
+
+        ds_1h = np.zeros_like(rp_kpc_h)
+        ds_2h = np.zeros_like(rp_kpc_h)
+        for m, w in zip(m_bin, w_bin):
+            c = float(c_spline(m))
+            b = float(b_spline(m))
+            p = profile_nfw.NFWProfile(M=10**m, c=c, z=z_lens, mdef="200m")
+            ds_1h += w * p.deltaSigma(rp_kpc_h)
+            ds_2h += w * b * ds_xi
+
+        ds_tot_phys = (ds_1h + ds_2h) / (1e6 / h)
+        ds_err = np.zeros_like(ds_tot_phys)
+
+        tbl = Table({"rp": rp_mpc, "ds": ds_tot_phys, "ds_err": ds_err})
+        tbl.meta["label"] = f"Colossus Halo Model Bin {b_idx} (sigma=0)"
+        tables.append(tbl)
+
+    return tables
 
 
 def get_theoretical_upper_limit(
@@ -272,15 +345,15 @@ def get_theoretical_upper_limit(
         if rp_eval is None:
             # Default to standard HSC radial grid (0.1 to 20 Mpc)
             rp_eval = np.logspace(np.log10(0.1), np.log10(20.0), 20)
-        tbl = compute_colossus_zero_scatter(
+        return compute_colossus_zero_scatter(
             rp_eval=rp_eval,
+            nbins=nbins,
             area_deg2=area_deg2,
             z_min=z_min,
             z_max=z_max,
             z_lens=z_lens,
             top_n=top_n,
         )
-        return [tbl]
     else:
         raise ValueError(
             f"Unknown source: {source!r}. Must be 'simulation' or 'colossus'."
@@ -377,9 +450,36 @@ def export_theoretical_limit_outputs(
 
 
 def ensure_theoretical_limit_outputs(root_path: Path, overwrite: bool = False) -> None:
-    """Ensure standard theoretical upper limit FITS exist for ideal_mdpl2 and ideal_colossus."""
+    """Ensure standard theoretical upper limit FITS and prepare tables exist."""
+    top_counts_4bin = (53, 196, 660, 1159)
+    total_4bin = sum(top_counts_4bin)
+
     for cat_id in ["ideal_mdpl2", "ideal_colossus"]:
         for nbins in ["1bin", "4bin"]:
+            # 1. Ensure prepare lens table exists so scripts like fit_custom_scatter work seamlessly
+            prep_dir = Path(root_path) / f"output/{cat_id}/{nbins}/prepare"
+            prep_dir.mkdir(parents=True, exist_ok=True)
+            lens_fits = prep_dir / f"{cat_id}_{nbins}_lenses.fits"
+            rand_fits = prep_dir / f"{cat_id}_{nbins}_randoms.fits"
+
+            n_obj = 500 if nbins == "1bin" else total_4bin
+            if overwrite or not lens_fits.exists():
+                t_lens = Table()
+                t_lens["ra"] = np.linspace(200.0, 250.0, n_obj)
+                t_lens["dec"] = np.linspace(42.0, 44.5, n_obj)
+                t_lens["z"] = np.full(n_obj, 0.35)
+                t_lens["wsys"] = np.ones(n_obj, dtype=float)
+                if nbins == "1bin":
+                    t_lens["bin_id"] = np.zeros(n_obj, dtype=int)
+                else:
+                    b_ids = []
+                    for b_idx, c in enumerate(top_counts_4bin):
+                        b_ids.extend([b_idx] * c)
+                    t_lens["bin_id"] = np.array(b_ids)
+                t_lens.write(lens_fits, overwrite=True)
+                t_lens.write(rand_fits, overwrite=True)
+
+            # 2. Ensure dsigma outputs exist
             for ver in ["Y3", "Y1"]:
                 out_dir = Path(root_path) / f"output/{cat_id}/{nbins}/{ver}/dsigma"
                 if overwrite or not (out_dir / "hsc_hsc_bin0.fits").exists():

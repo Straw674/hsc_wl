@@ -19,7 +19,6 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from hsc_wl.theoretical_limit import get_theoretical_upper_limit
 from initial import *  # noqa: F401,F403
 
 # %% Local Functions
@@ -85,30 +84,6 @@ def load_comparison_data(configs_to_compare, root_path):
     return present_labels, loaded_tables, label_time_texts
 
 
-def load_theoretical_limit_data(nbins, root_path, source="simulation", top_n=500):
-    """Load theoretical upper limit tables (sigma=0) for comparison.
-
-    Returns
-    -------
-    limit_tables : list[Table] or None
-    limit_label : str or None
-    """
-    try:
-        limit_tables = get_theoretical_upper_limit(
-            root_path=root_path,
-            nbins=nbins,
-            top_n=top_n,
-            source=source,
-        )
-        src_label = "MDPL2" if source == "simulation" else "Colossus"
-        limit_label = f"Ideal Upper Limit ({src_label}, $\\sigma=0$)"
-        print(f"Loaded {limit_label} for {nbins} (source={source})")
-        return limit_tables, limit_label
-    except Exception as exc:
-        print(f"Warning: Could not load theoretical upper limit: {exc}")
-        return None, None
-
-
 def plot_main_comparison(
     present_labels,
     loaded_tables,
@@ -118,8 +93,6 @@ def plot_main_comparison(
     use_log_y,
     reference_line_y,
     color_mode,
-    limit_tables=None,
-    limit_label=None,
 ):
     """Plot the main ΔΣ comparison profile across all labels."""
     fig_height = max(4.0, 3.3 * n_bins)
@@ -147,23 +120,6 @@ def plot_main_comparison(
             use_log_y=use_log_y,
             reference_line_y=reference_line_y,
         )
-
-    # Overlay theoretical upper limit (sigma=0) if available
-    if limit_tables is not None:
-        for b_idx in range(min(n_bins, len(limit_tables))):
-            plot_theoretical_upper_limit(
-                ax=axes[b_idx],
-                limit_table=limit_tables[b_idx],
-                multiply_by_radius=multiply_by_radius,
-                use_log_y=use_log_y,
-                label=limit_label if b_idx == 0 else None,
-                color="#111111",
-                ls="--",
-                lw=2.2,
-                alpha=0.95,
-                show_band=True,
-                fill_alpha=0.12,
-            )
 
     fig.suptitle("Comparison of ΔΣ Profiles", y=0.996)
     fig.tight_layout()
@@ -239,8 +195,6 @@ def plot_ratio_comparison(
     use_log_y,
     reference_line_y,
     color_mode,
-    limit_tables=None,
-    limit_label=None,
 ):
     """Plot ratio ΔΣ / ΔΣ_ref across all non-reference labels."""
     if not loaded_tables or len(loaded_tables) <= 1:
@@ -285,23 +239,6 @@ def plot_ratio_comparison(
             title_suffix="Ratio Profiles",
         )
 
-    # Overlay theoretical limit ratio (limit / ref) if available
-    if limit_tables is not None:
-        for b_idx in range(min(n_bins, len(limit_tables))):
-            plot_theoretical_limit_ratio(
-                ax=ratio_axes[b_idx],
-                limit_table=limit_tables[b_idx],
-                reference_table=reference_tables[b_idx],
-                use_log_y=use_log_y,
-                label=f"{limit_label} / Ref" if b_idx == 0 else None,
-                color="#111111",
-                ls="--",
-                lw=2.2,
-                alpha=0.95,
-                show_band=True,
-                fill_alpha=0.12,
-            )
-
     ratio_fig.suptitle(f"ΔΣ Ratio relative to {present_labels[0]}", y=0.996)
     ratio_fig.tight_layout()
     handles, legend_labels = ratio_axes[0].get_legend_handles_labels()
@@ -318,10 +255,8 @@ def plot_ratio_comparison(
     return ratio_fig, ratio_axes
 
 
-def calculate_comparison_statistics(
-    present_labels, loaded_tables, limit_tables=None, limit_label=None
-):
-    """Compute and print pairwise chi-square and theoretical limit recovery statistics."""
+def calculate_comparison_statistics(present_labels, loaded_tables):
+    """Compute and print pairwise chi-square statistics across all configurations."""
     if len(loaded_tables) <= 1:
         return
 
@@ -380,68 +315,15 @@ def calculate_comparison_statistics(
                 )
             print("-" * 70)
 
-    # Theoretical limit recovery metrics
-    if limit_tables is not None and len(loaded_tables) > 0:
-        from scipy.interpolate import interp1d
-
-        print("\n" + "=" * 70)
-        print(f"{'Recovery of Theoretical Upper Limit (sigma=0)':^70}")
-        print("=" * 70)
-
-        for label_name, tables in zip(present_labels, loaded_tables):
-            print(f"\nCatalog: '{label_name}' vs {limit_label}:")
-            for bin_idx, (t_obs, t_lim) in enumerate(zip(tables, limit_tables)):
-                rp_obs = np.asarray(t_obs["rp"], dtype=float)
-                ds_obs = np.asarray(t_obs["ds"], dtype=float)
-                rp_lim = np.asarray(t_lim["rp"], dtype=float)
-                ds_lim = np.asarray(t_lim["ds"], dtype=float)
-
-                f_lim = interp1d(
-                    np.log10(rp_lim),
-                    ds_lim,
-                    kind="cubic",
-                    fill_value="extrapolate",
-                )
-                ds_lim_at_obs = f_lim(np.log10(rp_obs))
-                ratio = ds_obs / ds_lim_at_obs
-
-                inner_mask = (rp_obs < 1.0) & np.isfinite(ratio)
-                all_mask = np.isfinite(ratio)
-
-                mean_ratio_inner = (
-                    np.nanmean(ratio[inner_mask]) * 100
-                    if np.any(inner_mask)
-                    else np.nan
-                )
-                mean_ratio_all = (
-                    np.nanmean(ratio[all_mask]) * 100 if np.any(all_mask) else np.nan
-                )
-
-                print(
-                    f"  Bin {bin_idx}: Inner (<1 Mpc) = {mean_ratio_inner:5.1f}% | "
-                    f"Overall (0.1-20 Mpc) = {mean_ratio_all:5.1f}% of theoretical max"
-                )
-        print("-" * 70)
-
 
 # %% Global Configuration
 
 # List of (catalog_id, nbins, version_name) triples to compare.
-# To compare 4-bin configurations, change "1bin" to "4bin".
-# For available catalog IDs and nbins, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
-# CONFIGS_TO_COMPARE = [
-#     # ("logm_s16a_hectomap", "1bin", "Y3"),
-#     ("camira", "1bin", "Y3"),
-#     ("redm_s16a_hectomap", "1bin", "Y3"),
-#     ("redm_pdr3_3band_fixed_s16a", "1bin", "Y3"),
-#     # ("redm_pdr3_5band_free_s16a", "1bin", "Y3"),
-#     # ("redm_pdr3_3band_free_s16a", "1bin", "Y3"),
-#     ("cosine_s16a", "1bin", "Y3"),
-#     ("camira_hecto_s16a", "1bin", "Y3"),
-#     ("redm_r16_hecto_s16a", "1bin", "Y3"),
-# ]
-
+# Available catalogs include observational sets ("camira", "cosine", "redm_pdr3_5band_free", ...)
+# as well as ideal theoretical zero-scatter upper limits ("ideal_mdpl2", "ideal_colossus").
+# If an ideal catalog is placed first, the ratio plot directly shows DeltaSigma_obs / DeltaSigma_ideal.
 CONFIGS_TO_COMPARE = [
+    ("ideal_mdpl2", "1bin", "Y3"),
     ("camira", "1bin", "Y3"),
     ("redm_pdr3_5band_free", "1bin", "Y3"),
     ("camira_hectomap", "1bin", "Y3"),
@@ -449,15 +331,6 @@ CONFIGS_TO_COMPARE = [
     # ("amico", "1bin", "Y3"),
     ("cosine", "1bin", "Y3"),
 ]
-
-# ---------------------------------------------------------------------------
-# Theoretical Upper Limit Configuration (sigma = 0 ideal benchmark)
-# ---------------------------------------------------------------------------
-SHOW_THEORETICAL_LIMIT = True
-THEORETICAL_LIMIT_SOURCE = (
-    "simulation"  # "simulation" (MDPL2) or "colossus" (Analytic HMF+NFW)
-)
-THEORETICAL_LIMIT_TOP_N = 500  # For 1bin mode
 
 MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
 
@@ -480,20 +353,10 @@ OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_multi_main.png"
 OUTPUT_RATIO_FIG = project_root / "output/plots_for_agents/visual_multi_ratio.png"
 
 
-# [Stage 1: Load comparison data and theoretical limit]
+# [Stage 1: Load comparison data]
 present_labels, loaded_tables, label_time_texts = load_comparison_data(
     CONFIGS_TO_COMPARE, project_root
 )
-
-limit_tables, limit_label = None, None
-if SHOW_THEORETICAL_LIMIT and loaded_tables:
-    nbins_mode = CONFIGS_TO_COMPARE[0][1]
-    limit_tables, limit_label = load_theoretical_limit_data(
-        nbins=nbins_mode,
-        root_path=project_root,
-        source=THEORETICAL_LIMIT_SOURCE,
-        top_n=THEORETICAL_LIMIT_TOP_N,
-    )
 
 
 # [Stage 2: Plot main comparison]
@@ -513,8 +376,6 @@ if loaded_tables:
         use_log_y=MAIN_USE_LOG_Y,
         reference_line_y=MAIN_REFERENCE_LINE_Y,
         color_mode=COLOR_MODE,
-        limit_tables=limit_tables,
-        limit_label=limit_label,
     )
     fig.savefig(OUTPUT_MAIN_FIG, dpi=300, bbox_inches="tight")
     plt.show()
@@ -538,8 +399,6 @@ if loaded_tables:
         use_log_y=RATIO_USE_LOG_Y,
         reference_line_y=RATIO_REFERENCE_LINE_Y,
         color_mode=COLOR_MODE,
-        limit_tables=limit_tables,
-        limit_label=limit_label,
     )
     if ratio_result is not None:
         ratio_fig, ratio_axes = ratio_result
@@ -550,9 +409,4 @@ if loaded_tables:
 
 # %% [Stage 4: Statistical comparison]
 if loaded_tables:
-    calculate_comparison_statistics(
-        present_labels,
-        loaded_tables,
-        limit_tables=limit_tables,
-        limit_label=limit_label,
-    )
+    calculate_comparison_statistics(present_labels, loaded_tables)

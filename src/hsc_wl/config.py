@@ -337,6 +337,16 @@ _PATH_AMICO = get_latest_cluster_catalog(
 # redMapper SDSS R16 cluster catalog
 _PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
 
+# Ideal theoretical upper limit catalog paths (MDPL2 simulation and Colossus halo model)
+_PATH_IDEAL_MDPL2_1BIN = "output/ideal_mdpl2/1bin/prepare/ideal_mdpl2_1bin_lenses.fits"
+_PATH_IDEAL_MDPL2_4BIN = "output/ideal_mdpl2/4bin/prepare/ideal_mdpl2_4bin_lenses.fits"
+_PATH_IDEAL_COLOSSUS_1BIN = (
+    "output/ideal_colossus/1bin/prepare/ideal_colossus_1bin_lenses.fits"
+)
+_PATH_IDEAL_COLOSSUS_4BIN = (
+    "output/ideal_colossus/4bin/prepare/ideal_colossus_4bin_lenses.fits"
+)
+
 # ---------------------------------------------------------------------------
 # Random catalog paths
 # ---------------------------------------------------------------------------
@@ -879,5 +889,43 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
         **_BOX_AMICO,
+    ),
+    # -----------------------------------------------------------------------
+    # Ideal Theoretical Upper Limit (N-body MDPL2 Simulation, sigma=0)
+    # -----------------------------------------------------------------------
+    "ideal_mdpl2_1bin": _cfg(
+        "ideal_mdpl2_1bin",
+        _PATH_IDEAL_MDPL2_1BIN,
+        _RAND_HECTOMAP,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    "ideal_mdpl2_4bin": _cfg(
+        "ideal_mdpl2_4bin",
+        _PATH_IDEAL_MDPL2_4BIN,
+        _RAND_HECTOMAP,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    # -----------------------------------------------------------------------
+    # Ideal Theoretical Upper Limit (Colossus Analytical Halo Model, sigma=0)
+    # -----------------------------------------------------------------------
+    "ideal_colossus_1bin": _cfg(
+        "ideal_colossus_1bin",
+        _PATH_IDEAL_COLOSSUS_1BIN,
+        _RAND_HECTOMAP,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    "ideal_colossus_4bin": _cfg(
+        "ideal_colossus_4bin",
+        _PATH_IDEAL_COLOSSUS_4BIN,
+        _RAND_HECTOMAP,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        binning=_DEFAULT_BINNING_4BIN,
     ),
 }

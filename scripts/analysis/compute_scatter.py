@@ -129,7 +129,7 @@ def visualize_summary(custom_sum):
 # %% Global Configuration
 
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
-LABEL = "amico_4bin"  # Must be a 4bin configuration
+LABEL = "ideal_mdpl2_4bin"  # Must be a 4bin configuration
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Parse catalog_id and nbins from the unified run label
@@ -174,4 +174,4 @@ save_summary_pkl(custom_sum, OUTPUT_PKL)
 
 
 # %% [Stage 5: Visualize]
-visualize_summary(custom_sum)
+_ = visualize_summary(custom_sum)
