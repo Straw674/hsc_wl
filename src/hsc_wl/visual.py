@@ -323,3 +323,215 @@ def plot_radial_profile(
             ax.set_title(f"Lens bin {i}")
 
     return fig
+
+
+def plot_theoretical_upper_limit(
+    ax,
+    limit_table,
+    multiply_by_radius=True,
+    use_log_y=False,
+    label=r"Theoretical Limit ($\sigma=0$)",
+    color="#222222",
+    ls="--",
+    lw=2.2,
+    alpha=0.95,
+    show_band=True,
+    fill_alpha=0.12,
+    zorder=5,
+):
+    """Overlay a theoretical upper limit (sigma=0) curve on an axis.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Target axis.
+    limit_table : astropy.table.Table
+        Table with columns 'rp', 'ds', and optionally 'ds_err'.
+    multiply_by_radius : bool, default True
+        If True, plot R * DeltaSigma; otherwise DeltaSigma.
+    use_log_y : bool, default False
+        Use logarithmic y-scale.
+    label : str
+        Legend label for the limit curve.
+    color : str
+        Line and band color.
+    ls : str
+        Line style (default '--').
+    lw : float
+        Line width.
+    alpha : float
+        Line alpha.
+    show_band : bool
+        Whether to show error/uncertainty band if ds_err is present and > 0.
+    fill_alpha : float
+        Alpha for the uncertainty band.
+    zorder : int
+        Plotting order.
+    """
+    from scipy.interpolate import interp1d
+
+    rp = np.asarray(limit_table["rp"], dtype=float)
+    ds = np.asarray(limit_table["ds"], dtype=float)
+    ds_err = (
+        np.asarray(limit_table["ds_err"], dtype=float)
+        if "ds_err" in limit_table.colnames
+        else np.zeros_like(ds)
+    )
+
+    valid = np.isfinite(rp) & np.isfinite(ds) & (rp > 0) & (ds > 0)
+    rp, ds, ds_err = rp[valid], ds[valid], ds_err[valid]
+    if len(rp) < 2:
+        return
+
+    order = np.argsort(rp)
+    rp, ds, ds_err = rp[order], ds[order], ds_err[order]
+
+    rp_dense = np.logspace(np.log10(rp[0]), np.log10(rp[-1]), 250)
+
+    # Smooth log-log interpolation for clean physical profiles
+    f_log_ds = interp1d(
+        np.log10(rp), np.log10(ds), kind="cubic", fill_value="extrapolate"
+    )
+    ds_dense = 10.0 ** f_log_ds(np.log10(rp_dense))
+
+    if multiply_by_radius:
+        plot_y = rp_dense * ds_dense
+    else:
+        plot_y = ds_dense
+
+    if show_band and np.any(ds_err > 0):
+        # Interpolate fractional errors
+        frac_err = ds_err / ds
+        f_frac = interp1d(
+            np.log10(rp), frac_err, kind="linear", fill_value="extrapolate"
+        )
+        frac_dense = np.clip(f_frac(np.log10(rp_dense)), 0.0, 1.0)
+        y_err_dense = plot_y * frac_dense
+
+        ax.fill_between(
+            rp_dense,
+            plot_y - y_err_dense,
+            plot_y + y_err_dense,
+            color=color,
+            alpha=fill_alpha,
+            linewidth=0,
+            zorder=zorder - 1,
+        )
+
+    ax.plot(
+        rp_dense,
+        plot_y,
+        color=color,
+        ls=ls,
+        lw=lw,
+        alpha=alpha,
+        label=label,
+        zorder=zorder,
+    )
+
+
+def plot_theoretical_limit_ratio(
+    ax,
+    limit_table,
+    reference_table,
+    use_log_y=False,
+    label=r"Theoretical Limit ($\sigma=0$) / Ref",
+    color="#222222",
+    ls="--",
+    lw=2.2,
+    alpha=0.95,
+    show_band=True,
+    fill_alpha=0.12,
+    zorder=5,
+):
+    """Overlay the theoretical upper limit ratio (DeltaSigma_limit / DeltaSigma_ref) on an axis.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Target axis.
+    limit_table : astropy.table.Table
+        Limit table with columns 'rp', 'ds', 'ds_err'.
+    reference_table : astropy.table.Table
+        Reference table with columns 'rp', 'ds', 'ds_err'.
+    """
+    from scipy.interpolate import interp1d
+
+    rp_ref = np.asarray(reference_table["rp"], dtype=float)
+    ds_ref = np.asarray(reference_table["ds"], dtype=float)
+    err_ref = np.asarray(reference_table["ds_err"], dtype=float)
+
+    rp_lim = np.asarray(limit_table["rp"], dtype=float)
+    ds_lim = np.asarray(limit_table["ds"], dtype=float)
+    err_lim = (
+        np.asarray(limit_table["ds_err"], dtype=float)
+        if "ds_err" in limit_table.colnames
+        else np.zeros_like(ds_lim)
+    )
+
+    valid_ref = np.isfinite(rp_ref) & np.isfinite(ds_ref) & (rp_ref > 0) & (ds_ref > 0)
+    rp_ref, ds_ref, err_ref = (
+        rp_ref[valid_ref],
+        ds_ref[valid_ref],
+        err_ref[valid_ref],
+    )
+
+    valid_lim = np.isfinite(rp_lim) & np.isfinite(ds_lim) & (rp_lim > 0) & (ds_lim > 0)
+    rp_lim, ds_lim, err_lim = (
+        rp_lim[valid_lim],
+        ds_lim[valid_lim],
+        err_lim[valid_lim],
+    )
+
+    if len(rp_ref) < 2 or len(rp_lim) < 2:
+        return
+
+    # Interpolate limit onto ref rp grid
+    f_log_lim = interp1d(
+        np.log10(rp_lim), np.log10(ds_lim), kind="cubic", fill_value="extrapolate"
+    )
+    ds_lim_at_ref = 10.0 ** f_log_lim(np.log10(rp_ref))
+
+    ratio = ds_lim_at_ref / ds_ref
+
+    # Smooth curve on dense grid
+    rp_dense = np.logspace(np.log10(rp_ref[0]), np.log10(rp_ref[-1]), 250)
+    f_ratio = interp1d(np.log10(rp_ref), ratio, kind="cubic", fill_value="extrapolate")
+    ratio_dense = f_ratio(np.log10(rp_dense))
+
+    if show_band:
+        # Error propagation for the ratio
+        frac_lim = err_lim / ds_lim if np.any(err_lim > 0) else np.zeros_like(ds_lim)
+        f_frac_lim = interp1d(
+            np.log10(rp_lim), frac_lim, kind="linear", fill_value="extrapolate"
+        )
+        frac_lim_at_ref = f_frac_lim(np.log10(rp_ref))
+
+        frac_ref = err_ref / ds_ref
+        ratio_err = ratio * np.sqrt(frac_lim_at_ref**2 + frac_ref**2)
+
+        f_err = interp1d(
+            np.log10(rp_ref), ratio_err, kind="linear", fill_value="extrapolate"
+        )
+        err_dense = np.clip(f_err(np.log10(rp_dense)), 0.0, None)
+
+        ax.fill_between(
+            rp_dense,
+            ratio_dense - err_dense,
+            ratio_dense + err_dense,
+            color=color,
+            alpha=fill_alpha,
+            linewidth=0,
+            zorder=zorder - 1,
+        )
+
+    ax.plot(
+        rp_dense,
+        ratio_dense,
+        color=color,
+        ls=ls,
+        lw=lw,
+        alpha=alpha,
+        label=label,
+        zorder=zorder,
+    )
