@@ -37,7 +37,20 @@ try:
 except (ValueError, RuntimeError):
     pass
 
+
 # matplotlib settings
+def is_in_ipython() -> bool:
+    try:
+        from IPython import get_ipython
+
+        return get_ipython() is not None
+    except ImportError:
+        return False
+
+
+if not is_in_ipython():
+    plt.switch_backend("Agg")
+
 plt.rcParams["figure.dpi"] = 300
 desired_font = "Source Serif 4"
 plt.rcParams["font.family"] = "serif"
