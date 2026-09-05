@@ -80,13 +80,14 @@ def load_chen2024_clusters(
     return tbl
 
 
-def load_lens_data(labels: list[str], root: Path) -> dict[str, Table]:
+def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
     """Load prepared lens tables for the given configurations.
 
     Parameters
     ----------
-    labels : list of str
-        Run labels to load, e.g. ["redm_s16a_hectomap_1bin", ...].
+    labels : list of str or tuple
+        Run labels to load, e.g. ["redm_s16a_hectomap_1bin", ...] or
+        [("redm_s16a_hectomap", "1bin", ...), ...].
     root : Path
         Project root path.
 
@@ -98,7 +99,12 @@ def load_lens_data(labels: list[str], root: Path) -> dict[str, Table]:
     from hsc_wl.config import RUN_REGISTRY
 
     dfs = {}
-    for label in labels:
+    for item in labels:
+        if isinstance(item, tuple):
+            label = f"{item[0]}_{item[1]}"
+        else:
+            label = str(item)
+
         if label in RUN_REGISTRY:
             cfg = RUN_REGISTRY[label]
             save_root = cfg.resolved_save_root(root)
@@ -187,9 +193,13 @@ def compute_pairwise_matches(dfs: dict[str, Table]) -> pd.DataFrame:
 def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
     """Plot pairwise matching statistics as a heatmap grid using matplotlib.
 
+    Applies histogram equalization stretch (HistEqStretch) to emphasize contrast
+    among matching fractions across catalogs.
+
     Saves results as a PNG file and displays the image.
     """
     import matplotlib.pyplot as plt
+    from astropy.visualization import HistEqStretch, ImageNormalize
 
     fig, ax = plt.subplots(figsize=(11, 9))
 
@@ -204,12 +214,21 @@ def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
     row_totals_safe = np.where(row_totals == 0, 1, row_totals)
     data_pct = (data / row_totals_safe[:, None]) * 100.0
 
-    # Use a sequential colormap ('YlGnBu') representing matching percentage
-    im = ax.imshow(data_pct, cmap="YlGnBu", aspect="equal", vmin=0, vmax=100)
+    # Equalized histogram stretch to make matching rate differences pronounced
+    stretch = HistEqStretch(data_pct)
+    norm = ImageNormalize(vmin=float(data_pct.min()), vmax=100.0, stretch=stretch)
 
-    # Add colorbar
-    cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label("Match Fraction (%)", fontsize=11)
+    # Use a sequential colormap ('YlGnBu') representing matching percentage
+    im = ax.imshow(data_pct, cmap="YlGnBu", aspect="equal", norm=norm)
+
+    # Dynamic non-overlapping colorbar ticks mapped from equalized space
+    norm_positions = np.linspace(0.05, 0.95, 6)
+    tick_vals = norm.inverse(norm_positions)
+    ticks = sorted(
+        list(set(int(round(t)) for t in tick_vals)) + [int(round(data_pct.min())), 100]
+    )
+    cbar = fig.colorbar(im, ax=ax, ticks=ticks, shrink=0.8)
+    cbar.set_label("Match Fraction (%) [Equalized Hist Stretch]", fontsize=11)
 
     # Set ticks and labels
     ax.set_xticks(np.arange(n))
@@ -240,8 +259,9 @@ def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
             else:
                 text = f"{val}/{total}\n({pct:.1f}%)"
 
-            # Contrasting text color based on cell brightness
-            text_color = "white" if pct > 60.0 else "black"
+            # Contrasting text color based on normalized cell brightness
+            norm_val = float(norm(np.array([pct]))[0])
+            text_color = "white" if norm_val > 0.60 else "black"
             ax.text(
                 j,
                 i,
@@ -254,7 +274,7 @@ def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
             )
 
     ax.set_title(
-        "Pairwise Lens Match Fractions (0.5 Mpc/h Physical Radius)\nRow Normalized: Fraction of Row Catalog Matched in Column Catalog",
+        "Pairwise Lens Match Fractions (0.5 Mpc/h Physical Radius)\nRow Normalized: Fraction of Row Catalog Matched in Column Catalog [HistEq Stretch]",
         fontsize=12,
         pad=18,
     )
@@ -530,66 +550,33 @@ def plot_bokeh_spatial(
         )
 
         # Plot based on marker style (use larger hollow markers so overlapping can be seen)
-        size = 12 + idx * 3  # Increase size per catalog to nest them
-        # Map simple marker names to bokeh methods
-        if marker_name == "o":
-            renderer = p.scatter(
-                x="ra",
-                y="dec",
-                source=source,
-                size=size,
-                color=color,
-                fill_color=None,
-                line_width=2.5,
-                legend_label=f"{name} (N={len(tbl)})",
-            )
-        elif marker_name == "s":
-            renderer = p.scatter(
-                x="ra",
-                y="dec",
-                source=source,
-                size=size,
-                marker="square",
-                color=color,
-                fill_color=None,
-                line_width=2.5,
-                legend_label=f"{name} (N={len(tbl)})",
-            )
-        elif marker_name == "v":
-            renderer = p.scatter(
-                x="ra",
-                y="dec",
-                source=source,
-                size=size,
-                marker="triangle",
-                color=color,
-                fill_color=None,
-                line_width=2.5,
-                legend_label=f"{name} (N={len(tbl)})",
-            )
-        elif marker_name == "D":
-            renderer = p.scatter(
-                x="ra",
-                y="dec",
-                source=source,
-                size=size,
-                marker="diamond",
-                color=color,
-                fill_color=None,
-                line_width=2.5,
-                legend_label=f"{name} (N={len(tbl)})",
-            )
-        else:
-            renderer = p.scatter(
-                x="ra",
-                y="dec",
-                source=source,
-                size=size - 3,
-                marker="cross",
-                color=color,
-                line_width=2,
-                legend_label=f"{name} (N={len(tbl)})",
-            )
+        # Map marker names to Bokeh marker types
+        bokeh_marker_map = {
+            "o": "circle",
+            "s": "square",
+            "^": "triangle",
+            "v": "inverted_triangle",
+            "D": "diamond",
+            "d": "diamond",
+            "h": "hex",
+            "*": "star",
+            "x": "x",
+            "+": "cross",
+        }
+        bokeh_marker = bokeh_marker_map.get(marker_name, "circle")
+        size = 12 + idx * 3
+        line_only = bokeh_marker in {"cross", "x", "plus"}
+        renderer = p.scatter(
+            x="ra",
+            y="dec",
+            source=source,
+            size=size if not line_only else max(8, size - 3),
+            marker=bokeh_marker,
+            color=color,
+            fill_color=None,
+            line_width=2.0 if line_only else 2.5,
+            legend_label=f"{name} (N={len(tbl)})",
+        )
 
         # Configure individual hover tool for this renderer
         hover = HoverTool(
@@ -708,21 +695,28 @@ LABELS_TO_COMPARE = [
     ("redm_r16_hectomap_1bin"),
     ("amico_1bin"),
     ("cosine_1bin"),
+    ("pls_1bin"),
+    ("regression_1bin"),
+    ("rz_diff_1bin"),
 ]
 
 
-# Color palette: Paul Tol Bright/Muted adapted
+# Color palette: Paul Tol Bright/Muted adapted (10 distinct hues for high contrast)
 PALETTE = [
     "#4477AA",  # Blue
     "#EE6677",  # Red
     "#228833",  # Green
+    "#CCBB44",  # Yellow
+    "#66CCEE",  # Cyan
     "#AA3377",  # Purple
     "#EE7733",  # Orange
+    "#009988",  # Teal
+    "#332288",  # Indigo
     "#BBBBBB",  # Gray
 ]
 
-# Plotting marker config (increasing size order so they layer neatly)
-MARKERS = ["o", "s", "v", "D", "x"]
+# Plotting marker config (distinct shapes supported across matplotlib and Bokeh)
+MARKERS = ["o", "s", "^", "v", "D", "h", "*", "d", "x", "+"]
 
 OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
 OUTPUT_CONSENSUS_BREAKDOWN = (
