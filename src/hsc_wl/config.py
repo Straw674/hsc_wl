@@ -347,6 +347,9 @@ _PATH_REGRESSION = (
     "/Users/xinq/cluster_finder/output/regression/regression_cluster_catalog.parquet"
 )
 
+# CCA cluster finder (2D CoG CCA decomposition, cca1 ranking, no NMS)
+_PATH_CCA = "/Users/xinq/cluster_finder/output/cca/cca_cluster_catalog.parquet"
+
 # redMapper SDSS R16 cluster catalog
 _PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
 
@@ -382,6 +385,7 @@ _COLS_AMICO = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl
 _COLS_PLS = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 _COLS_RZ_DIFF = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 _COLS_REGRESSION = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
+_COLS_CCA = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 
 # ---------------------------------------------------------------------------
 # Sky footprint boxes  (unpacked as **kwargs into _cfg)
@@ -484,6 +488,8 @@ def _cfg(
 #   rz_diff_s16a                 – same, restricted to s16a random ∩ HectoMAP box
 #   regression                   – Linear regression against WL mass (ElasticNet, no NMS)
 #   regression_s16a              – same, restricted to s16a random ∩ HectoMAP box
+#   cca                          – CCA cluster finder (2D CoG CCA decomposition, cca1 ranking, no NMS)
+#   cca_s16a                     – same, restricted to s16a random ∩ HectoMAP box
 #   amico                        – AMICO cluster finder (RA 215-250 / Dec 42.2-44.5)
 #   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
 #   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
@@ -1013,6 +1019,49 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         _PATH_REGRESSION,
         _RAND_S16A,
         columns=_COLS_REGRESSION,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # CCA cluster finder (2D CoG CCA decomposition, cca1 ranking, no NMS)
+    # -----------------------------------------------------------------------
+    "cca_4bin": _cfg(
+        "cca_4bin",
+        _PATH_CCA,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "cca_1bin": _cfg(
+        "cca_1bin",
+        _PATH_CCA,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
+    # and PDR3 catalogs on the same sky patch.
+    "cca_s16a_4bin": _cfg(
+        "cca_s16a_4bin",
+        _PATH_CCA,
+        _RAND_S16A,
+        columns=_COLS_CCA,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "cca_s16a_1bin": _cfg(
+        "cca_s16a_1bin",
+        _PATH_CCA,
+        _RAND_S16A,
+        columns=_COLS_CCA,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
