@@ -342,6 +342,11 @@ _PATH_RZ_DIFF = (
     "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_cluster_catalog.parquet"
 )
 
+# Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
+_PATH_REGRESSION = (
+    "/Users/xinq/cluster_finder/output/regression/regression_cluster_catalog.parquet"
+)
+
 # redMapper SDSS R16 cluster catalog
 _PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
 
@@ -376,6 +381,7 @@ _COLS_COSINE = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_c
 _COLS_AMICO = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 _COLS_PLS = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 _COLS_RZ_DIFF = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
+_COLS_REGRESSION = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 
 # ---------------------------------------------------------------------------
 # Sky footprint boxes  (unpacked as **kwargs into _cfg)
@@ -476,6 +482,8 @@ def _cfg(
 #   pls_s16a                     – same, restricted to s16a random ∩ HectoMAP box
 #   rz_diff                      – Direct 2D r-z profile subtraction cluster catalog (no model, no NMS)
 #   rz_diff_s16a                 – same, restricted to s16a random ∩ HectoMAP box
+#   regression                   – Linear regression against WL mass (ElasticNet, no NMS)
+#   regression_s16a              – same, restricted to s16a random ∩ HectoMAP box
 #   amico                        – AMICO cluster finder (RA 215-250 / Dec 42.2-44.5)
 #   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
 #   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
@@ -962,6 +970,49 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         _PATH_RZ_DIFF,
         _RAND_S16A,
         columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
+    # -----------------------------------------------------------------------
+    "regression_4bin": _cfg(
+        "regression_4bin",
+        _PATH_REGRESSION,
+        _RAND_HECTOMAP,
+        columns=_COLS_REGRESSION,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "regression_1bin": _cfg(
+        "regression_1bin",
+        _PATH_REGRESSION,
+        _RAND_HECTOMAP,
+        columns=_COLS_REGRESSION,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
+    # and PDR3 catalogs on the same sky patch.
+    "regression_s16a_4bin": _cfg(
+        "regression_s16a_4bin",
+        _PATH_REGRESSION,
+        _RAND_S16A,
+        columns=_COLS_REGRESSION,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "regression_s16a_1bin": _cfg(
+        "regression_s16a_1bin",
+        _PATH_REGRESSION,
+        _RAND_S16A,
+        columns=_COLS_REGRESSION,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
