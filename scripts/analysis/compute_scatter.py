@@ -36,14 +36,14 @@ def load_simulation_model(root_path, sim_path):
 
 
 def load_observed_profiles(root_path, fits_files):
-    """Load the 4 observed dsigma FITS files into a single table.
+    """Load observed dsigma FITS files into a single table.
 
     Parameters
     ----------
     root_path : Path
         Project root path.
     fits_files : list[str]
-        Relative paths for bin0..bin3 (richest bin first).
+        Relative paths for bin0..binN (richest bin first).
 
     Returns
     -------
@@ -55,6 +55,7 @@ def load_observed_profiles(root_path, fits_files):
     bin_ids, ds_list, ds_err_list, jk_cov_list = [], [], [], []
     rp_mpc = None
 
+    print(f"Loading {len(fits_files)} observed dsigma profile(s)...")
     for i, rel_path in enumerate(fits_files):
         bin_id = i + 1
         abs_path = root_path / rel_path
@@ -83,7 +84,7 @@ def load_observed_profiles(root_path, fits_files):
     obs["dsig_cov_bt"] = jk_cov_list
     obs.meta["r_mpc"] = rp_mpc
 
-    print("Observed profiles packaged successfully.")
+    print(f"Observed profiles ({len(bin_ids)} bins) packaged successfully.")
     return obs
 
 
@@ -129,24 +130,32 @@ def visualize_summary(custom_sum):
 # %% Global Configuration
 
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
-LABEL = "ideal_mdpl2_4bin"  # Must be a 4bin configuration
+LABEL = "redm_r16_4bin"  # Supports 3bin or 4bin configurations
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Parse catalog_id and nbins from the unified run label
 catalog_id, nbins = LABEL.rsplit("_", 1)
-if nbins != "4bin":
-    raise ValueError(f"Scatter fitting requires a 4bin configuration, got {nbins}")
+if nbins not in ("3bin", "4bin"):
+    raise ValueError(
+        f"Scatter fitting requires a 3bin or 4bin configuration, got {nbins}"
+    )
 
 # Path to simulation data (relative to project_root)
 SIM_PATH = "libs/jianbing/data/simulation/sim_mdpl2_cen_dsig.fits"
 
-# 4 FITS files in order (bin_id=1 corresponds to the 1st file / richest bin).
-FITS_FILES = [
-    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin0.fits",
-    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin1.fits",
-    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin2.fits",
-    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin3.fits",
-]
+# Observed dsigma FITS files in order (bin_id=1 corresponds to bin0 / richest bin).
+# Automatically detects available bin FITS files (e.g. 3 bins for redm_r16, 4 bins for standard runs).
+_dsigma_dir = project_root / f"output/{catalog_id}/{nbins}/{VERSION}/dsigma"
+FITS_FILES = sorted(
+    [str(p.relative_to(project_root)) for p in _dsigma_dir.glob("hsc_hsc_bin*.fits")],
+    key=lambda s: int(Path(s).stem.replace("hsc_hsc_bin", "")),
+)
+if not FITS_FILES:
+    raise FileNotFoundError(f"No dsigma FITS files found in {_dsigma_dir}")
+if len(FITS_FILES) > 4:
+    raise ValueError(
+        f"Simulation model templates only support up to 4 bins, but found {len(FITS_FILES)}."
+    )
 
 OUTPUT_PKL = (
     project_root
