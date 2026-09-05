@@ -347,8 +347,10 @@ _PATH_REGRESSION = (
     "/Users/xinq/cluster_finder/output/regression/regression_cluster_catalog.parquet"
 )
 
-# CCA cluster finder (2D CoG CCA decomposition, cca1 ranking, no NMS)
-_PATH_CCA = "/Users/xinq/cluster_finder/output/cca/cca_cluster_catalog.parquet"
+# CCA cluster finders (2D CoG CCA decomposition, cca1 & cca2 ranking, no NMS)
+_PATH_CCA1 = "/Users/xinq/cluster_finder/output/cca/cca1_cluster_catalog.parquet"
+_PATH_CCA2 = "/Users/xinq/cluster_finder/output/cca/cca2_cluster_catalog.parquet"
+_PATH_CCA = _PATH_CCA1
 
 # redMapper SDSS R16 cluster catalog
 _PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
@@ -386,6 +388,8 @@ _COLS_PLS = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 _COLS_RZ_DIFF = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 _COLS_REGRESSION = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
 _COLS_CCA = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
+_COLS_CCA1 = _COLS_CCA
+_COLS_CCA2 = _COLS_CCA
 
 # ---------------------------------------------------------------------------
 # Sky footprint boxes  (unpacked as **kwargs into _cfg)
@@ -488,8 +492,10 @@ def _cfg(
 #   rz_diff_s16a                 – same, restricted to s16a random ∩ HectoMAP box
 #   regression                   – Linear regression against WL mass (ElasticNet, no NMS)
 #   regression_s16a              – same, restricted to s16a random ∩ HectoMAP box
-#   cca                          – CCA cluster finder (2D CoG CCA decomposition, cca1 ranking, no NMS)
-#   cca_s16a                     – same, restricted to s16a random ∩ HectoMAP box
+#   cca / cca1                   – CCA1 cluster finder (Primary WL mass mode, cca1 ranking, no NMS)
+#   cca_s16a / cca1_s16a         – same, restricted to s16a random ∩ HectoMAP box
+#   cca2                         – CCA2 cluster finder (Morphology/concentration mode, cca2 ranking, no NMS)
+#   cca2_s16a                    – same, restricted to s16a random ∩ HectoMAP box
 #   amico                        – AMICO cluster finder (RA 215-250 / Dec 42.2-44.5)
 #   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
 #   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
@@ -1025,22 +1031,40 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
-    # CCA cluster finder (2D CoG CCA decomposition, cca1 ranking, no NMS)
+    # CCA1 cluster finder (2D CoG CCA decomposition, cca1 ranking, no NMS)
     # -----------------------------------------------------------------------
     "cca_4bin": _cfg(
         "cca_4bin",
-        _PATH_CCA,
+        _PATH_CCA1,
         _RAND_HECTOMAP,
-        columns=_COLS_CCA,
+        columns=_COLS_CCA1,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
     ),
     "cca_1bin": _cfg(
         "cca_1bin",
-        _PATH_CCA,
+        _PATH_CCA1,
         _RAND_HECTOMAP,
-        columns=_COLS_CCA,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    "cca1_4bin": _cfg(
+        "cca1_4bin",
+        _PATH_CCA1,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "cca1_1bin": _cfg(
+        "cca1_1bin",
+        _PATH_CCA1,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA1,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
@@ -1049,9 +1073,9 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     # and PDR3 catalogs on the same sky patch.
     "cca_s16a_4bin": _cfg(
         "cca_s16a_4bin",
-        _PATH_CCA,
+        _PATH_CCA1,
         _RAND_S16A,
-        columns=_COLS_CCA,
+        columns=_COLS_CCA1,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
@@ -1059,9 +1083,70 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     ),
     "cca_s16a_1bin": _cfg(
         "cca_s16a_1bin",
-        _PATH_CCA,
+        _PATH_CCA1,
         _RAND_S16A,
-        columns=_COLS_CCA,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "cca1_s16a_4bin": _cfg(
+        "cca1_s16a_4bin",
+        _PATH_CCA1,
+        _RAND_S16A,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "cca1_s16a_1bin": _cfg(
+        "cca1_s16a_1bin",
+        _PATH_CCA1,
+        _RAND_S16A,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # CCA2 cluster finder (2D CoG CCA decomposition, cca2 ranking, no NMS)
+    # -----------------------------------------------------------------------
+    "cca2_4bin": _cfg(
+        "cca2_4bin",
+        _PATH_CCA2,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA2,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "cca2_1bin": _cfg(
+        "cca2_1bin",
+        _PATH_CCA2,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA2,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    "cca2_s16a_4bin": _cfg(
+        "cca2_s16a_4bin",
+        _PATH_CCA2,
+        _RAND_S16A,
+        columns=_COLS_CCA2,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "cca2_s16a_1bin": _cfg(
+        "cca2_s16a_1bin",
+        _PATH_CCA2,
+        _RAND_S16A,
+        columns=_COLS_CCA2,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
