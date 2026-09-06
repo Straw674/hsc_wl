@@ -65,7 +65,18 @@ def _label_variant_color(base_color, label_index, n_labels):
 
 
 def _plot_errorbar_style(
-    ax, rp, plot_y, plot_yerr, color, marker, label, use_log_y, reference_line_y=0.0
+    ax,
+    rp,
+    plot_y,
+    plot_yerr,
+    color,
+    marker,
+    label,
+    use_log_y,
+    reference_line_y=0.0,
+    marker_size=5.0,
+    capsize=3.0,
+    elinewidth=1.2,
 ):
     if not use_log_y:
         ax.errorbar(
@@ -73,10 +84,10 @@ def _plot_errorbar_style(
             plot_y,
             yerr=plot_yerr,
             fmt=marker,
-            ms=5.0,
+            ms=marker_size,
             ls="none",
-            elinewidth=1.2,
-            capsize=3.0,
+            elinewidth=elinewidth,
+            capsize=capsize,
             color=color,
             alpha=0.95,
             label=label,
@@ -93,10 +104,10 @@ def _plot_errorbar_style(
             plot_y[pos],
             yerr=[yerr_lower, yerr_upper],
             fmt=marker,
-            ms=5.0,
+            ms=marker_size,
             ls="none",
-            elinewidth=1.2,
-            capsize=3.0,
+            elinewidth=elinewidth,
+            capsize=capsize,
             color=color,
             alpha=0.95,
             label=label,
@@ -108,7 +119,16 @@ def _plot_errorbar_style(
 
 
 def _plot_spline_style(
-    ax, rp, plot_y, plot_yerr, color, marker, label, use_log_y, reference_line_y=0.0
+    ax,
+    rp,
+    plot_y,
+    plot_yerr,
+    color,
+    marker,
+    label,
+    use_log_y,
+    reference_line_y=0.0,
+    marker_size=5.0,
 ):
     from scipy.interpolate import make_interp_spline
 
@@ -172,7 +192,7 @@ def _plot_spline_style(
         ax.set_yscale("log")
 
     ax.axhline(reference_line_y, color="0.35", lw=1.0, ls="--", zorder=0)
-    ax.plot(rp, plot_y, color=color, marker=marker, ms=4.5, lw=0.0, label=label)
+    ax.plot(rp, plot_y, color=color, marker=marker, ms=marker_size, lw=0.0, label=label)
     return True
 
 
@@ -194,6 +214,9 @@ def plot_radial_profile(
     marker="o",
     color_mode="by_label",
     palette=None,
+    marker_size=5.0,
+    capsize=3.0,
+    elinewidth=1.2,
 ):
     if ax_list is None:
         n_bins = len(tables)
@@ -259,6 +282,9 @@ def plot_radial_profile(
                 current_label,
                 use_log_y,
                 reference_line_y,
+                marker_size=marker_size,
+                capsize=capsize,
+                elinewidth=elinewidth,
             )
         else:
             success = _plot_spline_style(
@@ -271,6 +297,7 @@ def plot_radial_profile(
                 current_label,
                 use_log_y,
                 reference_line_y,
+                marker_size=marker_size,
             )
 
         if not success:

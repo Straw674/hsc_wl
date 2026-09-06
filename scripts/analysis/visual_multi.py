@@ -95,6 +95,9 @@ def plot_main_comparison(
     use_log_y,
     reference_line_y,
     color_mode,
+    marker_size=4.0,
+    capsize=0.0,
+    elinewidth=0.8,
 ):
     """Plot the main ΔΣ comparison profile across all labels."""
     fig_height = max(4.0, 3.3 * n_bins)
@@ -121,6 +124,9 @@ def plot_main_comparison(
             use_spline=use_spline,
             use_log_y=use_log_y,
             reference_line_y=reference_line_y,
+            marker_size=marker_size,
+            capsize=capsize,
+            elinewidth=elinewidth,
         )
 
     fig.suptitle("Comparison of ΔΣ Profiles", y=0.996)
@@ -197,6 +203,9 @@ def plot_ratio_comparison(
     use_log_y,
     reference_line_y,
     color_mode,
+    marker_size=4.0,
+    capsize=0.0,
+    elinewidth=0.8,
 ):
     """Plot ratio ΔΣ / ΔΣ_ref across all non-reference labels."""
     if not loaded_tables or len(loaded_tables) <= 1:
@@ -239,6 +248,9 @@ def plot_ratio_comparison(
             reference_line_y=reference_line_y,
             y_label=r"$\Delta\Sigma / \Delta\Sigma_{\mathrm{ref}}$",
             title_suffix="Ratio Profiles",
+            marker_size=marker_size,
+            capsize=capsize,
+            elinewidth=elinewidth,
         )
 
     ratio_fig.suptitle(f"ΔΣ Ratio relative to {present_labels[0]}", y=0.996)
@@ -325,27 +337,55 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 # as well as ideal theoretical zero-scatter upper limits ("ideal_mdpl2", "ideal_colossus").
 # If an ideal catalog is placed first, the ratio plot directly shows DeltaSigma_obs / DeltaSigma_ideal.
 CONFIGS_TO_COMPARE = [
+    # ("redm_r16", "1bin", "Y3"),
     ("ideal_mdpl2", "1bin", "Y3"),
+    # ("camira", "1bin", "Y3"),
     ("redm_r16_hectomap", "1bin", "Y3"),
+    # ("logm_s16a", "1bin", "Y3"),
+    # ("redm_pdr3_5band_free", "1bin", "Y3"),
     ("camira_hectomap", "1bin", "Y3"),
-    ("cosine", "1bin", "Y3"),
-    ("redm_pdr3_5band_free", "1bin", "Y3"),
+    ("amico", "1bin", "Y3"),
+    # ("cosine", "1bin", "Y3"),
     ("pls", "1bin", "Y3"),
     ("regression", "1bin", "Y3"),
-    ("cca1", "1bin", "Y3"),
-    ("cca2", "1bin", "Y3"),
-    ("amico", "1bin", "Y3"),
+    # ("cca1", "1bin", "Y3"),
+    # ("cca2", "1bin", "Y3"),
+    ("rz_diff", "1bin", "Y3"),
 ]
 
-MARKERS = ["o", "s", "^", "D", "v", "P", "*", "X", "<", ">"]
+CONFIGS_TO_COMPARE = [
+    # ("redm_r16", "1bin", "Y3"),
+    ("ideal_mdpl2", "1bin", "Y3"),
+    # ("camira", "1bin", "Y3"),
+    ("redm_r16_hectomap", "1bin", "Y3"),
+    # ("logm_s16a", "1bin", "Y3"),
+    # ("redm_pdr3_5band_free", "1bin", "Y3"),
+    ("camira_hectomap", "1bin", "Y3"),
+    ("amico", "1bin", "Y3"),
+    # ("cosine", "1bin", "Y3"),
+    # ("pls", "1bin", "Y3"),
+    # ("regression", "1bin", "Y3"),
+    ("cca1", "1bin", "Y3"),
+    ("cca2", "1bin", "Y3"),
+    # ("rz_diff", "1bin", "Y3"),
+]
 
-# Palette with 10 distinct colors: black for ideal theoretical limit, followed by Tol bright/vibrant hues
+# CONFIGS_TO_COMPARE = [
+#     ("ideal_mdpl2", "1bin", "Y3"),
+#     # ("redm_r16", "1bin", "Y3"),
+#     ("redm_r16_hectomap", "1bin", "Y3"),
+#     ("redm_pdr3_5band_free", "1bin", "Y3"),
+# ]
+
+MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
+
+# Paul Tol "bright"-based palette (grey/yellow dropped for white-bg visibility,
+# orange & teal added for extra distinguishability). 8 distinct hues.
 LABEL_PALETTE = [
-    "#000000",  # black (ideal reference)
-    "#EE6677",  # red
+    "#000000",
     "#4477AA",  # blue
+    "#EE6677",  # red
     "#228833",  # green
-    "#CCBB44",  # olive/yellow
     "#66CCEE",  # cyan
     "#AA3377",  # purple
     "#EE7733",  # orange
@@ -354,6 +394,9 @@ LABEL_PALETTE = [
 ]
 
 COLOR_MODE = "by_label"
+MARKER_SIZE = 4.0
+CAPSIZE = 0.0
+ERRORBAR_LINEWIDTH = 0.8
 
 OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_multi_main.png"
 OUTPUT_RATIO_FIG = project_root / "output/plots_for_agents/visual_multi_ratio.png"
@@ -382,6 +425,9 @@ if loaded_tables:
         use_log_y=MAIN_USE_LOG_Y,
         reference_line_y=MAIN_REFERENCE_LINE_Y,
         color_mode=COLOR_MODE,
+        marker_size=MARKER_SIZE,
+        capsize=CAPSIZE,
+        elinewidth=ERRORBAR_LINEWIDTH,
     )
     fig.savefig(OUTPUT_MAIN_FIG, dpi=300, bbox_inches="tight")
     plt.show()
@@ -405,6 +451,9 @@ if loaded_tables:
         use_log_y=RATIO_USE_LOG_Y,
         reference_line_y=RATIO_REFERENCE_LINE_Y,
         color_mode=COLOR_MODE,
+        marker_size=MARKER_SIZE,
+        capsize=CAPSIZE,
+        elinewidth=ERRORBAR_LINEWIDTH,
     )
     if ratio_result is not None:
         ratio_fig, ratio_axes = ratio_result
