@@ -130,7 +130,7 @@ def visualize_summary(custom_sum):
 # %% Global Configuration
 
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
-LABEL = "redm_r16_4bin"  # Supports 3bin or 4bin configurations
+LABEL = "cca2_4bin"  # Supports 3bin or 4bin configurations
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Parse catalog_id and nbins from the unified run label

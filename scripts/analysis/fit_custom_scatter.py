@@ -145,7 +145,7 @@ def plot_map_fit_decomposition(
 # %% Global Configuration
 
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
-LABEL = "ideal_mdpl2_1bin"  # Must match a run label in RUN_REGISTRY
+LABEL = "cca2_1bin"  # Must match a run label in RUN_REGISTRY
 VERSION = "Y3"  # "Y1" or "Y3"
 BIN_INDEX = 0  # Index of the lens bin to fit (0, 1, 2, 3...)
 
