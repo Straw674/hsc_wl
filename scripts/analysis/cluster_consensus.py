@@ -1156,6 +1156,8 @@ LABELS_TO_COMPARE = [
     "pls_1bin",
     "regression_1bin",
     "rz_diff_1bin",
+    "cca1_1bin",
+    # "cca2_1bin",
 ]
 
 DISPLAY_NAMES = {
