@@ -400,8 +400,7 @@ _COLS_CCA2 = _COLS_CCA
 _BOX_HECTOMAP = {"ra_range": (210, 250), "dec_range": (42, 44.5)}
 _BOX_R16_HECTOMAP = _BOX_HECTOMAP
 
-# AMICO search support: RA 215-250 deg, Dec 42.2-44.5 deg
-_BOX_AMICO = {"ra_range": (215, 250), "dec_range": (42.2, 44.5)}
+_BOX_AMICO = _BOX_HECTOMAP
 
 # Reference redshift range shared by all catalogs
 _Z_RANGE = (0.19, 0.52)
@@ -1152,7 +1151,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
-    # AMICO cluster finder (natural RA 215-250 / Dec 42.2-44.5 footprint)
+    # AMICO cluster finder
     # -----------------------------------------------------------------------
     "amico_4bin": _cfg(
         "amico_4bin",
@@ -1162,7 +1161,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
-        **_BOX_AMICO,
+        **_BOX_HECTOMAP,
     ),
     "amico_1bin": _cfg(
         "amico_1bin",
@@ -1172,7 +1171,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
-        **_BOX_AMICO,
+        **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
     # Ideal Theoretical Upper Limit (N-body MDPL2 Simulation, sigma=0)
