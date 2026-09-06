@@ -885,6 +885,7 @@ def plot_tier_consensus_profiles(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
     print(f"Tiered consensus profiles plot saved to {save_path}")
+    plt.show()
     plt.close(fig)
 
 
@@ -967,6 +968,7 @@ def plot_tier_pairwise_heatmaps(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
     print(f"Tier-resolved pairwise heatmaps saved to {save_path}")
+    plt.show()
     plt.close(fig)
 
 
@@ -1276,10 +1278,7 @@ print(
     f"\nLoaded Chen+2024 WL shear-selected clusters in HectoMAP: N={len(chen_tbl)} (z in [0.19, 0.52], Y3 mask)"
 )
 
-print("\n--- Pairwise Cluster Matching Statistics (0.5 Mpc/h) ---")
 match_df = compute_pairwise_matches(dfs_dict)
-with pd.option_context("display.max_columns", None, "display.width", 1000):
-    print(match_df)
 
 # %% [Stage 2: Plot Matching Heatmap]
 
@@ -1287,15 +1286,7 @@ plot_matching_heatmap(match_df, save_path=OUTPUT_MATCH_HEATMAP)
 
 # %% [Stage 3: Overall Consensus Breakdown Analysis]
 
-print("\n--- Multi-Catalog Consensus Breakdown ---")
 consensus_counts_df, consensus_pct_df = compute_consensus_breakdown(dfs_dict)
-print("Raw Counts (Count of Clusters matching k other catalogs):")
-with pd.option_context("display.max_columns", None, "display.width", 1000):
-    print(consensus_counts_df)
-
-print("\nPercentages (% of Catalog):")
-with pd.option_context("display.max_columns", None, "display.width", 1000):
-    print(consensus_pct_df.round(1))
 
 plot_consensus_breakdown(
     consensus_counts_df,
@@ -1317,22 +1308,9 @@ plot_bokeh_spatial(
 
 # %% [Stage 5: Tiered Proxy Consensus Analysis (4 Bins per Catalog)]
 
-print("\n--- Tiered Proxy Rank Consensus Analysis (4 Bins per Catalog) ---")
 tier_consensus_df = compute_tier_consensus_breakdown(
     dfs_dict, n_bins=4, display_names=DISPLAY_NAMES
 )
-print("Summary of Tiered Consensus Breakdown:")
-summary_cols = [
-    "display_name",
-    "tier_name",
-    "n_clusters",
-    "mean_matches",
-    "sem_matches",
-    "pct_solo",
-    "pct_ge4",
-]
-with pd.option_context("display.max_columns", None, "display.width", 1000):
-    print(tier_consensus_df[summary_cols].round(2))
 
 plot_tier_consensus_profiles(
     tier_consensus_df,
@@ -1345,7 +1323,6 @@ plot_tier_consensus_profiles(
 
 # %% [Stage 6: Tier-Resolved Pairwise Matching Heatmaps]
 
-print("\n--- Tier-Resolved Pairwise Matching Matrices ---")
 tier_pairwise_dict = compute_tier_pairwise_matches(
     dfs_dict, n_bins=4, display_names=DISPLAY_NAMES
 )
