@@ -53,7 +53,7 @@ def save_figure(fig, output_path):
 # %% Global Configuration
 
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
-LABEL = "amico_4bin"
+LABEL = "pls_4bin"
 VERSION = "Y3"  # "Y1" or "Y3"
 
 # Whether to plot random and raw profiles
@@ -75,6 +75,10 @@ RANDOM_USE_LOG_Y = False
 RANDOM_USE_SPLINE = False
 RANDOM_REFERENCE_LINE_Y = 0.0
 
+MARKER_SIZE = 4.0
+CAPSIZE = 0.0
+ERRORBAR_LINEWIDTH = 0.8
+
 OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_single_main.png"
 OUTPUT_RAW_FIG = project_root / "output/plots_for_agents/visual_single_raw.png"
 OUTPUT_RANDOM_FIG = project_root / "output/plots_for_agents/visual_single_random.png"
@@ -94,6 +98,9 @@ basic_fig = plot_radial_profile(
     use_spline=MAIN_USE_SPLINE,
     use_log_y=MAIN_USE_LOG_Y,
     reference_line_y=MAIN_REFERENCE_LINE_Y,
+    marker_size=MARKER_SIZE,
+    capsize=CAPSIZE,
+    elinewidth=ERRORBAR_LINEWIDTH,
 )
 save_figure(basic_fig, OUTPUT_MAIN_FIG)
 plt.show()
@@ -109,6 +116,9 @@ if PLOT_RAW:
         use_spline=MAIN_USE_SPLINE,
         use_log_y=MAIN_USE_LOG_Y,
         reference_line_y=MAIN_REFERENCE_LINE_Y,
+        marker_size=MARKER_SIZE,
+        capsize=CAPSIZE,
+        elinewidth=ERRORBAR_LINEWIDTH,
     )
     save_figure(raw_fig, OUTPUT_RAW_FIG)
     plt.show()
@@ -124,6 +134,9 @@ if PLOT_RANDOM:
         use_spline=RANDOM_USE_SPLINE,
         use_log_y=RANDOM_USE_LOG_Y,
         reference_line_y=RANDOM_REFERENCE_LINE_Y,
+        marker_size=MARKER_SIZE,
+        capsize=CAPSIZE,
+        elinewidth=ERRORBAR_LINEWIDTH,
     )
     save_figure(rds_fig, OUTPUT_RANDOM_FIG)
     plt.show()
