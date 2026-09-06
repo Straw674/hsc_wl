@@ -627,151 +627,82 @@ def plot_tier_consensus_profiles(
 ):
     """Plot multi-panel tiered consensus breakdown figure.
 
-    Panel (a): Consensus retention curve across proxy tiers (mean external matches & solo rate).
-    Panel (b): Heatmap matrix of mean consensus scores and high-consensus rates (Catalog x Tier).
-    Panel (c): Small-multiples stacked horizontal bars showing full consensus composition per tier.
+    Panel (a): Transposed heatmap matrix of mean consensus scores (Tier x Catalog)
+               with equalized histogram stretch (HistEqStretch).
+    Panel (b): Small-multiples stacked horizontal bars showing full consensus composition per tier.
     """
     import matplotlib.gridspec as gridspec
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize
+    from astropy.visualization import HistEqStretch, ImageNormalize
 
     names_map = display_names or {}
     n_cats = len(catalog_order)
 
-    fig = plt.figure(figsize=(19, 13))
-    gs = gridspec.GridSpec(
-        2,
-        2,
-        height_ratios=[1.15, 1.0],
-        width_ratios=[1.15, 0.95],
-        hspace=0.32,
-        wspace=0.25,
+    fig = plt.figure(figsize=(16, 12))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[1.0, 1.3], hspace=0.32)
+
+    # Top Subplot: Transposed Heatmap Matrix (4 bins x 8 catalogs)
+    ax_heat = fig.add_subplot(gs[0])
+    mat_mean = np.zeros((4, n_cats))
+    mat_ge4 = np.zeros((4, n_cats))
+    mat_solo = np.zeros((4, n_cats))
+
+    for j, name in enumerate(catalog_order):
+        c_df = tier_df[tier_df["catalog"] == name].sort_values("bin_idx")
+        mat_mean[:, j] = c_df["mean_matches"].values
+        mat_ge4[:, j] = c_df["pct_ge4"].values
+        mat_solo[:, j] = c_df["pct_solo"].values
+
+    stretch = HistEqStretch(mat_mean)
+    norm = ImageNormalize(
+        vmin=float(mat_mean.min()), vmax=float(mat_mean.max()), stretch=stretch
     )
 
-    # --- Top-Left: Retention Curves (Subplots for Mean Matches & Solo Rate) ---
-    gs_left = gridspec.GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=gs[0, 0], height_ratios=[1.4, 1.0], hspace=0.22
-    )
-    ax_mean = fig.add_subplot(gs_left[0, 0])
-    ax_solo = fig.add_subplot(gs_left[1, 0], sharex=ax_mean)
+    im = ax_heat.imshow(mat_mean, cmap="YlGnBu", aspect="auto", norm=norm)
 
-    x_bins = np.arange(4)
-    bin_labels = [
-        "Bin 1 (Q1)\nRanks 1–25",
-        "Bin 2 (Q2)\nRanks 26–50",
-        "Bin 3 (Q3)\nRanks 51–75",
-        "Bin 4 (Q4)\nRanks 76–100",
+    # Dynamic non-overlapping colorbar ticks mapped from equalized space
+    norm_positions = np.linspace(0.05, 0.95, 6)
+    tick_vals = norm.inverse(norm_positions)
+    ticks = sorted(
+        list(set(round(float(t), 1) for t in tick_vals))
+        + [round(float(mat_mean.min()), 1), round(float(mat_mean.max()), 1)]
+    )
+    cbar = fig.colorbar(im, ax=ax_heat, ticks=ticks, shrink=0.85, pad=0.02)
+    cbar.set_label(
+        "Mean Matched Catalogs (out of 7) [HistEq Stretch]",
+        fontsize=10.5,
+        fontweight="bold",
+    )
+
+    cat_labels = [names_map.get(name, name) for name in catalog_order]
+    bin_row_labels = [
+        "Bin 1 (Q1: Ranks 1–25)",
+        "Bin 2 (Q2: Ranks 26–50)",
+        "Bin 3 (Q3: Ranks 51–75)",
+        "Bin 4 (Q4: Ranks 76–100)",
     ]
 
-    for idx, name in enumerate(catalog_order):
-        c_df = tier_df[tier_df["catalog"] == name].sort_values("bin_idx")
-        d_name = names_map.get(name, name)
-        col = colors[idx % len(colors)]
-        mrk = markers[idx % len(markers)]
-        lw = 2.4 if "redm_pdr3" in name or "amico" in name else 1.8
-
-        ax_mean.errorbar(
-            x_bins,
-            c_df["mean_matches"],
-            yerr=c_df["sem_matches"],
-            label=d_name,
-            color=col,
-            marker=mrk,
-            markersize=8,
-            linewidth=lw,
-            capsize=4,
-            capthick=1.2,
-            alpha=0.9,
-        )
-        ax_solo.plot(
-            x_bins,
-            c_df["pct_solo"],
-            label=d_name,
-            color=col,
-            marker=mrk,
-            markersize=7,
-            linewidth=lw,
-            alpha=0.9,
-        )
-
-    ax_mean.set_ylabel(
-        "Mean External Matches (out of 7)",
-        fontsize=11,
-        fontweight="bold",
-        labelpad=8,
-    )
-    ax_mean.set_title(
-        "(a) Consensus Retention Curve across Proxy Tiers (0.5 Mpc/h)",
-        fontsize=12,
-        fontweight="bold",
-        pad=10,
-    )
-    ax_mean.grid(True, linestyle="--", alpha=0.5)
-    ax_mean.set_ylim(0.5, 6.2)
-    ax_mean.legend(fontsize=9, ncol=2, loc="upper right", framealpha=0.95)
-    plt.setp(ax_mean.get_xticklabels(), visible=False)
-
-    ax_solo.set_ylabel(
-        "Solo / Unique Rate (% k=0)",
-        fontsize=11,
-        fontweight="bold",
-        labelpad=8,
-    )
-    ax_solo.set_xlabel(
-        "Proxy / Score Tier (Rank Ordered)",
-        fontsize=11,
-        fontweight="bold",
-        labelpad=8,
-    )
-    ax_solo.set_xticks(x_bins)
-    ax_solo.set_xticklabels(bin_labels, fontsize=10)
-    ax_solo.grid(True, linestyle="--", alpha=0.5)
-    ax_solo.set_ylim(-2, 70)
-
-    # --- Top-Right: Heatmap Matrix (Catalogs x Tiers) ---
-    ax_heat = fig.add_subplot(gs[0, 1])
-    mat_mean = np.zeros((n_cats, 4))
-    mat_ge4 = np.zeros((n_cats, 4))
-    mat_solo = np.zeros((n_cats, 4))
-
-    for idx, name in enumerate(catalog_order):
-        c_df = tier_df[tier_df["catalog"] == name].sort_values("bin_idx")
-        mat_mean[idx] = c_df["mean_matches"].values
-        mat_ge4[idx] = c_df["pct_ge4"].values
-        mat_solo[idx] = c_df["pct_solo"].values
-
-    norm_heat = Normalize(vmin=1.0, vmax=6.0)
-    im = ax_heat.imshow(mat_mean, cmap="YlGnBu", aspect="auto", norm=norm_heat)
-
-    cbar = fig.colorbar(im, ax=ax_heat, shrink=0.85, pad=0.03)
-    cbar.set_label("Mean Matched Catalogs (out of 7)", fontsize=10.5, fontweight="bold")
-
-    ax_heat.set_xticks(np.arange(4))
+    ax_heat.set_xticks(np.arange(n_cats))
     ax_heat.set_xticklabels(
-        ["Bin 1 (Q1)", "Bin 2 (Q2)", "Bin 3 (Q3)", "Bin 4 (Q4)"],
-        fontsize=10.5,
-        fontweight="bold",
+        cat_labels, fontsize=10.5, fontweight="bold", rotation=25, ha="right"
     )
-    ax_heat.set_yticks(np.arange(n_cats))
-    ax_heat.set_yticklabels(
-        [names_map.get(name, name) for name in catalog_order],
-        fontsize=10.5,
-        fontweight="bold",
-    )
+    ax_heat.set_yticks(np.arange(4))
+    ax_heat.set_yticklabels(bin_row_labels, fontsize=10.5, fontweight="bold")
     ax_heat.set_title(
-        "(b) Mean Consensus Score by Tier (Catalog × Proxy Bin)",
-        fontsize=12,
+        "(a) Mean Consensus Score by Proxy Tier [Transposed Matrix with Equalized Hist Stretch]",
+        fontsize=13,
         fontweight="bold",
         pad=12,
     )
 
     # Annotate cells
-    for i in range(n_cats):
-        for j in range(4):
+    for i in range(4):
+        for j in range(n_cats):
             val = mat_mean[i, j]
             ge4_val = mat_ge4[i, j]
             solo_val = mat_solo[i, j]
-            text_color = "white" if val > 3.8 else "black"
+            norm_val = float(norm(np.array([val]))[0])
+            text_color = "white" if norm_val > 0.55 else "black"
             txt = f"{val:.2f}\n({ge4_val:.0f}% ≥4)"
             if solo_val > 0:
                 txt += f"\n[{solo_val:.0f}% solo]"
@@ -782,18 +713,19 @@ def plot_tier_consensus_profiles(
                 ha="center",
                 va="center",
                 color=text_color,
-                fontsize=8.5,
+                fontsize=9,
                 fontweight="bold",
             )
 
-    ax_heat.set_xticks(np.arange(5) - 0.5, minor=True)
-    ax_heat.set_yticks(np.arange(n_cats + 1) - 0.5, minor=True)
-    ax_heat.grid(which="minor", color="white", linestyle="-", linewidth=2.0)
+    # Gridlines
+    ax_heat.set_xticks(np.arange(n_cats + 1) - 0.5, minor=True)
+    ax_heat.set_yticks(np.arange(5) - 0.5, minor=True)
+    ax_heat.grid(which="minor", color="white", linestyle="-", linewidth=2.5)
     ax_heat.tick_params(which="minor", bottom=False, left=False)
 
-    # --- Bottom: Small Multiples Stacked Consensus Spectrum ---
+    # Bottom Subplot: Small Multiples Stacked Consensus Spectrum (2x4 grid)
     gs_spec = gridspec.GridSpecFromSubplotSpec(
-        2, 4, subplot_spec=gs[1, :], hspace=0.38, wspace=0.22
+        2, 4, subplot_spec=gs[1], hspace=0.35, wspace=0.22
     )
     spec_colors = ["#d73027", "#fdae61", "#a6d96a", "#313695"]
     spec_labels = ["Solo (k=0)", "Low (k=1–2)", "Moderate (k=3–4)", "High (k=5–7)"]
@@ -854,21 +786,19 @@ def plot_tier_consensus_profiles(
                 f"μ={m_val:.1f}",
                 va="center",
                 ha="left",
-                fontsize=8,
+                fontsize=8.5,
                 fontweight="bold",
                 color="#333333",
             )
 
         ax_b.set_yticks(y_pos)
-        ax_b.set_yticklabels(["Bin 4", "Bin 3", "Bin 2", "Bin 1"], fontsize=9)
-        ax_b.set_title(
-            names_map.get(name, name), fontsize=10.5, fontweight="bold", pad=4
-        )
+        ax_b.set_yticklabels(["Bin 4", "Bin 3", "Bin 2", "Bin 1"], fontsize=9.5)
+        ax_b.set_title(names_map.get(name, name), fontsize=11, fontweight="bold", pad=5)
         ax_b.set_xlim(0, 125)
         ax_b.set_xticks([0, 25, 50, 75, 100])
         ax_b.grid(axis="x", linestyle=":", alpha=0.6)
         if idx // 4 == 1:
-            ax_b.set_xlabel("Composition (%)", fontsize=9.5)
+            ax_b.set_xlabel("Composition (%)", fontsize=10)
 
     fig.legend(
         [b1, b2, b3, b4],
@@ -876,7 +806,7 @@ def plot_tier_consensus_profiles(
         loc="lower center",
         bbox_to_anchor=(0.5, -0.02),
         ncol=4,
-        fontsize=10.5,
+        fontsize=11,
         frameon=True,
         facecolor="white",
         edgecolor="#cccccc",
