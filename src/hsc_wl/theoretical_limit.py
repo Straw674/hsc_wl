@@ -304,10 +304,10 @@ def compute_colossus_zero_scatter(
 def get_theoretical_upper_limit(
     root_path: Path,
     nbins: Literal["1bin", "4bin"] = "1bin",
-    top_n: int = 500,
+    top_n: int = 100,
     source: Literal["simulation", "colossus"] = "simulation",
     rp_eval: np.ndarray | None = None,
-    area_deg2: float = 170.0,
+    area_deg2: float = 50.8824,
     z_min: float = 0.19,
     z_max: float = 0.52,
     z_lens: float = 0.35,
@@ -320,14 +320,16 @@ def get_theoretical_upper_limit(
         Project root path.
     nbins : {"1bin", "4bin"}, default "1bin"
         Binning mode.
-    top_n : int, default 500
+    top_n : int, default 100
         Top N count for 1-bin mode.
     source : {"simulation", "colossus"}, default "simulation"
         Source of the upper limit curve: N-body simulation or analytical Halo Model.
     rp_eval : np.ndarray or None
         Projected radial grid (Mpc) to interpolate or evaluate onto.
     area_deg2, z_min, z_max, z_lens : float
-        Cosmological volume and redshift parameters used for Colossus.
+        Cosmological volume and redshift parameters. For simulation mode in 1bin,
+        area_deg2 is used to scale top_n to match comoving number density against
+        the MDPL2 calibration volume (S16A area = 137.9 deg^2).
 
     Returns
     -------
@@ -335,12 +337,27 @@ def get_theoretical_upper_limit(
         Per-bin theoretical limit tables with columns ``["rp", "ds", "ds_err"]``.
     """
     if source == "simulation":
-        return load_simulation_zero_scatter(
+        sim_top_n = top_n
+        if nbins == "1bin" and area_deg2 is not None:
+            sim_area = 137.9  # S16A calibration area of sim_mdpl2_cen_dsig.fits
+            sim_top_n = int(round(top_n * (sim_area / area_deg2)))
+            logger.info(
+                "Scaling MDPL2 top_n from %d (area=%.2f) to %d (calib_area=%.2f) for density matching",
+                top_n,
+                area_deg2,
+                sim_top_n,
+                sim_area,
+            )
+        tbls = load_simulation_zero_scatter(
             root_path=root_path,
             nbins=nbins,
-            top_n=top_n,
+            top_n=sim_top_n,
             rp_eval=rp_eval,
         )
+        if nbins == "1bin":
+            for t in tbls:
+                t.meta["label"] = f"MDPL2 Top-{top_n} (sigma=0)"
+        return tbls
     elif source == "colossus":
         if rp_eval is None:
             # Default to standard HSC radial grid (0.1 to 20 Mpc)
@@ -365,7 +382,8 @@ def export_theoretical_limit_outputs(
     catalog_id: str = "ideal_mdpl2",
     nbins: Literal["1bin", "4bin"] = "1bin",
     version: str = "Y3",
-    top_n: int = 500,
+    top_n: int = 100,
+    area_deg2: float = 50.8824,
     rp_min: float = 0.10,
     rp_max: float = 20.0,
     n_rp_bins: int = 11,
@@ -386,8 +404,10 @@ def export_theoretical_limit_outputs(
         Binning mode.
     version : str
         Source version (e.g. "Y3", "Y1").
-    top_n : int
+    top_n : int, default 100
         Top-N count for 1-bin mode.
+    area_deg2 : float, default 50.8824
+        Survey area in square degrees.
     rp_min, rp_max, n_rp_bins : float, int
         Radial binning matching RPConfig.
     overwrite : bool
@@ -412,6 +432,7 @@ def export_theoretical_limit_outputs(
         top_n=top_n,
         source=source,
         rp_eval=rp_mid,
+        area_deg2=area_deg2,
     )
 
     out_dir = Path(root_path) / f"output/{catalog_id}/{nbins}/{version}/dsigma"
@@ -462,7 +483,7 @@ def ensure_theoretical_limit_outputs(root_path: Path, overwrite: bool = False) -
             lens_fits = prep_dir / f"{cat_id}_{nbins}_lenses.fits"
             rand_fits = prep_dir / f"{cat_id}_{nbins}_randoms.fits"
 
-            n_obj = 500 if nbins == "1bin" else total_4bin
+            n_obj = 100 if nbins == "1bin" else total_4bin
             if overwrite or not lens_fits.exists():
                 t_lens = Table()
                 t_lens["ra"] = np.linspace(200.0, 250.0, n_obj)
@@ -488,5 +509,7 @@ def ensure_theoretical_limit_outputs(root_path: Path, overwrite: bool = False) -
                         catalog_id=cat_id,
                         nbins=nbins,
                         version=ver,
+                        top_n=100,
+                        area_deg2=50.8824,
                         overwrite=True,
                     )

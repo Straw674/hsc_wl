@@ -79,7 +79,9 @@ def load_comparison_data(configs_to_compare, root_path):
     n_bins = len(loaded_tables[0])
     for tables in loaded_tables:
         if len(tables) != n_bins:
-            raise ValueError("All labels must have the same number of lens bins.")
+            raise ValueError(
+                f"All labels must have the same number of lens bins. For {display_name}: {len(tables)} != {n_bins}"
+            )
 
     return present_labels, loaded_tables, label_time_texts
 
@@ -324,22 +326,26 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 # If an ideal catalog is placed first, the ratio plot directly shows DeltaSigma_obs / DeltaSigma_ideal.
 CONFIGS_TO_COMPARE = [
     ("ideal_mdpl2", "1bin", "Y3"),
-    ("camira", "1bin", "Y3"),
-    ("redm_pdr3_5band_free", "1bin", "Y3"),
-    ("camira_hectomap", "1bin", "Y3"),
     ("redm_r16_hectomap", "1bin", "Y3"),
-    # ("amico", "1bin", "Y3"),
+    ("camira_hectomap", "1bin", "Y3"),
     ("cosine", "1bin", "Y3"),
+    ("redm_pdr3_5band_free", "1bin", "Y3"),
+    ("pls", "1bin", "Y3"),
+    ("regression", "1bin", "Y3"),
+    ("cca1", "1bin", "Y3"),
+    ("cca2", "1bin", "Y3"),
+    ("amico", "1bin", "Y3"),
 ]
 
-MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
+MARKERS = ["o", "s", "^", "D", "v", "P", "*", "X", "<", ">"]
 
-# Paul Tol "bright"-based palette (grey/yellow dropped for white-bg visibility,
-# orange & teal added for extra distinguishability). 8 distinct hues.
+# Palette with 10 distinct colors: black for ideal theoretical limit, followed by Tol bright/vibrant hues
 LABEL_PALETTE = [
-    "#4477AA",  # blue
+    "#000000",  # black (ideal reference)
     "#EE6677",  # red
+    "#4477AA",  # blue
     "#228833",  # green
+    "#CCBB44",  # olive/yellow
     "#66CCEE",  # cyan
     "#AA3377",  # purple
     "#EE7733",  # orange

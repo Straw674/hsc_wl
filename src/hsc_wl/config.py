@@ -286,10 +286,11 @@ _DEFAULT_BINNING_4BIN = BinningConfig(
     edges_mass=_EDGES_MASS,
 )
 # 1-bin mode: all lenses treated as a single top-N sample.
+# top_n=320 in reference volume corresponds to exactly top_n=100 in the HectoMAP volume.
 _DEFAULT_BINNING_1BIN = BinningConfig(
     mode="top_n",
     top_counts=_TOP_COUNTS_4BIN,
-    top_n=500,
+    top_n=320,
     edges_richness=_EDGES_RICHNESS,
     edges_mass=_EDGES_MASS,
 )
@@ -395,11 +396,9 @@ _COLS_CCA2 = _COLS_CCA
 # Sky footprint boxes  (unpacked as **kwargs into _cfg)
 # ---------------------------------------------------------------------------
 
-# HectoMap sub-region: RA 200-250 deg, Dec 42-44.5 deg
-_BOX_HECTOMAP = {"ra_range": (200, 250), "dec_range": (42, 44.5)}
-
-# redMapper R16 HectoMap sub-region: RA 210-250 deg, Dec 42-44.5 deg
-_BOX_R16_HECTOMAP = {"ra_range": (210, 250), "dec_range": (42, 44.5)}
+# HectoMap sub-region: RA 210-250 deg, Dec 42-44.5 deg
+_BOX_HECTOMAP = {"ra_range": (210, 250), "dec_range": (42, 44.5)}
+_BOX_R16_HECTOMAP = _BOX_HECTOMAP
 
 # AMICO search support: RA 215-250 deg, Dec 42.2-44.5 deg
 _BOX_AMICO = {"ra_range": (215, 250), "dec_range": (42.2, 44.5)}
@@ -760,7 +759,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "camira_hectomap_4bin": _cfg(
         "camira_hectomap_4bin",
         _PATH_CAMIRA,
-        _RAND_Y3,
+        _RAND_HECTOMAP,
         columns=_COLS_CAMIRA,
         redshift_range=_Z_RANGE,
         lens_format="pandas_dat",
@@ -770,7 +769,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "camira_hectomap_1bin": _cfg(
         "camira_hectomap_1bin",
         _PATH_CAMIRA,
-        _RAND_Y3,
+        _RAND_HECTOMAP,
         columns=_COLS_CAMIRA,
         redshift_range=_Z_RANGE,
         lens_format="pandas_dat",
@@ -823,20 +822,20 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "redm_r16_hectomap_4bin": _cfg(
         "redm_r16_hectomap_4bin",
         _PATH_R16,
-        _RAND_Y3,
+        _RAND_HECTOMAP,
         columns=_COLS_R16,
         redshift_range=_Z_RANGE,
         binning=_DEFAULT_BINNING_4BIN,
-        **_BOX_R16_HECTOMAP,
+        **_BOX_HECTOMAP,
     ),
     "redm_r16_hectomap_1bin": _cfg(
         "redm_r16_hectomap_1bin",
         _PATH_R16,
-        _RAND_Y3,
+        _RAND_HECTOMAP,
         columns=_COLS_R16,
         redshift_range=_Z_RANGE,
         binning=_DEFAULT_BINNING_1BIN,
-        **_BOX_R16_HECTOMAP,
+        **_BOX_HECTOMAP,
     ),
     # HectoMAP box ∩ s16a random footprint
     "redm_r16_hecto_s16a_4bin": _cfg(
