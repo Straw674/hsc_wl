@@ -638,10 +638,15 @@ def plot_tier_consensus_profiles(
     names_map = display_names or {}
     n_cats = len(catalog_order)
 
-    fig = plt.figure(figsize=(16, 12))
-    gs = gridspec.GridSpec(2, 1, height_ratios=[1.0, 1.3], hspace=0.32)
+    # Dynamic layout calculation: 4 columns for small multiples
+    ncols = 4
+    nrows = (n_cats + ncols - 1) // ncols
 
-    # Top Subplot: Transposed Heatmap Matrix (4 bins x 8 catalogs)
+    fig_height = 5.5 + 3.2 * nrows
+    fig = plt.figure(figsize=(16, fig_height))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[1.0, 0.65 * nrows], hspace=0.32)
+
+    # Top Subplot: Transposed Heatmap Matrix (4 bins x n_cats catalogs)
     ax_heat = fig.add_subplot(gs[0])
     mat_mean = np.zeros((4, n_cats))
     mat_ge4 = np.zeros((4, n_cats))
@@ -669,7 +674,7 @@ def plot_tier_consensus_profiles(
     )
     cbar = fig.colorbar(im, ax=ax_heat, ticks=ticks, shrink=0.85, pad=0.02)
     cbar.set_label(
-        "Mean Matched Catalogs (out of 7) [HistEq Stretch]",
+        f"Mean Matched Catalogs (out of {n_cats - 1}) [HistEq Stretch]",
         fontsize=10.5,
         fontweight="bold",
     )
@@ -723,15 +728,21 @@ def plot_tier_consensus_profiles(
     ax_heat.grid(which="minor", color="white", linestyle="-", linewidth=2.5)
     ax_heat.tick_params(which="minor", bottom=False, left=False)
 
-    # Bottom Subplot: Small Multiples Stacked Consensus Spectrum (2x4 grid)
+    # Bottom Subplot: Small Multiples Stacked Consensus Spectrum (nrows x ncols grid)
     gs_spec = gridspec.GridSpecFromSubplotSpec(
-        2, 4, subplot_spec=gs[1], hspace=0.35, wspace=0.22
+        nrows, ncols, subplot_spec=gs[1], hspace=0.35, wspace=0.22
     )
     spec_colors = ["#d73027", "#fdae61", "#a6d96a", "#313695"]
-    spec_labels = ["Solo (k=0)", "Low (k=1–2)", "Moderate (k=3–4)", "High (k=5–7)"]
+    spec_labels = [
+        "Solo (k=0)",
+        "Low (k=1–2)",
+        "Moderate (k=3–4)",
+        f"High (k=5–{n_cats - 1})",
+    ]
 
     for idx, name in enumerate(catalog_order):
-        ax_b = fig.add_subplot(gs_spec[idx // 4, idx % 4])
+        row_i, col_i = divmod(idx, ncols)
+        ax_b = fig.add_subplot(gs_spec[row_i, col_i])
         c_df = tier_df[tier_df["catalog"] == name].sort_values(
             "bin_idx", ascending=False
         )
@@ -797,7 +808,7 @@ def plot_tier_consensus_profiles(
         ax_b.set_xlim(0, 125)
         ax_b.set_xticks([0, 25, 50, 75, 100])
         ax_b.grid(axis="x", linestyle=":", alpha=0.6)
-        if idx // 4 == 1:
+        if row_i == nrows - 1 or idx + ncols >= n_cats:
             ax_b.set_xlabel("Composition (%)", fontsize=10)
 
     fig.legend(
@@ -1169,6 +1180,8 @@ DISPLAY_NAMES = {
     "pls_1bin": "PLS Finder",
     "regression_1bin": "Regression Finder",
     "rz_diff_1bin": "r-z Diff Finder",
+    "cca1_1bin": "CCA1 Finder",
+    "cca2_1bin": "CCA2 Finder",
 }
 
 # Color palette: Paul Tol Bright/Muted adapted (10 distinct hues for high contrast)
