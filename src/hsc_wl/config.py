@@ -338,10 +338,13 @@ _PATH_AMICO = get_latest_cluster_catalog(
 # PLS cluster finder (2D CoG PLS decomposition + Cylinder NMS)
 _PATH_PLS = "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog_no_nms.parquet"
 
-# Direct 2D r-z profile subtraction cluster catalog (no model, no NMS)
-_PATH_RZ_DIFF = (
-    "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_cluster_catalog.parquet"
+# Direct 2D r-z profile subtraction cluster catalogs (Richness, Sat Lum, Tot Lum)
+_PATH_RZ_DIFF_RICHNESS = (
+    "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_richness_cluster_catalog.parquet"
 )
+_PATH_RZ_DIFF_LUM_SAT = "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_luminosity_sat_cluster_catalog.parquet"
+_PATH_RZ_DIFF_LUM_TOT = "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_luminosity_tot_cluster_catalog.parquet"
+_PATH_RZ_DIFF = _PATH_RZ_DIFF_RICHNESS
 
 # Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
 _PATH_REGRESSION = (
@@ -978,6 +981,129 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "rz_diff_s16a_1bin": _cfg(
         "rz_diff_s16a_1bin",
         _PATH_RZ_DIFF,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # Direct 2D r-z profile subtraction: Richness (Counts) optimal configuration
+    # -----------------------------------------------------------------------
+    "rz_diff_richness_4bin": _cfg(
+        "rz_diff_richness_4bin",
+        _PATH_RZ_DIFF_RICHNESS,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "rz_diff_richness_1bin": _cfg(
+        "rz_diff_richness_1bin",
+        _PATH_RZ_DIFF_RICHNESS,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    "rz_diff_richness_s16a_4bin": _cfg(
+        "rz_diff_richness_s16a_4bin",
+        _PATH_RZ_DIFF_RICHNESS,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_richness_s16a_1bin": _cfg(
+        "rz_diff_richness_s16a_1bin",
+        _PATH_RZ_DIFF_RICHNESS,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # Direct 2D r-z profile subtraction: Satellite Luminosity optimal configuration
+    # -----------------------------------------------------------------------
+    "rz_diff_lum_sat_4bin": _cfg(
+        "rz_diff_lum_sat_4bin",
+        _PATH_RZ_DIFF_LUM_SAT,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "rz_diff_lum_sat_1bin": _cfg(
+        "rz_diff_lum_sat_1bin",
+        _PATH_RZ_DIFF_LUM_SAT,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    "rz_diff_lum_sat_s16a_4bin": _cfg(
+        "rz_diff_lum_sat_s16a_4bin",
+        _PATH_RZ_DIFF_LUM_SAT,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_sat_s16a_1bin": _cfg(
+        "rz_diff_lum_sat_s16a_1bin",
+        _PATH_RZ_DIFF_LUM_SAT,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    # -----------------------------------------------------------------------
+    # Direct 2D r-z profile subtraction: Total Luminosity (Sat + BCG) optimal configuration
+    # -----------------------------------------------------------------------
+    "rz_diff_lum_tot_4bin": _cfg(
+        "rz_diff_lum_tot_4bin",
+        _PATH_RZ_DIFF_LUM_TOT,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+    ),
+    "rz_diff_lum_tot_1bin": _cfg(
+        "rz_diff_lum_tot_1bin",
+        _PATH_RZ_DIFF_LUM_TOT,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+    ),
+    "rz_diff_lum_tot_s16a_4bin": _cfg(
+        "rz_diff_lum_tot_s16a_4bin",
+        _PATH_RZ_DIFF_LUM_TOT,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_tot_s16a_1bin": _cfg(
+        "rz_diff_lum_tot_s16a_1bin",
+        _PATH_RZ_DIFF_LUM_TOT,
         _RAND_S16A,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
