@@ -1201,17 +1201,13 @@ PALETTE = [
 # Plotting marker config (distinct shapes supported across matplotlib and Bokeh)
 MARKERS = ["o", "s", "^", "v", "D", "h", "*", "d", "x", "+"]
 
-OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
-OUTPUT_CONSENSUS_BREAKDOWN = (
-    project_root / "output/plots_for_agents/consensus_breakdown.png"
-)
-OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
+OUTPUT_MATCH_HEATMAP = project_root / "output/plots/matching_statistics.png"
+OUTPUT_CONSENSUS_BREAKDOWN = project_root / "output/plots/consensus_breakdown.png"
+OUTPUT_BOKEH_HTML = project_root / "output/plots/spatial_distribution.html"
 OUTPUT_TIER_CONSENSUS_PROFILES = (
-    project_root / "output/plots_for_agents/tier_consensus_profiles.png"
+    project_root / "output/plots/tier_consensus_profiles.png"
 )
-OUTPUT_TIER_PAIRWISE_HEATMAPS = (
-    project_root / "output/plots_for_agents/tier_pairwise_heatmaps.png"
-)
+OUTPUT_TIER_PAIRWISE_HEATMAPS = project_root / "output/plots/tier_pairwise_heatmaps.png"
 
 
 # %% [Stage 1: Load and Match Catalogs]
