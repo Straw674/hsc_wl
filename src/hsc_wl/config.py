@@ -335,8 +335,8 @@ _PATH_AMICO = get_latest_cluster_catalog(
     "/Users/xinq/cluster_finder/output/amico/cluster"
 )
 
-# PLS cluster finder (2D CoG PLS decomposition + Cylinder NMS)
-_PATH_PLS = "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog_no_nms.parquet"
+# PLS cluster finder (2D CoG PLS decomposition)
+_PATH_PLS = "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog.parquet"
 
 # Direct 2D r-z profile subtraction cluster catalogs (Richness, Sat Lum, Tot Lum)
 _PATH_RZ_DIFF_RICHNESS = (
