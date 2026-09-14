@@ -573,17 +573,29 @@ def _cfg(
 #   redm_r16_hectomap            – redMapper SDSS R16, HectoMap sub-region (RA 210-250)
 #   redm_r16_hecto_s16a          – redMapper SDSS R16, HectoMAP box ∩ s16a random footprint
 #   cosine                       – COSINE cluster finder (natural HectoMap footprint)
+#   cosine_specz                 – same, with reference spectroscopic redshift (specz)
 #   cosine_s16a                  – same, restricted to s16a random ∩ HectoMAP box
+#   cosine_s16a_specz            – same, with reference spectroscopic redshift (specz)
 #   pls                          – PLS cluster finder (2D CoG PLS decomposition + Cylinder NMS)
+#   pls_specz                    – same, with reference spectroscopic redshift (specz)
 #   pls_s16a                     – same, restricted to s16a random ∩ HectoMAP box
+#   pls_s16a_specz               – same, with reference spectroscopic redshift (specz)
 #   rz_diff                      – Direct 2D r-z profile subtraction cluster catalog (no model, no NMS)
+#   rz_diff_specz                – same, with reference spectroscopic redshift (specz)
 #   rz_diff_s16a                 – same, restricted to s16a random ∩ HectoMAP box
+#   rz_diff_s16a_specz           – same, with reference spectroscopic redshift (specz)
 #   regression                   – Linear regression against WL mass (ElasticNet, no NMS)
+#   regression_specz             – same, with reference spectroscopic redshift (specz)
 #   regression_s16a              – same, restricted to s16a random ∩ HectoMAP box
+#   regression_s16a_specz        – same, with reference spectroscopic redshift (specz)
 #   cca / cca1                   – CCA1 cluster finder (Primary WL mass mode, cca1 ranking, no NMS)
+#   cca_specz / cca1_specz       – same, with reference spectroscopic redshift (specz)
 #   cca_s16a / cca1_s16a         – same, restricted to s16a random ∩ HectoMAP box
+#   cca_s16a_specz / cca1_s16a_specz – same, with reference spectroscopic redshift (specz)
 #   cca2                         – CCA2 cluster finder (Morphology/concentration mode, cca2 ranking, no NMS)
+#   cca2_specz                   – same, with reference spectroscopic redshift (specz)
 #   cca2_s16a                    – same, restricted to s16a random ∩ HectoMAP box
+#   cca2_s16a_specz              – same, with reference spectroscopic redshift (specz)
 #   amico                        – AMICO cluster finder (RA 215-250 / Dec 42.2-44.5)
 #   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
 #   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
@@ -967,6 +979,26 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    "cosine_specz_4bin": _cfg(
+        "cosine_specz_4bin",
+        get_latest_cluster_catalog(),
+        _RAND_HECTOMAP,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "cosine_specz_1bin": _cfg(
+        "cosine_specz_1bin",
+        get_latest_cluster_catalog(),
+        _RAND_HECTOMAP,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
     # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
     # and PDR3 catalogs on the same sky patch.
     "cosine_s16a_4bin": _cfg(
@@ -987,6 +1019,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "cosine_s16a_specz_4bin": _cfg(
+        "cosine_s16a_specz_4bin",
+        get_latest_cluster_catalog(),
+        _RAND_S16A,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "cosine_s16a_specz_1bin": _cfg(
+        "cosine_s16a_specz_1bin",
+        get_latest_cluster_catalog(),
+        _RAND_S16A,
+        columns=_COLS_COSINE,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
@@ -1010,6 +1064,26 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    "pls_specz_4bin": _cfg(
+        "pls_specz_4bin",
+        _PATH_PLS,
+        _RAND_HECTOMAP,
+        columns=_COLS_PLS,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "pls_specz_1bin": _cfg(
+        "pls_specz_1bin",
+        _PATH_PLS,
+        _RAND_HECTOMAP,
+        columns=_COLS_PLS,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
     # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
     # and PDR3 catalogs on the same sky patch.
     "pls_s16a_4bin": _cfg(
@@ -1030,6 +1104,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "pls_s16a_specz_4bin": _cfg(
+        "pls_s16a_specz_4bin",
+        _PATH_PLS,
+        _RAND_S16A,
+        columns=_COLS_PLS,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "pls_s16a_specz_1bin": _cfg(
+        "pls_s16a_specz_1bin",
+        _PATH_PLS,
+        _RAND_S16A,
+        columns=_COLS_PLS,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
@@ -1053,6 +1149,26 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    "rz_diff_specz_4bin": _cfg(
+        "rz_diff_specz_4bin",
+        _PATH_RZ_DIFF,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "rz_diff_specz_1bin": _cfg(
+        "rz_diff_specz_1bin",
+        _PATH_RZ_DIFF,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
     # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
     # and PDR3 catalogs on the same sky patch.
     "rz_diff_s16a_4bin": _cfg(
@@ -1073,6 +1189,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_s16a_specz_4bin": _cfg(
+        "rz_diff_s16a_specz_4bin",
+        _PATH_RZ_DIFF,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_s16a_specz_1bin": _cfg(
+        "rz_diff_s16a_specz_1bin",
+        _PATH_RZ_DIFF,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
@@ -1096,6 +1234,26 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    "rz_diff_richness_specz_4bin": _cfg(
+        "rz_diff_richness_specz_4bin",
+        _PATH_RZ_DIFF_RICHNESS,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "rz_diff_richness_specz_1bin": _cfg(
+        "rz_diff_richness_specz_1bin",
+        _PATH_RZ_DIFF_RICHNESS,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
     "rz_diff_richness_s16a_4bin": _cfg(
         "rz_diff_richness_s16a_4bin",
         _PATH_RZ_DIFF_RICHNESS,
@@ -1114,6 +1272,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_richness_s16a_specz_4bin": _cfg(
+        "rz_diff_richness_s16a_specz_4bin",
+        _PATH_RZ_DIFF_RICHNESS,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_richness_s16a_specz_1bin": _cfg(
+        "rz_diff_richness_s16a_specz_1bin",
+        _PATH_RZ_DIFF_RICHNESS,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
@@ -1137,6 +1317,26 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    "rz_diff_lum_sat_specz_4bin": _cfg(
+        "rz_diff_lum_sat_specz_4bin",
+        _PATH_RZ_DIFF_LUM_SAT,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "rz_diff_lum_sat_specz_1bin": _cfg(
+        "rz_diff_lum_sat_specz_1bin",
+        _PATH_RZ_DIFF_LUM_SAT,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
     "rz_diff_lum_sat_s16a_4bin": _cfg(
         "rz_diff_lum_sat_s16a_4bin",
         _PATH_RZ_DIFF_LUM_SAT,
@@ -1155,6 +1355,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_sat_s16a_specz_4bin": _cfg(
+        "rz_diff_lum_sat_s16a_specz_4bin",
+        _PATH_RZ_DIFF_LUM_SAT,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_sat_s16a_specz_1bin": _cfg(
+        "rz_diff_lum_sat_s16a_specz_1bin",
+        _PATH_RZ_DIFF_LUM_SAT,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
@@ -1178,6 +1400,26 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    "rz_diff_lum_tot_specz_4bin": _cfg(
+        "rz_diff_lum_tot_specz_4bin",
+        _PATH_RZ_DIFF_LUM_TOT,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "rz_diff_lum_tot_specz_1bin": _cfg(
+        "rz_diff_lum_tot_specz_1bin",
+        _PATH_RZ_DIFF_LUM_TOT,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
     "rz_diff_lum_tot_s16a_4bin": _cfg(
         "rz_diff_lum_tot_s16a_4bin",
         _PATH_RZ_DIFF_LUM_TOT,
@@ -1196,6 +1438,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_tot_s16a_specz_4bin": _cfg(
+        "rz_diff_lum_tot_s16a_specz_4bin",
+        _PATH_RZ_DIFF_LUM_TOT,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_tot_s16a_specz_1bin": _cfg(
+        "rz_diff_lum_tot_s16a_specz_1bin",
+        _PATH_RZ_DIFF_LUM_TOT,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
@@ -1219,6 +1483,26 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    "regression_specz_4bin": _cfg(
+        "regression_specz_4bin",
+        _PATH_REGRESSION,
+        _RAND_HECTOMAP,
+        columns=_COLS_REGRESSION,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "regression_specz_1bin": _cfg(
+        "regression_specz_1bin",
+        _PATH_REGRESSION,
+        _RAND_HECTOMAP,
+        columns=_COLS_REGRESSION,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
     # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
     # and PDR3 catalogs on the same sky patch.
     "regression_s16a_4bin": _cfg(
@@ -1239,6 +1523,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "regression_s16a_specz_4bin": _cfg(
+        "regression_s16a_specz_4bin",
+        _PATH_REGRESSION,
+        _RAND_S16A,
+        columns=_COLS_REGRESSION,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "regression_s16a_specz_1bin": _cfg(
+        "regression_s16a_specz_1bin",
+        _PATH_REGRESSION,
+        _RAND_S16A,
+        columns=_COLS_REGRESSION,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
@@ -1279,6 +1585,46 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+    ),
+    "cca_specz_4bin": _cfg(
+        "cca_specz_4bin",
+        _PATH_CCA1,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "cca_specz_1bin": _cfg(
+        "cca_specz_1bin",
+        _PATH_CCA1,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
+    "cca1_specz_4bin": _cfg(
+        "cca1_specz_4bin",
+        _PATH_CCA1,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "cca1_specz_1bin": _cfg(
+        "cca1_specz_1bin",
+        _PATH_CCA1,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
     ),
     # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
     # and PDR3 catalogs on the same sky patch.
@@ -1322,6 +1668,50 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         binning=_DEFAULT_BINNING_1BIN,
         **_BOX_HECTOMAP,
     ),
+    "cca_s16a_specz_4bin": _cfg(
+        "cca_s16a_specz_4bin",
+        _PATH_CCA1,
+        _RAND_S16A,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "cca_s16a_specz_1bin": _cfg(
+        "cca_s16a_specz_1bin",
+        _PATH_CCA1,
+        _RAND_S16A,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "cca1_s16a_specz_4bin": _cfg(
+        "cca1_s16a_specz_4bin",
+        _PATH_CCA1,
+        _RAND_S16A,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "cca1_s16a_specz_1bin": _cfg(
+        "cca1_s16a_specz_1bin",
+        _PATH_CCA1,
+        _RAND_S16A,
+        columns=_COLS_CCA1,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
     # -----------------------------------------------------------------------
     # CCA2 cluster finder (2D CoG CCA decomposition, cca2 ranking, no NMS)
     # -----------------------------------------------------------------------
@@ -1343,6 +1733,26 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
+    "cca2_specz_4bin": _cfg(
+        "cca2_specz_4bin",
+        _PATH_CCA2,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA2,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+    ),
+    "cca2_specz_1bin": _cfg(
+        "cca2_specz_1bin",
+        _PATH_CCA2,
+        _RAND_HECTOMAP,
+        columns=_COLS_CCA2,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+    ),
     "cca2_s16a_4bin": _cfg(
         "cca2_s16a_4bin",
         _PATH_CCA2,
@@ -1361,6 +1771,28 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "cca2_s16a_specz_4bin": _cfg(
+        "cca2_s16a_specz_4bin",
+        _PATH_CCA2,
+        _RAND_S16A,
+        columns=_COLS_CCA2,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "cca2_s16a_specz_1bin": _cfg(
+        "cca2_s16a_specz_1bin",
+        _PATH_CCA2,
+        _RAND_S16A,
+        columns=_COLS_CCA2,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------

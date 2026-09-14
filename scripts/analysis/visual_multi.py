@@ -344,29 +344,30 @@ CONFIGS_TO_COMPARE = [
     ("redm_r16_hectomap", "1bin", "Y3"),
     # ("redm_pdr3_5band_free", "1bin", "Y3"),
     ("camira_hectomap", "1bin", "Y3"),
-    # ("amico", "1bin", "Y3"),¬
-    ("cosine", "1bin", "Y3"),
+    ("amico", "1bin", "Y3"),
+    # ("cosine", "1bin", "Y3"),
     ("pls", "1bin", "Y3"),
-    ("regression", "1bin", "Y3"),
-    ("rz_diff", "1bin", "Y3"),
+    # ("regression", "1bin", "Y3"),
+    # ("rz_diff", "1bin", "Y3"),
     ("rz_diff_richness", "1bin", "Y3"),
-    ("rz_diff_lum_sat", "1bin", "Y3"),
     ("rz_diff_lum_tot", "1bin", "Y3"),
+    # ("cca1", "1bin", "Y3"),
+    # ("cca2", "1bin", "Y3"),
 ]
 
 # CONFIGS_TO_COMPARE = [
 #     ("ideal_mdpl2", "1bin", "Y3"),
-#     # ("redm_r16", "1bin", "Y3"),
-#     # ("camira", "1bin", "Y3"),
-#     # ("logm_s16a", "1bin", "Y3"),
-#     ("redm_r16_hectomap", "1bin", "Y3"),
-#     # ("redm_pdr3_5band_free", "1bin", "Y3"),
-#     ("camira_hectomap", "1bin", "Y3"),
-#     # ("amico", "1bin", "Y3"),
-#     ("cosine", "1bin", "Y3"),
-#     ("cca1", "1bin", "Y3"),
-#     ("cca2", "1bin", "Y3"),
+#     ("rz_diff", "1bin", "Y3"),
+#     ("rz_diff_richness", "1bin", "Y3"),
 # ]
+
+
+CONFIGS_TO_COMPARE = [
+    ("cca1", "1bin", "Y3"),
+    ("cca1_specz", "1bin", "Y3"),
+    ("cca2", "1bin", "Y3"),
+    ("cca2_specz", "1bin", "Y3"),
+]
 
 # CONFIGS_TO_COMPARE = [
 #     ("ideal_mdpl2", "1bin", "Y3"),
