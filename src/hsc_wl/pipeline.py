@@ -74,6 +74,7 @@ def lens_config_from_dict(d: dict) -> LensCatalogConfig:
             ra=cols["ra"],
             dec=cols["dec"],
             z=cols["z"],
+            z_spec=cols.get("z_spec"),
         ),
         redshift_range=tuple(rr) if rr else (0.0, 1.0),
         top_counts_factor=d.get("top_counts_factor", 1.0),
@@ -81,6 +82,7 @@ def lens_config_from_dict(d: dict) -> LensCatalogConfig:
         random_format=d.get("random_format"),
         ra_range=tuple(d["ra_range"]) if d.get("ra_range") else None,
         dec_range=tuple(d["dec_range"]) if d.get("dec_range") else None,
+        redshift_type=d.get("redshift_type", "photoz"),
     )
 
 

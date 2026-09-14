@@ -89,6 +89,7 @@ class ColumnMapping:
     ra: str
     dec: str
     z: str
+    z_spec: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +112,7 @@ class LensCatalogConfig:
     ra_range: Optional[tuple[float, float]] = None
     dec_range: Optional[tuple[float, float]] = None
     area_deg2: Optional[float] = None
+    redshift_type: Literal["photoz", "specz"] = "photoz"
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +207,7 @@ class WLConfig:
     random_multiplier: int = 20
     rng_seed: Optional[int] = None
     make_plots: bool = True
+    redshift_type: Literal["photoz", "specz"] = "photoz"
 
     def resolved_save_root(self, root: Path) -> Path:
         """Return ``save_root`` as an absolute path under *root*."""
@@ -243,7 +246,7 @@ def resolve_binning(binning: BinningConfig, factor: float) -> BinningConfig:
 
 
 def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
-    """Resolve ``area_deg2`` and ``top_counts_factor`` from sky coverage.
+    """Resolve ``area_deg2``, ``top_counts_factor``, and ``redshift_type``.
 
     Computes the effective area (lens-random footprint ∩ Y3 FDFC mask) and
     the volume factor relative to the s16a reference (z 0.19–0.52,
@@ -253,12 +256,20 @@ def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
     Falls back to the static ``top_counts_factor`` (default 1.0) if the
     mask or random files are unavailable.
     """
+    effective_redshift_type = (
+        cfg.redshift_type if cfg.redshift_type != "photoz" else cfg.lens.redshift_type
+    )
     try:
         from hsc_wl.coverage import resolve_area_and_factor
 
         area, factor = resolve_area_and_factor(cfg.lens, root)
-        new_lens = replace(cfg.lens, area_deg2=area, top_counts_factor=factor)
-        return replace(cfg, lens=new_lens)
+        new_lens = replace(
+            cfg.lens,
+            area_deg2=area,
+            top_counts_factor=factor,
+            redshift_type=effective_redshift_type,
+        )
+        return replace(cfg, lens=new_lens, redshift_type=effective_redshift_type)
     except (FileNotFoundError, ImportError) as exc:
         logger.warning(
             "Could not resolve area/factor for %s (%s); "
@@ -267,7 +278,8 @@ def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
             exc,
             cfg.lens.top_counts_factor,
         )
-        return cfg
+        new_lens = replace(cfg.lens, redshift_type=effective_redshift_type)
+        return replace(cfg, lens=new_lens, redshift_type=effective_redshift_type)
 
 
 # ---------------------------------------------------------------------------
@@ -381,19 +393,91 @@ _RAND_Y3 = "data/random_y3_mask.fits"
 # Column mappings
 # ---------------------------------------------------------------------------
 
-_COLS_REDM = {"col_rank": "lambda", "ra": "ra", "dec": "dec", "z": "z_lambda"}
-_COLS_R16 = {"col_rank": "lambda", "ra": "RAJ2000", "dec": "DEJ2000", "z": "zlambda"}
-_COLS_LOGM = {"col_rank": "logm_50_100", "ra": "ra", "dec": "dec", "z": "z_best"}
-_COLS_FORCED = {"col_rank": "lam", "ra": "ra", "dec": "dec", "z": "z_best"}
-_COLS_CAMIRA = {"col_rank": "N_mem", "ra": "RA", "dec": "Dec", "z": "z_cl"}
-_COLS_COSINE = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
-_COLS_AMICO = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
-_COLS_PLS = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
-_COLS_RZ_DIFF = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
-_COLS_REGRESSION = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
-_COLS_CCA = {"col_rank": "true_richness", "ra": "ra", "dec": "dec", "z": "z_cl"}
+_COLS_REDM = {
+    "col_rank": "lambda",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_lambda",
+    "z_spec": "z_spec",
+}
+_COLS_R16 = {
+    "col_rank": "lambda",
+    "ra": "RAJ2000",
+    "dec": "DEJ2000",
+    "z": "zlambda",
+    "z_spec": "zspec",
+}
+_COLS_LOGM = {
+    "col_rank": "logm_50_100",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_best",
+    "z_spec": "z_spec",
+}
+_COLS_FORCED = {
+    "col_rank": "lam",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_best",
+    "z_spec": "z_spec",
+}
+_COLS_CAMIRA = {
+    "col_rank": "N_mem",
+    "ra": "RA",
+    "dec": "Dec",
+    "z": "z_cl",
+    "z_spec": "z_spec",
+}
+_COLS_COSINE = {
+    "col_rank": "true_richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_cl",
+    "z_spec": "specz",
+}
+_COLS_AMICO = {
+    "col_rank": "true_richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_cl",
+    "z_spec": "specz",
+}
+_COLS_PLS = {
+    "col_rank": "true_richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_cl",
+    "z_spec": "specz",
+}
+_COLS_RZ_DIFF = {
+    "col_rank": "true_richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_cl",
+    "z_spec": "specz",
+}
+_COLS_REGRESSION = {
+    "col_rank": "true_richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_cl",
+    "z_spec": "specz",
+}
+_COLS_CCA = {
+    "col_rank": "cca1",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_cl",
+    "z_spec": "specz",
+}
 _COLS_CCA1 = _COLS_CCA
-_COLS_CCA2 = _COLS_CCA
+_COLS_CCA2 = {
+    "col_rank": "cca2",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z_cl",
+    "z_spec": "specz",
+}
 
 # ---------------------------------------------------------------------------
 # Sky footprint boxes  (unpacked as **kwargs into _cfg)
@@ -429,6 +513,7 @@ def _cfg(
     source=None,
     binning=None,
     save_root=None,
+    redshift_type="photoz",
 ):
     """Compact constructor for :class:`WLConfig` registry entries.
 
@@ -453,10 +538,12 @@ def _cfg(
             random_format=random_format,
             ra_range=tuple(ra_range) if ra_range else None,
             dec_range=tuple(dec_range) if dec_range else None,
+            redshift_type=redshift_type,
         ),
         source=source or SourceConfig(),
         binning=binning or _DEFAULT_BINNING_4BIN,
         save_root=save_root,
+        redshift_type=redshift_type,
     )
 
 

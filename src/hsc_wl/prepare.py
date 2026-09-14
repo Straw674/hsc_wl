@@ -224,6 +224,96 @@ def apply_lens_quality_filters(lens: Table) -> Table:
     return lens
 
 
+def resolve_lens_redshift(
+    lens: Table, cfg: LensCatalogConfig
+) -> tuple[np.ndarray, dict]:
+    """Resolve effective redshift based on ``cfg.redshift_type`` with fallback.
+
+    If ``cfg.redshift_type == 'specz'``:
+        Attempts to use the spec-z column. If missing or non-finite/non-positive for
+        some objects, falls back to photo-z for those objects.
+    If ``cfg.redshift_type == 'photoz'``:
+        Uses the photo-z column.
+
+    Returns
+    -------
+    tuple[np.ndarray, dict]
+        (effective_z_array, stats_dict)
+    """
+    n_total = len(lens)
+    if n_total == 0:
+        return np.array([], dtype=float), {
+            "n_total": 0,
+            "n_specz": 0,
+            "n_photoz": 0,
+        }
+
+    col_photoz = cfg.columns.z
+    if col_photoz not in lens.colnames:
+        raise KeyError(
+            f"Photo-z column '{col_photoz}' not found in lens catalog. Available: {lens.colnames}"
+        )
+
+    photoz = np.asarray(lens[col_photoz], dtype=float)
+
+    if cfg.redshift_type == "specz":
+        # Identify candidate specz column
+        specz_col = None
+        if cfg.columns.z_spec and cfg.columns.z_spec in lens.colnames:
+            specz_col = cfg.columns.z_spec
+        else:
+            for candidate in ("specz", "z_spec", "z_best", "zspec"):
+                if candidate in lens.colnames:
+                    specz_col = candidate
+                    break
+
+        if specz_col is not None:
+            raw_specz = np.asarray(lens[specz_col], dtype=float)
+            valid_specz = np.isfinite(raw_specz) & (raw_specz > 0)
+            eff_z = np.where(valid_specz, raw_specz, photoz)
+            n_specz = int(np.sum(valid_specz))
+            n_photoz = int(n_total - n_specz)
+            pct_specz = (n_specz / n_total * 100.0) if n_total > 0 else 0.0
+            logger.info(
+                "Using spec-z ('%s') with photo-z fallback ('%s'): %d / %d (%.1f%%) with spec-z, %d (%.1f%%) fallback to photo-z.",
+                specz_col,
+                col_photoz,
+                n_specz,
+                n_total,
+                pct_specz,
+                n_photoz,
+                100.0 - pct_specz,
+            )
+            return eff_z, {
+                "mode": "specz",
+                "specz_col": specz_col,
+                "n_total": n_total,
+                "n_specz": n_specz,
+                "n_photoz": n_photoz,
+            }
+        else:
+            logger.warning(
+                "Spec-z requested (redshift_type='specz') but no spec-z column found (checked z_spec='%s', 'specz', 'z_spec', 'z_best', 'zspec') in catalog '%s'. Falling back entirely to photo-z ('%s').",
+                cfg.columns.z_spec,
+                cfg.label,
+                col_photoz,
+            )
+            return photoz, {
+                "mode": "specz_fallback_all",
+                "n_total": n_total,
+                "n_specz": 0,
+                "n_photoz": n_total,
+            }
+
+    logger.info("Using photo-z ('%s') for %d lenses.", col_photoz, n_total)
+    return photoz, {
+        "mode": "photoz",
+        "n_total": n_total,
+        "n_specz": 0,
+        "n_photoz": n_total,
+    }
+
+
 def apply_lens_range_filters(lens: Table, cfg: LensCatalogConfig) -> Table:
     """Apply finite-rank, redshift, RA and Dec range cuts from *cfg*."""
     col_rank = cfg.columns.col_rank
@@ -238,14 +328,18 @@ def apply_lens_range_filters(lens: Table, cfg: LensCatalogConfig) -> Table:
             col_rank,
         )
 
-    col_z, col_ra, col_dec = cfg.columns.z, cfg.columns.ra, cfg.columns.dec
+    col_ra, col_dec = cfg.columns.ra, cfg.columns.dec
+
+    # Compute effective redshift and attach as temporary column '_z_eff'
+    eff_z, _ = resolve_lens_redshift(lens, cfg)
+    lens["_z_eff"] = eff_z
 
     z_min, z_max = cfg.redshift_range
-    lens = lens[(lens[col_z] >= z_min) & (lens[col_z] <= z_max)]
+    lens = lens[(lens["_z_eff"] >= z_min) & (lens["_z_eff"] <= z_max)]
     logger.info(
-        "Applied redshift mask %s on '%s': %d objects remain.",
+        "Applied redshift mask %s on effective z (%s): %d objects remain.",
         cfg.redshift_range,
-        col_z,
+        cfg.redshift_type,
         len(lens),
     )
 
@@ -462,7 +556,11 @@ def prepare_lens_random_tables(
         lens_out = Table()
         lens_out["ra"] = lens_bin[catalog_config.columns.ra]
         lens_out["dec"] = lens_bin[catalog_config.columns.dec]
-        lens_out["z"] = lens_bin[catalog_config.columns.z]
+        lens_out["z"] = (
+            lens_bin["_z_eff"]
+            if "_z_eff" in lens_bin.colnames
+            else lens_bin[catalog_config.columns.z]
+        )
         lens_out["wsys"] = np.ones(n_bin, dtype=float)
         lens_out["bin_id"] = i
 
@@ -476,7 +574,11 @@ def prepare_lens_random_tables(
         random_out = Table()
         random_out["ra"] = random_catalog[random_ra_col][rand_idx]
         random_out["dec"] = random_catalog[random_dec_col][rand_idx]
-        random_out["z"] = lens_bin[catalog_config.columns.z][z_idx]
+        random_out["z"] = (
+            lens_bin["_z_eff"][z_idx]
+            if "_z_eff" in lens_bin.colnames
+            else lens_bin[catalog_config.columns.z][z_idx]
+        )
         random_out["wsys"] = np.ones(n_random, dtype=float)
         random_out["bin_id"] = i
 
@@ -693,6 +795,7 @@ def run_prepare_pipeline(cfg: WLConfig, root: Path | None = None):
     print(f"Using source: {cfg.label}")
     print(f"Column used for ranking: {lens_cfg.columns.col_rank}")
     print("-" * 80)
+    print(f"Redshift source: {lens_cfg.redshift_type}")
     print(f"Redshift range: {lens_cfg.redshift_range}")
     print(
         f"Effective area: {lens_cfg.area_deg2:.4f} deg2"
