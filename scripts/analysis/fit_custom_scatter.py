@@ -170,10 +170,10 @@ BIAS_MODEL = "tinker10"
 MASS_FUNC_MODEL = "tinker08"
 
 # Fallback survey configuration if config or prepared catalog is missing
-AREA_SQ_DEG = 51.4198
-Z_MIN = 0.1
-Z_MAX = 0.8
-N_OBJ = 924
+AREA_SQ_DEG = 50.8822
+Z_MIN = 0.19
+Z_MAX = 0.52
+N_OBJ = 100
 
 OUTPUT_FIG = project_root / "output/plots_for_agents/fit_custom_scatter.png"
 
@@ -205,7 +205,10 @@ lenses_path = (
 )
 if lenses_path.exists():
     lenses_table = Table.read(lenses_path)
-    N_OBJ = len(lenses_table)
+    if "bin_id" in lenses_table.colnames:
+        N_OBJ = int(np.sum(lenses_table["bin_id"] == BIN_INDEX))
+    else:
+        N_OBJ = len(lenses_table)
     logging.info(f"Loaded prepared lenses from {lenses_path}, N_OBJ = {N_OBJ}")
 else:
     logging.info(
