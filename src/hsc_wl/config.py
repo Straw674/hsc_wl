@@ -350,13 +350,13 @@ _PATH_AMICO = get_latest_cluster_catalog(
 # PLS cluster finder (2D CoG PLS decomposition)
 _PATH_PLS = "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog.parquet"
 
-# Direct 2D r-z profile subtraction cluster catalogs (Richness, Sat Lum, Tot Lum)
-_PATH_RZ_DIFF_RICHNESS = (
-    "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_richness_cluster_catalog.parquet"
+# Direct 2D r-z profile subtraction cluster catalogs (Richness, Total Luminosity)
+_PATH_RZ_DIFF = (
+    "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_cluster_catalog.parquet"
 )
-_PATH_RZ_DIFF_LUM_SAT = "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_luminosity_sat_cluster_catalog.parquet"
-_PATH_RZ_DIFF_LUM_TOT = "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_luminosity_tot_cluster_catalog.parquet"
-_PATH_RZ_DIFF = _PATH_RZ_DIFF_RICHNESS
+_PATH_RZ_DIFF_LUM = (
+    "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_lum_cluster_catalog.parquet"
+)
 
 # Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
 _PATH_REGRESSION = (
@@ -580,10 +580,14 @@ def _cfg(
 #   pls_specz                    – same, with reference spectroscopic redshift (specz)
 #   pls_s16a                     – same, restricted to s16a random ∩ HectoMAP box
 #   pls_s16a_specz               – same, with reference spectroscopic redshift (specz)
-#   rz_diff                      – Direct 2D r-z profile subtraction cluster catalog (no model, no NMS)
+#   rz_diff                      – Direct 2D r-z profile subtraction richness catalog (no model, no NMS)
 #   rz_diff_specz                – same, with reference spectroscopic redshift (specz)
 #   rz_diff_s16a                 – same, restricted to s16a random ∩ HectoMAP box
 #   rz_diff_s16a_specz           – same, with reference spectroscopic redshift (specz)
+#   rz_diff_lum                  – Direct 2D r-z profile subtraction total luminosity catalog (no model, no NMS)
+#   rz_diff_lum_specz            – same, with reference spectroscopic redshift (specz)
+#   rz_diff_lum_s16a             – same, restricted to s16a random ∩ HectoMAP box
+#   rz_diff_lum_s16a_specz       – same, with reference spectroscopic redshift (specz)
 #   regression                   – Linear regression against WL mass (ElasticNet, no NMS)
 #   regression_specz             – same, with reference spectroscopic redshift (specz)
 #   regression_s16a              – same, restricted to s16a random ∩ HectoMAP box
@@ -1214,195 +1218,29 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
-    # Direct 2D r-z profile subtraction: Richness (Counts) optimal configuration
-    # -----------------------------------------------------------------------
-    "rz_diff_richness_4bin": _cfg(
-        "rz_diff_richness_4bin",
-        _PATH_RZ_DIFF_RICHNESS,
-        _RAND_HECTOMAP,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_4BIN,
-    ),
-    "rz_diff_richness_1bin": _cfg(
-        "rz_diff_richness_1bin",
-        _PATH_RZ_DIFF_RICHNESS,
-        _RAND_HECTOMAP,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_1BIN,
-    ),
-    "rz_diff_richness_specz_4bin": _cfg(
-        "rz_diff_richness_specz_4bin",
-        _PATH_RZ_DIFF_RICHNESS,
-        _RAND_HECTOMAP,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_4BIN,
-        redshift_type="specz",
-    ),
-    "rz_diff_richness_specz_1bin": _cfg(
-        "rz_diff_richness_specz_1bin",
-        _PATH_RZ_DIFF_RICHNESS,
-        _RAND_HECTOMAP,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_1BIN,
-        redshift_type="specz",
-    ),
-    "rz_diff_richness_s16a_4bin": _cfg(
-        "rz_diff_richness_s16a_4bin",
-        _PATH_RZ_DIFF_RICHNESS,
-        _RAND_S16A,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_4BIN,
-        **_BOX_HECTOMAP,
-    ),
-    "rz_diff_richness_s16a_1bin": _cfg(
-        "rz_diff_richness_s16a_1bin",
-        _PATH_RZ_DIFF_RICHNESS,
-        _RAND_S16A,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_1BIN,
-        **_BOX_HECTOMAP,
-    ),
-    "rz_diff_richness_s16a_specz_4bin": _cfg(
-        "rz_diff_richness_s16a_specz_4bin",
-        _PATH_RZ_DIFF_RICHNESS,
-        _RAND_S16A,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_4BIN,
-        redshift_type="specz",
-        **_BOX_HECTOMAP,
-    ),
-    "rz_diff_richness_s16a_specz_1bin": _cfg(
-        "rz_diff_richness_s16a_specz_1bin",
-        _PATH_RZ_DIFF_RICHNESS,
-        _RAND_S16A,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_1BIN,
-        redshift_type="specz",
-        **_BOX_HECTOMAP,
-    ),
-    # -----------------------------------------------------------------------
-    # Direct 2D r-z profile subtraction: Satellite Luminosity optimal configuration
-    # -----------------------------------------------------------------------
-    "rz_diff_lum_sat_4bin": _cfg(
-        "rz_diff_lum_sat_4bin",
-        _PATH_RZ_DIFF_LUM_SAT,
-        _RAND_HECTOMAP,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_4BIN,
-    ),
-    "rz_diff_lum_sat_1bin": _cfg(
-        "rz_diff_lum_sat_1bin",
-        _PATH_RZ_DIFF_LUM_SAT,
-        _RAND_HECTOMAP,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_1BIN,
-    ),
-    "rz_diff_lum_sat_specz_4bin": _cfg(
-        "rz_diff_lum_sat_specz_4bin",
-        _PATH_RZ_DIFF_LUM_SAT,
-        _RAND_HECTOMAP,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_4BIN,
-        redshift_type="specz",
-    ),
-    "rz_diff_lum_sat_specz_1bin": _cfg(
-        "rz_diff_lum_sat_specz_1bin",
-        _PATH_RZ_DIFF_LUM_SAT,
-        _RAND_HECTOMAP,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_1BIN,
-        redshift_type="specz",
-    ),
-    "rz_diff_lum_sat_s16a_4bin": _cfg(
-        "rz_diff_lum_sat_s16a_4bin",
-        _PATH_RZ_DIFF_LUM_SAT,
-        _RAND_S16A,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_4BIN,
-        **_BOX_HECTOMAP,
-    ),
-    "rz_diff_lum_sat_s16a_1bin": _cfg(
-        "rz_diff_lum_sat_s16a_1bin",
-        _PATH_RZ_DIFF_LUM_SAT,
-        _RAND_S16A,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_1BIN,
-        **_BOX_HECTOMAP,
-    ),
-    "rz_diff_lum_sat_s16a_specz_4bin": _cfg(
-        "rz_diff_lum_sat_s16a_specz_4bin",
-        _PATH_RZ_DIFF_LUM_SAT,
-        _RAND_S16A,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_4BIN,
-        redshift_type="specz",
-        **_BOX_HECTOMAP,
-    ),
-    "rz_diff_lum_sat_s16a_specz_1bin": _cfg(
-        "rz_diff_lum_sat_s16a_specz_1bin",
-        _PATH_RZ_DIFF_LUM_SAT,
-        _RAND_S16A,
-        columns=_COLS_RZ_DIFF,
-        redshift_range=_Z_RANGE,
-        lens_format="parquet",
-        binning=_DEFAULT_BINNING_1BIN,
-        redshift_type="specz",
-        **_BOX_HECTOMAP,
-    ),
-    # -----------------------------------------------------------------------
     # Direct 2D r-z profile subtraction: Total Luminosity (Sat + BCG) optimal configuration
     # -----------------------------------------------------------------------
-    "rz_diff_lum_tot_4bin": _cfg(
-        "rz_diff_lum_tot_4bin",
-        _PATH_RZ_DIFF_LUM_TOT,
+    "rz_diff_lum_4bin": _cfg(
+        "rz_diff_lum_4bin",
+        _PATH_RZ_DIFF_LUM,
         _RAND_HECTOMAP,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
     ),
-    "rz_diff_lum_tot_1bin": _cfg(
-        "rz_diff_lum_tot_1bin",
-        _PATH_RZ_DIFF_LUM_TOT,
+    "rz_diff_lum_1bin": _cfg(
+        "rz_diff_lum_1bin",
+        _PATH_RZ_DIFF_LUM,
         _RAND_HECTOMAP,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
     ),
-    "rz_diff_lum_tot_specz_4bin": _cfg(
-        "rz_diff_lum_tot_specz_4bin",
-        _PATH_RZ_DIFF_LUM_TOT,
+    "rz_diff_lum_specz_4bin": _cfg(
+        "rz_diff_lum_specz_4bin",
+        _PATH_RZ_DIFF_LUM,
         _RAND_HECTOMAP,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
@@ -1410,9 +1248,9 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         binning=_DEFAULT_BINNING_4BIN,
         redshift_type="specz",
     ),
-    "rz_diff_lum_tot_specz_1bin": _cfg(
-        "rz_diff_lum_tot_specz_1bin",
-        _PATH_RZ_DIFF_LUM_TOT,
+    "rz_diff_lum_specz_1bin": _cfg(
+        "rz_diff_lum_specz_1bin",
+        _PATH_RZ_DIFF_LUM,
         _RAND_HECTOMAP,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
@@ -1420,9 +1258,9 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         binning=_DEFAULT_BINNING_1BIN,
         redshift_type="specz",
     ),
-    "rz_diff_lum_tot_s16a_4bin": _cfg(
-        "rz_diff_lum_tot_s16a_4bin",
-        _PATH_RZ_DIFF_LUM_TOT,
+    "rz_diff_lum_s16a_4bin": _cfg(
+        "rz_diff_lum_s16a_4bin",
+        _PATH_RZ_DIFF_LUM,
         _RAND_S16A,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
@@ -1430,9 +1268,9 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         binning=_DEFAULT_BINNING_4BIN,
         **_BOX_HECTOMAP,
     ),
-    "rz_diff_lum_tot_s16a_1bin": _cfg(
-        "rz_diff_lum_tot_s16a_1bin",
-        _PATH_RZ_DIFF_LUM_TOT,
+    "rz_diff_lum_s16a_1bin": _cfg(
+        "rz_diff_lum_s16a_1bin",
+        _PATH_RZ_DIFF_LUM,
         _RAND_S16A,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
@@ -1440,9 +1278,9 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         binning=_DEFAULT_BINNING_1BIN,
         **_BOX_HECTOMAP,
     ),
-    "rz_diff_lum_tot_s16a_specz_4bin": _cfg(
-        "rz_diff_lum_tot_s16a_specz_4bin",
-        _PATH_RZ_DIFF_LUM_TOT,
+    "rz_diff_lum_s16a_specz_4bin": _cfg(
+        "rz_diff_lum_s16a_specz_4bin",
+        _PATH_RZ_DIFF_LUM,
         _RAND_S16A,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
@@ -1451,9 +1289,9 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_type="specz",
         **_BOX_HECTOMAP,
     ),
-    "rz_diff_lum_tot_s16a_specz_1bin": _cfg(
-        "rz_diff_lum_tot_s16a_specz_1bin",
-        _PATH_RZ_DIFF_LUM_TOT,
+    "rz_diff_lum_s16a_specz_1bin": _cfg(
+        "rz_diff_lum_s16a_specz_1bin",
+        _PATH_RZ_DIFF_LUM,
         _RAND_S16A,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,

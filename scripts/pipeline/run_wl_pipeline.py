@@ -30,12 +30,7 @@ from initial import *  # noqa: F401,F403
 #   RUN_LABEL = "cosine_4bin"
 #   RUN_LABEL = ["redm_s16a_hectomap_4bin", "camira_hectomap_4bin"]
 #   RUN_LABEL = list(RUN_REGISTRY.keys())  # run all configurations
-RUN_LABEL = [
-    "cca1_1bin",
-    "cca1_specz_1bin",
-    "cca2_1bin",
-    "cca2_specz_1bin",
-]
+RUN_LABEL = ["rz_diff_1bin", "rz_diff_lum_1bin"]
 
 # %% Local Functions
 
