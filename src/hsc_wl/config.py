@@ -96,23 +96,24 @@ class ColumnMapping:
 class LensCatalogConfig:
     """Where to find a lens catalog and how to interpret it.
 
-    The ``lens_path`` / ``random_path`` may be absolute or relative to the
+    The ``lens_path`` may be absolute or relative to the
     project root (resolved at run time).  ``lens_format`` selects a reader;
     ``None`` lets ``astropy`` auto-detect.
     """
 
     label: str
     lens_path: str
-    random_path: str
     columns: ColumnMapping
     redshift_range: tuple[float, float]
     top_counts_factor: float = 1.0
     lens_format: Optional[str] = None
-    random_format: Optional[str] = None
+    fields: Optional[tuple[str, ...]] = None
+    survey_overlap: Optional[str] = None
     ra_range: Optional[tuple[float, float]] = None
     dec_range: Optional[tuple[float, float]] = None
     area_deg2: Optional[float] = None
     redshift_type: Literal["photoz", "specz"] = "photoz"
+    random_path: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -498,16 +499,50 @@ _Z_RANGE = (0.19, 0.52)
 # ---------------------------------------------------------------------------
 
 
+def _infer_footprint(
+    label: str,
+    fields: Optional[tuple[str, ...]],
+    survey_overlap: Optional[str],
+) -> tuple[Optional[tuple[str, ...]], Optional[str]]:
+    """Determine effective fields and survey overlap for a run label."""
+    if fields is not None or survey_overlap is not None:
+        return fields, survey_overlap
+    label_lower = label.lower()
+    is_s16a = "_s16a" in label_lower or label_lower.startswith(
+        ("logm_s16a", "redm_s16a", "forced")
+    )
+    is_hecto = "hecto" in label_lower or label_lower.startswith(
+        (
+            "redm_pdr3",
+            "cosine",
+            "pls",
+            "cca",
+            "regression",
+            "rz_diff",
+            "amico",
+            "ideal",
+        )
+    )
+    if is_hecto and is_s16a:
+        return ("HECTOMAP",), "s16a"
+    if is_hecto:
+        return ("HECTOMAP",), None
+    if is_s16a:
+        return None, "s16a"
+    return None, None
+
+
 def _cfg(
     label,
     lens_path,
-    random_path,
+    random_path=None,
     *,
     columns,
     redshift_range,
+    fields=None,
+    survey_overlap=None,
     top_counts_factor=1.0,
     lens_format=None,
-    random_format=None,
     ra_range=None,
     dec_range=None,
     source=None,
@@ -522,6 +557,7 @@ def _cfg(
     last underscore (e.g. ``"redm_s16a_4bin"`` → ``"redm_s16a"`` /
     ``"4bin"``).
     """
+    eff_fields, eff_overlap = _infer_footprint(label, fields, survey_overlap)
     if save_root is None:
         catalog_id, nbins = label.rsplit("_", 1)
         save_root = f"output/{catalog_id}/{nbins}"
@@ -530,15 +566,16 @@ def _cfg(
         lens=LensCatalogConfig(
             label=label,
             lens_path=lens_path,
-            random_path=random_path,
             columns=ColumnMapping(**columns),
             redshift_range=tuple(redshift_range),
+            fields=eff_fields,
+            survey_overlap=eff_overlap,
             top_counts_factor=top_counts_factor,
             lens_format=lens_format,
-            random_format=random_format,
             ra_range=tuple(ra_range) if ra_range else None,
             dec_range=tuple(dec_range) if dec_range else None,
             redshift_type=redshift_type,
+            random_path=random_path,
         ),
         source=source or SourceConfig(),
         binning=binning or _DEFAULT_BINNING_4BIN,

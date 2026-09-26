@@ -68,7 +68,6 @@ def lens_config_from_dict(d: dict) -> LensCatalogConfig:
     return LensCatalogConfig(
         label=d["label"],
         lens_path=d["lens_path"],
-        random_path=d["random_path"],
         columns=ColumnMapping(
             col_rank=cols["col_rank"],
             ra=cols["ra"],
@@ -79,10 +78,12 @@ def lens_config_from_dict(d: dict) -> LensCatalogConfig:
         redshift_range=tuple(rr) if rr else (0.0, 1.0),
         top_counts_factor=d.get("top_counts_factor", 1.0),
         lens_format=d.get("lens_format"),
-        random_format=d.get("random_format"),
+        fields=tuple(d["fields"]) if d.get("fields") else None,
+        survey_overlap=d.get("survey_overlap"),
         ra_range=tuple(d["ra_range"]) if d.get("ra_range") else None,
         dec_range=tuple(d["dec_range"]) if d.get("dec_range") else None,
         redshift_type=d.get("redshift_type", "photoz"),
+        random_path=d.get("random_path"),
     )
 
 
