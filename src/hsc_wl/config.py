@@ -333,7 +333,7 @@ _PATH_REDM_S16A = (
 )
 
 # Stellar-mass selected S16a galaxies
-_PATH_LOGM_S16A = "/Users/xinq/redmapper_HSC/data/reference/s16a_massive_logm_11.2.fits"
+_PATH_LOGM_S16A = "/Users/xinq/research/HSC_massive/s16a_massive_logm_11.2.fits"
 
 # Forced-richness S16a massive galaxies
 _PATH_FORCED = (
