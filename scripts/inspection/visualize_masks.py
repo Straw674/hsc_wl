@@ -18,183 +18,167 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from hsc_wl.coverage import build_config_mask, group_configs_by_mask
+from hsc_wl.coverage import (
+    build_config_mask,
+    group_configs_by_mask,
+    load_s16a_pixset_1024,
+    load_y3_mask,
+)
 from initial import *
 
 # %%
 # Local Functions
 
 
-def build_mask_images(
+def build_fullsky_mask_images(
     mask_groups: list[dict],
     masks: dict[str, hsp.HealSparseMap],
     w_full: WCS,
     shape_full: tuple[int, int],
-    w_zoom: WCS,
-    shape_zoom: tuple[int, int],
-) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
-    """Precompute 2D WCS HPX-projected image arrays for all mask groups."""
+) -> dict[str, np.ndarray]:
+    """Precompute full-sky 2D HPX-projected image arrays for each mask group."""
     images_full = {}
-    images_zoom = {}
     for group in mask_groups:
         label = group["label"]
-        mask = masks[label]
-        images_full[label] = project_healsparse_to_wcs(mask, w_full, shape_full)
-        images_zoom[label] = project_healsparse_to_wcs(mask, w_zoom, shape_zoom)
-    return images_full, images_zoom
+        images_full[label] = project_healsparse_to_wcs(masks[label], w_full, shape_full)
+    return images_full
 
 
-def plot_all_masks_overview(
+def build_regional_layer_image(
+    mask_y3: hsp.HealSparseMap,
+    s16a_pix: set[int],
+    wcs: WCS,
+    shape: tuple[int, int],
+    include_sliver: bool = False,
+) -> np.ndarray:
+    """Build a 2D composite image for a region distinguishing Y3, S16A, and optional boundary sliver."""
+    ny, nx = shape
+    yy, xx = np.indices((ny, nx), dtype=float)
+    ra, dec = wcs.all_pix2world(xx, yy, 0)
+    finite = np.isfinite(ra) & np.isfinite(dec) & (dec >= -90.0) & (dec <= 90.0)
+
+    v_y3 = mask_y3.get_values_pos(ra[finite], dec[finite], lonlat=True)
+    pix_1024 = hp.ang2pix(1024, ra[finite], dec[finite], nest=True, lonlat=True)
+    v_s16a = np.isin(pix_1024, list(s16a_pix)) & v_y3
+
+    img = np.full((ny, nx), np.nan, dtype=float)
+    vals = np.zeros(np.sum(finite), dtype=float)
+    vals[v_y3] = 1.0
+    vals[v_s16a] = 2.0
+    if include_sliver:
+        is_sliver = v_y3 & (ra[finite] > 250.0)
+        vals[is_sliver] = 3.0
+
+    img[finite] = vals
+    return img
+
+
+def plot_combined_overview(
     mask_groups: list[dict],
     images_full: dict[str, np.ndarray],
-    images_zoom: dict[str, np.ndarray],
+    regional_data: list[dict],
     w_full: WCS,
-    w_zoom: WCS,
     output_path: Path,
     palette: list[str],
 ) -> plt.Figure:
-    """Plot a comprehensive multi-panel figure displaying each mask in HPX projection."""
-    n_masks = len(mask_groups)
-    fig = plt.figure(figsize=(15, 3.6 * n_masks))
+    """Plot the integrated overview: 5 full-sky masks on the left and 3 regional fields on the right."""
+    fig = plt.figure(figsize=(18, 16))
+    subfigs = fig.subfigures(1, 2, width_ratios=[1.0, 1.25], wspace=0.10)
 
+    # ------------------------------------------------------------------
+    # Left Subfigure: 5 Full-Sky HPX Panels
+    # ------------------------------------------------------------------
+    subfigs[0].subplots_adjust(top=0.96, bottom=0.04, hspace=0.40)
     for i, group in enumerate(mask_groups):
         label = group["label"]
         color = palette[i % len(palette)]
         cmap = mpl.colors.ListedColormap(["#f2f4f7", color])
         cmap.set_bad("white")
 
-        # Column 1: Full-Sky HPX
-        ax_full = fig.add_subplot(n_masks, 2, 2 * i + 1, projection=w_full)
-        ax_full.imshow(
-            images_full[label], origin="lower", cmap=cmap, vmin=0.0, vmax=1.0
-        )
-        ax_full.coords.grid(color="#777777", ls=":", lw=0.5, alpha=0.6)
-        ax_full.coords["ra"].set_axislabel("RA", fontsize=8)
-        ax_full.coords["dec"].set_axislabel("Dec", fontsize=8)
-        ax_full.set_title(
+        ax = subfigs[0].add_subplot(5, 1, i + 1, projection=w_full)
+        ax.imshow(images_full[label], origin="lower", cmap=cmap, vmin=0.0, vmax=1.0)
+        ax.coords.grid(color="#777777", ls=":", lw=0.5, alpha=0.6)
+        ax.coords["ra"].set_axislabel("RA", fontsize=8)
+        ax.coords["dec"].set_axislabel("Dec", fontsize=8)
+        ax.set_title(
             f"{group['title']} (Full Sky HPX)\n"
             f"Area: {group['area_deg2']:.2f} deg², Factor: {group['volume_factor']:.4f} "
             f"({len(group['all_config_names'])} configs)",
-            fontsize=9,
+            fontsize=8.5,
             fontweight="normal",
+            pad=3,
         )
 
-        # Column 2: HECTOMAP Regional Zoom HPX
-        ax_zoom = fig.add_subplot(n_masks, 2, 2 * i + 2, projection=w_zoom)
-        ax_zoom.imshow(
-            images_zoom[label], origin="lower", cmap=cmap, vmin=0.0, vmax=1.0
-        )
-        ax_zoom.coords.grid(color="#777777", ls=":", lw=0.5, alpha=0.6)
-        ax_zoom.coords["ra"].set_major_formatter("d")
-        ax_zoom.coords["ra"].set_ticks(spacing=5 * u.deg)
-        ax_zoom.coords["dec"].set_ticks(spacing=1 * u.deg)
-        ax_zoom.coords["ra"].set_axislabel("RA [deg]", fontsize=8)
-        ax_zoom.coords["dec"].set_axislabel("Dec [deg]", fontsize=8)
-        ax_zoom.set_title(
-            f"{group['title']} (HECTOMAP Zoom HPX)",
-            fontsize=9,
-            fontweight="normal",
-        )
+    # ------------------------------------------------------------------
+    # Right Subfigure: 3 Regional HPX Panels (HECTOMAP, SPRING, FALL)
+    # ------------------------------------------------------------------
+    subfigs[1].subplots_adjust(top=0.96, bottom=0.04, hspace=0.30)
+    cmap_reg = mpl.colors.ListedColormap(["#f2f4f7", "#9ecae1", "#2ca02c"])
+    cmap_reg.set_bad("white")
 
-    plt.tight_layout()
+    cmap_hecto = mpl.colors.ListedColormap(["#f2f4f7", "#9ecae1", "#2ca02c", "#d62728"])
+    cmap_hecto.set_bad("white")
+
+    for j, reg in enumerate(regional_data):
+        ax = subfigs[1].add_subplot(3, 1, j + 1, projection=reg["wcs"])
+        cmap_use = cmap_hecto if reg.get("has_sliver", False) else cmap_reg
+        vmax_use = 3.0 if reg.get("has_sliver", False) else 2.0
+
+        ax.imshow(reg["img"], origin="lower", cmap=cmap_use, vmin=0.0, vmax=vmax_use)
+        ax.coords.grid(color="#777777", ls=":", lw=0.5, alpha=0.6)
+
+        if reg["ra_unit"] == "deg":
+            ax.coords["ra"].set_major_formatter("d")
+            ax.coords["ra"].set_ticks(spacing=reg["ra_spacing"] * u.deg)
+            ax.coords["ra"].set_axislabel("RA [deg]", fontsize=8)
+        else:
+            ax.coords["ra"].set_ticks(spacing=reg["ra_spacing"] * 15 * u.deg)
+            ax.coords["ra"].set_axislabel("RA", fontsize=8)
+
+        ax.coords["dec"].set_ticks(spacing=reg["dec_spacing"] * u.deg)
+        ax.coords["dec"].set_axislabel("Dec", fontsize=8)
+        ax.set_title(reg["title"], fontsize=8.5, fontweight="normal", pad=3)
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, bbox_inches="tight", dpi=300)
     plt.show()
     return fig
 
 
-def plot_masks_composite_overlay(
-    masks: dict[str, hsp.HealSparseMap],
-    w_full: WCS,
-    shape_full: tuple[int, int],
-    w_zoom: WCS,
-    shape_zoom: tuple[int, int],
+def plot_standalone_regional_fields(
+    regional_data: list[dict],
     output_path: Path,
 ) -> plt.Figure:
-    """Plot comparative overlay views highlighting nested footprint relationships."""
-    ny_f, nx_f = shape_full
-    yy_f, xx_f = np.indices((ny_f, nx_f), dtype=float)
-    ra_f, dec_f = w_full.all_pix2world(xx_f, yy_f, 0)
-    fin_f = np.isfinite(ra_f) & np.isfinite(dec_f) & (dec_f >= -90.0) & (dec_f <= 90.0)
+    """Plot a dedicated, high-resolution standalone figure of the 3 survey regions."""
+    fig = plt.figure(figsize=(14, 12))
+    plt.subplots_adjust(top=0.96, bottom=0.05, hspace=0.32)
 
-    # Full-sky composite:
-    # 0 = unobserved background
-    # 1 = Full Y3 wide (non-S16A)
-    # 2 = S16A & Y3 overlap
-    v_y3_f = masks["full_y3"].get_values_pos(ra_f[fin_f], dec_f[fin_f], lonlat=True)
-    v_s16a_f = masks["s16a_full"].get_values_pos(ra_f[fin_f], dec_f[fin_f], lonlat=True)
+    cmap_reg = mpl.colors.ListedColormap(["#f2f4f7", "#9ecae1", "#2ca02c"])
+    cmap_reg.set_bad("white")
 
-    comp_f = np.full((ny_f, nx_f), np.nan, dtype=float)
-    comp_vals_f = np.zeros(np.sum(fin_f), dtype=float)
-    comp_vals_f[v_y3_f] = 1.0
-    comp_vals_f[v_s16a_f] = 2.0
-    comp_f[fin_f] = comp_vals_f
+    cmap_hecto = mpl.colors.ListedColormap(["#f2f4f7", "#9ecae1", "#2ca02c", "#d62728"])
+    cmap_hecto.set_bad("white")
 
-    # HECTOMAP zoom composite:
-    # 0 = unobserved background
-    # 1 = RA > 250 boundary sliver
-    # 2 = HECTOMAP Boxed non-S16A
-    # 3 = S16A overlap footprint
-    ny_z, nx_z = shape_zoom
-    yy_z, xx_z = np.indices((ny_z, nx_z), dtype=float)
-    ra_z, dec_z = w_zoom.all_pix2world(xx_z, yy_z, 0)
-    fin_z = np.isfinite(ra_z) & np.isfinite(dec_z) & (dec_z >= -90.0) & (dec_z <= 90.0)
+    for j, reg in enumerate(regional_data):
+        ax = fig.add_subplot(3, 1, j + 1, projection=reg["wcs"])
+        cmap_use = cmap_hecto if reg.get("has_sliver", False) else cmap_reg
+        vmax_use = 3.0 if reg.get("has_sliver", False) else 2.0
 
-    v_hf_z = masks["hectomap_full"].get_values_pos(
-        ra_z[fin_z], dec_z[fin_z], lonlat=True
-    )
-    v_hb_z = masks["hectomap_box"].get_values_pos(
-        ra_z[fin_z], dec_z[fin_z], lonlat=True
-    )
-    v_hs_z = masks["hectomap_box_s16a"].get_values_pos(
-        ra_z[fin_z], dec_z[fin_z], lonlat=True
-    )
+        ax.imshow(reg["img"], origin="lower", cmap=cmap_use, vmin=0.0, vmax=vmax_use)
+        ax.coords.grid(color="#777777", ls=":", lw=0.5, alpha=0.6)
 
-    comp_z = np.full((ny_z, nx_z), np.nan, dtype=float)
-    comp_vals_z = np.zeros(np.sum(fin_z), dtype=float)
-    comp_vals_z[v_hf_z] = 1.0
-    comp_vals_z[v_hb_z] = 2.0
-    comp_vals_z[v_hs_z] = 3.0
-    comp_z[fin_z] = comp_vals_z
+        if reg["ra_unit"] == "deg":
+            ax.coords["ra"].set_major_formatter("d")
+            ax.coords["ra"].set_ticks(spacing=reg["ra_spacing"] * u.deg)
+            ax.coords["ra"].set_axislabel("RA [deg]", fontsize=9)
+        else:
+            ax.coords["ra"].set_ticks(spacing=reg["ra_spacing"] * 15 * u.deg)
+            ax.coords["ra"].set_axislabel("RA", fontsize=9)
 
-    fig = plt.figure(figsize=(16, 6))
+        ax.coords["dec"].set_ticks(spacing=reg["dec_spacing"] * u.deg)
+        ax.coords["dec"].set_axislabel("Dec", fontsize=9)
+        ax.set_title(reg["title"], fontsize=9.5, fontweight="normal", pad=4)
 
-    # Left: Full-sky comparison
-    cmap_f = mpl.colors.ListedColormap(["#f5f5f5", "#9ecae1", "#2ca02c"])
-    cmap_f.set_bad("white")
-
-    ax_left = fig.add_subplot(1, 2, 1, projection=w_full)
-    ax_left.imshow(comp_f, origin="lower", cmap=cmap_f, vmin=0.0, vmax=2.0)
-    ax_left.coords.grid(color="#777777", ls=":", lw=0.5, alpha=0.6)
-    ax_left.coords["ra"].set_axislabel("RA")
-    ax_left.coords["dec"].set_axislabel("Dec")
-    ax_left.set_title(
-        "Global Survey Footprints (HPX Projection)\n"
-        "Light Blue: HSC Y3 Full (439.49 deg²) | Green: S16A Baseline (137.83 deg²)",
-        fontsize=10,
-        fontweight="normal",
-    )
-
-    # Right: HECTOMAP zoom comparison
-    cmap_z = mpl.colors.ListedColormap(["#f5f5f5", "#fc9272", "#a1d99b", "#2171b5"])
-    cmap_z.set_bad("white")
-
-    ax_right = fig.add_subplot(1, 2, 2, projection=w_zoom)
-    ax_right.imshow(comp_z, origin="lower", cmap=cmap_z, vmin=0.0, vmax=3.0)
-    ax_right.coords.grid(color="#777777", ls=":", lw=0.5, alpha=0.6)
-    ax_right.coords["ra"].set_major_formatter("d")
-    ax_right.coords["ra"].set_ticks(spacing=5 * u.deg)
-    ax_right.coords["dec"].set_ticks(spacing=1 * u.deg)
-    ax_right.coords["ra"].set_axislabel("RA [deg]")
-    ax_right.coords["dec"].set_axislabel("Dec [deg]")
-    ax_right.set_title(
-        "HECTOMAP Nested Footprints (HPX Projection)\n"
-        "Red: RA>250 Sliver (0.07 deg²) | Green: Boxed non-S16A (31.14 deg²) | Blue: S16A Overlap (12.23 deg²)",
-        fontsize=10,
-        fontweight="normal",
-    )
-
-    plt.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, bbox_inches="tight", dpi=300)
     plt.show()
@@ -205,10 +189,11 @@ def plot_masks_composite_overlay(
 # Global Configuration
 
 OUTPUT_DIR = project_root / "output" / "plots_for_agents"
-SHAPE_FULL = (500, 1000)
-SHAPE_ZOOM = (300, 700)
+SHAPE_FULL = (400, 800)
+SHAPE_REGIONAL = (320, 800)
 COLOR_PALETTE = ["#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#ff7f0e"]
 
+# 1. Full-sky HPX WCS (unrotated native celestial orientation)
 WCS_FULL = make_hpx_wcs(
     nx=SHAPE_FULL[1],
     ny=SHAPE_FULL[0],
@@ -216,13 +201,38 @@ WCS_FULL = make_hpx_wcs(
     center_dec=0.0,
 )
 
-WCS_ZOOM = make_hpx_wcs(
-    nx=SHAPE_ZOOM[1],
-    ny=SHAPE_ZOOM[0],
+# 2. Regional HPX WCS projections (unrotated, ref_dec=0.0 for horizontal parallels)
+WCS_HECTO = make_shifted_hpx_wcs(
+    nx=SHAPE_REGIONAL[1],
+    ny=SHAPE_REGIONAL[0],
     center_ra=231.0,
-    center_dec=43.0,
-    cdelt_ra=-0.075,
-    cdelt_dec=0.045,
+    center_dec=43.3,
+    cdelt_ra=-0.055,
+    cdelt_dec=0.018,
+    ref_ra=180.0,
+    ref_dec=0.0,
+)
+
+WCS_SPRING = make_shifted_hpx_wcs(
+    nx=SHAPE_REGIONAL[1],
+    ny=SHAPE_REGIONAL[0],
+    center_ra=177.0,
+    center_dec=1.4,
+    cdelt_ra=-0.130,
+    cdelt_dec=0.040,
+    ref_ra=180.0,
+    ref_dec=0.0,
+)
+
+WCS_FALL = make_shifted_hpx_wcs(
+    nx=SHAPE_REGIONAL[1],
+    ny=SHAPE_REGIONAL[0],
+    center_ra=0.0,
+    center_dec=0.0,
+    cdelt_ra=-0.125,
+    cdelt_dec=0.055,
+    ref_ra=0.0,
+    ref_dec=0.0,
 )
 
 
@@ -245,7 +255,7 @@ for idx, group in enumerate(mask_groups, start=1):
 logging.info("=" * 80)
 
 
-# %% [Stage 2: Build HealSparse Masks for Each Group]
+# %% [Stage 2: Build HealSparse Masks for Each Group and Precompute Regional Layers]
 
 masks = {}
 for group in mask_groups:
@@ -253,40 +263,89 @@ for group in mask_groups:
     logging.info("Building HealSparse mask for [%s]...", label)
     masks[label] = build_config_mask(group["lens_config"], root=project_root)
 
+mask_y3 = load_y3_mask(project_root)
+s16a_pix = load_s16a_pixset_1024(project_root)
 
-# %% [Stage 3: Render and Display All Masks Overview (HPX Projection)]
-
-images_full, images_zoom = build_mask_images(
+# Precompute full-sky 2D images
+images_full = build_fullsky_mask_images(
     mask_groups=mask_groups,
     masks=masks,
     w_full=WCS_FULL,
     shape_full=SHAPE_FULL,
-    w_zoom=WCS_ZOOM,
-    shape_zoom=SHAPE_ZOOM,
 )
 
+# Precompute regional images with Y3 (S19A) vs S16A breakdown
+regional_data = [
+    {
+        "name": "HECTOMAP",
+        "title": (
+            "HECTOMAP Field (North, HPX Projection)\n"
+            "Light Blue: HSC Y3 (S19A) | Green: S16A Baseline | Red: RA > 250 Sliver\n"
+            "Y3 Full: 43.44 deg² | Box (RA≤250): 43.37 deg² | S16A: 12.23 deg² (28.2%)"
+        ),
+        "wcs": WCS_HECTO,
+        "img": build_regional_layer_image(
+            mask_y3, s16a_pix, WCS_HECTO, SHAPE_REGIONAL, include_sliver=True
+        ),
+        "ra_unit": "deg",
+        "ra_spacing": 5,
+        "dec_spacing": 1,
+        "has_sliver": True,
+    },
+    {
+        "name": "SPRING",
+        "title": (
+            "SPRING Field (GAMA09H + WIDE12H + GAMA15H, HPX Projection)\n"
+            "Light Blue: HSC Y3 (S19A) | Green: S16A Baseline\n"
+            "Y3 (S19A): 265.33 deg² | S16A: 76.78 deg² (28.9%)"
+        ),
+        "wcs": WCS_SPRING,
+        "img": build_regional_layer_image(
+            mask_y3, s16a_pix, WCS_SPRING, SHAPE_REGIONAL, include_sliver=False
+        ),
+        "ra_unit": "hour",
+        "ra_spacing": 2,
+        "dec_spacing": 2,
+        "has_sliver": False,
+    },
+    {
+        "name": "FALL",
+        "title": (
+            "FALL Field (VVDS + XMM, HPX Projection)\n"
+            "Light Blue: HSC Y3 (S19A) | Green: S16A Baseline\n"
+            "Y3 (S19A): 130.72 deg² | S16A: 48.82 deg² (37.3%)"
+        ),
+        "wcs": WCS_FALL,
+        "img": build_regional_layer_image(
+            mask_y3, s16a_pix, WCS_FALL, SHAPE_REGIONAL, include_sliver=False
+        ),
+        "ra_unit": "hour",
+        "ra_spacing": 2,
+        "dec_spacing": 4,
+        "has_sliver": False,
+    },
+]
+
+
+# %% [Stage 3: Render and Save Combined Overview (Left: 5 Masks, Right: 3 Regions)]
+
 overview_path = OUTPUT_DIR / "masks_overview_hpx.png"
-logging.info("Generating all masks overview figure -> %s", overview_path)
-plot_all_masks_overview(
+logging.info("Generating combined overview figure -> %s", overview_path)
+plot_combined_overview(
     mask_groups=mask_groups,
     images_full=images_full,
-    images_zoom=images_zoom,
+    regional_data=regional_data,
     w_full=WCS_FULL,
-    w_zoom=WCS_ZOOM,
     output_path=overview_path,
     palette=COLOR_PALETTE,
 )
 
 
-# %% [Stage 4: Render and Display Comparative Composite (HPX Projection)]
+# %% [Stage 4: Render and Save Standalone Regional Comparison (HECTOMAP + SPRING + FALL)]
 
-composite_path = OUTPUT_DIR / "masks_composite_hpx.png"
-logging.info("Generating comparative composite figure -> %s", composite_path)
-plot_masks_composite_overlay(
-    masks=masks,
-    w_full=WCS_FULL,
-    shape_full=SHAPE_FULL,
-    w_zoom=WCS_ZOOM,
-    shape_zoom=SHAPE_ZOOM,
-    output_path=composite_path,
+regional_path = OUTPUT_DIR / "masks_regional_hpx.png"
+logging.info("Generating standalone regional fields figure -> %s", regional_path)
+plot_standalone_regional_fields(
+    regional_data=regional_data,
+    output_path=regional_path,
 )
