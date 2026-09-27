@@ -4,6 +4,7 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
+from astropy.wcs import WCS
 
 
 def load_result_tables(base_dir):
@@ -562,3 +563,80 @@ def plot_theoretical_limit_ratio(
         label=label,
         zorder=zorder,
     )
+
+
+def make_hpx_wcs(
+    nx: int = 1200,
+    ny: int = 600,
+    center_ra: float = 180.0,
+    center_dec: float = 0.0,
+    cdelt_ra: float | None = None,
+    cdelt_dec: float | None = None,
+) -> WCS:
+    """Build an astropy.wcs.WCS object configured for the HEALPix (HPX) projection.
+
+    Parameters
+    ----------
+    nx : int, default 1200
+        Number of horizontal pixels.
+    ny : int, default 600
+        Number of vertical pixels.
+    center_ra : float, default 180.0
+        Reference right ascension in degrees (CRVAL1).
+    center_dec : float, default 0.0
+        Reference declination in degrees (CRVAL2).
+    cdelt_ra : float or None, default None
+        RA pixel scale in degrees/pixel (CDELT1). If None, defaults to -360.0 / nx.
+    cdelt_dec : float or None, default None
+        Dec pixel scale in degrees/pixel (CDELT2). If None, defaults to 180.0 / ny.
+
+    Returns
+    -------
+    WCS
+        Configured WCS instance with CTYPE = ['RA---HPX', 'DEC--HPX'].
+    """
+    w = WCS(naxis=2)
+    w.wcs.ctype = ["RA---HPX", "DEC--HPX"]
+    w.wcs.cunit = ["deg", "deg"]
+    w.wcs.crval = [center_ra, center_dec]
+    w.wcs.crpix = [nx / 2.0, ny / 2.0]
+    w.wcs.cdelt = [
+        cdelt_ra if cdelt_ra is not None else -360.0 / nx,
+        cdelt_dec if cdelt_dec is not None else 180.0 / ny,
+    ]
+    return w
+
+
+def project_healsparse_to_wcs(
+    mask,
+    wcs: WCS,
+    shape: tuple[int, int],
+) -> np.ndarray:
+    """Project a boolean HealSparse mask onto a 2D image array using a WCS projection.
+
+    Parameters
+    ----------
+    mask : healsparse.HealSparseMap
+        Boolean HealSparse map.
+    wcs : WCS
+        Target WCS projection (e.g. HPX).
+    shape : tuple[int, int]
+        Output image dimensions as (ny, nx).
+
+    Returns
+    -------
+    np.ndarray
+        2D float array of shape (ny, nx) where valid mask pixels are 1.0,
+        unmasked pixels are 0.0, and pixels outside the projection domain are NaN.
+    """
+    ny, nx = shape
+    yy, xx = np.indices((ny, nx), dtype=float)
+    ra, dec = wcs.all_pix2world(xx, yy, 0)
+    finite = np.isfinite(ra) & np.isfinite(dec) & (dec >= -90.0) & (dec <= 90.0)
+
+    img = np.full((ny, nx), np.nan, dtype=float)
+    if np.any(finite):
+        img[finite] = mask.get_values_pos(ra[finite], dec[finite], lonlat=True).astype(
+            float
+        )
+    return img
