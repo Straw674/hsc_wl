@@ -82,13 +82,13 @@ def plot_combined_overview(
     palette: list[str],
 ) -> plt.Figure:
     """Plot the integrated overview: 5 full-sky masks on the left and 3 regional fields on the right."""
-    fig = plt.figure(figsize=(18, 16))
-    subfigs = fig.subfigures(1, 2, width_ratios=[1.0, 1.25], wspace=0.10)
+    fig = plt.figure(figsize=(20, 11))
+    subfigs = fig.subfigures(1, 2, width_ratios=[1.0, 1.45], wspace=0.06)
 
     # ------------------------------------------------------------------
     # Left Subfigure: 5 Full-Sky HPX Panels
     # ------------------------------------------------------------------
-    subfigs[0].subplots_adjust(top=0.96, bottom=0.04, hspace=0.40)
+    subfigs[0].subplots_adjust(top=0.97, bottom=0.03, hspace=0.35)
     for i, group in enumerate(mask_groups):
         label = group["label"]
         color = palette[i % len(palette)]
@@ -106,13 +106,24 @@ def plot_combined_overview(
             f"({len(group['all_config_names'])} configs)",
             fontsize=8.5,
             fontweight="normal",
-            pad=3,
+            pad=2,
         )
 
     # ------------------------------------------------------------------
     # Right Subfigure: 3 Regional HPX Panels (HECTOMAP, SPRING, FALL)
     # ------------------------------------------------------------------
-    subfigs[1].subplots_adjust(top=0.96, bottom=0.04, hspace=0.30)
+    height_ratios = [reg["shape"][0] for reg in regional_data]
+    gs_right = subfigs[1].add_gridspec(
+        3,
+        1,
+        height_ratios=height_ratios,
+        hspace=0.48,
+        top=0.96,
+        bottom=0.04,
+        left=0.05,
+        right=0.98,
+    )
+
     cmap_reg = mpl.colors.ListedColormap(["#f2f4f7", "#9ecae1", "#2ca02c"])
     cmap_reg.set_bad("white")
 
@@ -120,7 +131,7 @@ def plot_combined_overview(
     cmap_hecto.set_bad("white")
 
     for j, reg in enumerate(regional_data):
-        ax = subfigs[1].add_subplot(3, 1, j + 1, projection=reg["wcs"])
+        ax = subfigs[1].add_subplot(gs_right[j], projection=reg["wcs"])
         cmap_use = cmap_hecto if reg.get("has_sliver", False) else cmap_reg
         vmax_use = 3.0 if reg.get("has_sliver", False) else 2.0
 
@@ -130,14 +141,20 @@ def plot_combined_overview(
         if reg["ra_unit"] == "deg":
             ax.coords["ra"].set_major_formatter("d")
             ax.coords["ra"].set_ticks(spacing=reg["ra_spacing"] * u.deg)
-            ax.coords["ra"].set_axislabel("RA [deg]", fontsize=8)
+            ax.coords["ra"].set_ticks_position("b")
+            ax.coords["ra"].set_ticklabel_position("b")
+            ax.coords["ra"].set_axislabel("RA [deg]", fontsize=8.5)
         else:
             ax.coords["ra"].set_ticks(spacing=reg["ra_spacing"] * 15 * u.deg)
-            ax.coords["ra"].set_axislabel("RA", fontsize=8)
+            ax.coords["ra"].set_ticks_position("b")
+            ax.coords["ra"].set_ticklabel_position("b")
+            ax.coords["ra"].set_axislabel("RA", fontsize=8.5)
 
         ax.coords["dec"].set_ticks(spacing=reg["dec_spacing"] * u.deg)
-        ax.coords["dec"].set_axislabel("Dec", fontsize=8)
-        ax.set_title(reg["title"], fontsize=8.5, fontweight="normal", pad=3)
+        ax.coords["dec"].set_ticks_position("l")
+        ax.coords["dec"].set_ticklabel_position("l")
+        ax.coords["dec"].set_axislabel("Dec", fontsize=8.5)
+        ax.set_title(reg["title"], fontsize=8.5, fontweight="normal", pad=2)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, bbox_inches="tight", dpi=300)
@@ -150,8 +167,18 @@ def plot_standalone_regional_fields(
     output_path: Path,
 ) -> plt.Figure:
     """Plot a dedicated, high-resolution standalone figure of the 3 survey regions."""
-    fig = plt.figure(figsize=(14, 12))
-    plt.subplots_adjust(top=0.96, bottom=0.05, hspace=0.32)
+    fig = plt.figure(figsize=(14, 8))
+    height_ratios = [reg["shape"][0] for reg in regional_data]
+    gs = fig.add_gridspec(
+        3,
+        1,
+        height_ratios=height_ratios,
+        hspace=0.38,
+        top=0.94,
+        bottom=0.07,
+        left=0.07,
+        right=0.97,
+    )
 
     cmap_reg = mpl.colors.ListedColormap(["#f2f4f7", "#9ecae1", "#2ca02c"])
     cmap_reg.set_bad("white")
@@ -160,7 +187,7 @@ def plot_standalone_regional_fields(
     cmap_hecto.set_bad("white")
 
     for j, reg in enumerate(regional_data):
-        ax = fig.add_subplot(3, 1, j + 1, projection=reg["wcs"])
+        ax = fig.add_subplot(gs[j], projection=reg["wcs"])
         cmap_use = cmap_hecto if reg.get("has_sliver", False) else cmap_reg
         vmax_use = 3.0 if reg.get("has_sliver", False) else 2.0
 
@@ -170,14 +197,20 @@ def plot_standalone_regional_fields(
         if reg["ra_unit"] == "deg":
             ax.coords["ra"].set_major_formatter("d")
             ax.coords["ra"].set_ticks(spacing=reg["ra_spacing"] * u.deg)
+            ax.coords["ra"].set_ticks_position("b")
+            ax.coords["ra"].set_ticklabel_position("b")
             ax.coords["ra"].set_axislabel("RA [deg]", fontsize=9)
         else:
             ax.coords["ra"].set_ticks(spacing=reg["ra_spacing"] * 15 * u.deg)
+            ax.coords["ra"].set_ticks_position("b")
+            ax.coords["ra"].set_ticklabel_position("b")
             ax.coords["ra"].set_axislabel("RA", fontsize=9)
 
         ax.coords["dec"].set_ticks(spacing=reg["dec_spacing"] * u.deg)
+        ax.coords["dec"].set_ticks_position("l")
+        ax.coords["dec"].set_ticklabel_position("l")
         ax.coords["dec"].set_axislabel("Dec", fontsize=9)
-        ax.set_title(reg["title"], fontsize=9.5, fontweight="normal", pad=4)
+        ax.set_title(reg["title"], fontsize=9.0, fontweight="normal", pad=4)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, bbox_inches="tight", dpi=300)
@@ -189,8 +222,7 @@ def plot_standalone_regional_fields(
 # Global Configuration
 
 OUTPUT_DIR = project_root / "output" / "plots_for_agents"
-SHAPE_FULL = (400, 800)
-SHAPE_REGIONAL = (320, 800)
+SHAPE_FULL = (360, 720)
 COLOR_PALETTE = ["#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#ff7f0e"]
 
 # 1. Full-sky HPX WCS (unrotated native celestial orientation)
@@ -201,36 +233,41 @@ WCS_FULL = make_hpx_wcs(
     center_dec=0.0,
 )
 
-# 2. Regional HPX WCS projections (unrotated, ref_dec=0.0 for horizontal parallels)
+# 2. Regional HPX WCS projections with isotropic pixel scale (|cdelt_ra| = cdelt_dec)
+NX_REG = 1000
+SHAPE_HECTO = (95, NX_REG)
+SHAPE_SPRING = (130, NX_REG)
+SHAPE_FALL = (220, NX_REG)
+
 WCS_HECTO = make_shifted_hpx_wcs(
-    nx=SHAPE_REGIONAL[1],
-    ny=SHAPE_REGIONAL[0],
-    center_ra=231.0,
+    nx=SHAPE_HECTO[1],
+    ny=SHAPE_HECTO[0],
+    center_ra=231.4,
     center_dec=43.3,
-    cdelt_ra=-0.055,
-    cdelt_dec=0.018,
+    cdelt_ra=-0.042,
+    cdelt_dec=0.042,
     ref_ra=180.0,
     ref_dec=0.0,
 )
 
 WCS_SPRING = make_shifted_hpx_wcs(
-    nx=SHAPE_REGIONAL[1],
-    ny=SHAPE_REGIONAL[0],
+    nx=SHAPE_SPRING[1],
+    ny=SHAPE_SPRING[0],
     center_ra=177.0,
     center_dec=1.4,
-    cdelt_ra=-0.130,
-    cdelt_dec=0.040,
+    cdelt_ra=-0.104,
+    cdelt_dec=0.104,
     ref_ra=180.0,
     ref_dec=0.0,
 )
 
 WCS_FALL = make_shifted_hpx_wcs(
-    nx=SHAPE_REGIONAL[1],
-    ny=SHAPE_REGIONAL[0],
-    center_ra=0.0,
-    center_dec=0.0,
-    cdelt_ra=-0.125,
-    cdelt_dec=0.055,
+    nx=SHAPE_FALL[1],
+    ny=SHAPE_FALL[0],
+    center_ra=5.0,
+    center_dec=-0.25,
+    cdelt_ra=-0.082,
+    cdelt_dec=0.082,
     ref_ra=0.0,
     ref_dec=0.0,
 )
@@ -278,14 +315,14 @@ images_full = build_fullsky_mask_images(
 regional_data = [
     {
         "name": "HECTOMAP",
+        "shape": SHAPE_HECTO,
         "title": (
-            "HECTOMAP Field (North, HPX Projection)\n"
-            "Light Blue: HSC Y3 (S19A) | Green: S16A Baseline | Red: RA > 250 Sliver\n"
+            "HECTOMAP Field (North, HPX Projection) — Light Blue: HSC Y3 (S19A) | Green: S16A Baseline | Red: RA > 250 Sliver\n"
             "Y3 Full: 43.44 deg² | Box (RA≤250): 43.37 deg² | S16A: 12.23 deg² (28.2%)"
         ),
         "wcs": WCS_HECTO,
         "img": build_regional_layer_image(
-            mask_y3, s16a_pix, WCS_HECTO, SHAPE_REGIONAL, include_sliver=True
+            mask_y3, s16a_pix, WCS_HECTO, SHAPE_HECTO, include_sliver=True
         ),
         "ra_unit": "deg",
         "ra_spacing": 5,
@@ -294,14 +331,14 @@ regional_data = [
     },
     {
         "name": "SPRING",
+        "shape": SHAPE_SPRING,
         "title": (
-            "SPRING Field (GAMA09H + WIDE12H + GAMA15H, HPX Projection)\n"
-            "Light Blue: HSC Y3 (S19A) | Green: S16A Baseline\n"
+            "SPRING Field (GAMA09H + WIDE12H + GAMA15H, HPX Projection) — Light Blue: HSC Y3 (S19A) | Green: S16A Baseline\n"
             "Y3 (S19A): 265.33 deg² | S16A: 76.78 deg² (28.9%)"
         ),
         "wcs": WCS_SPRING,
         "img": build_regional_layer_image(
-            mask_y3, s16a_pix, WCS_SPRING, SHAPE_REGIONAL, include_sliver=False
+            mask_y3, s16a_pix, WCS_SPRING, SHAPE_SPRING, include_sliver=False
         ),
         "ra_unit": "hour",
         "ra_spacing": 2,
@@ -310,14 +347,14 @@ regional_data = [
     },
     {
         "name": "FALL",
+        "shape": SHAPE_FALL,
         "title": (
-            "FALL Field (VVDS + XMM, HPX Projection)\n"
-            "Light Blue: HSC Y3 (S19A) | Green: S16A Baseline\n"
+            "FALL Field (VVDS + XMM, HPX Projection) — Light Blue: HSC Y3 (S19A) | Green: S16A Baseline\n"
             "Y3 (S19A): 130.72 deg² | S16A: 48.82 deg² (37.3%)"
         ),
         "wcs": WCS_FALL,
         "img": build_regional_layer_image(
-            mask_y3, s16a_pix, WCS_FALL, SHAPE_REGIONAL, include_sliver=False
+            mask_y3, s16a_pix, WCS_FALL, SHAPE_FALL, include_sliver=False
         ),
         "ra_unit": "hour",
         "ra_spacing": 2,
