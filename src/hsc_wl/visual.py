@@ -607,6 +607,39 @@ def make_hpx_wcs(
     return w
 
 
+def make_shifted_hpx_wcs(
+    nx: int,
+    ny: int,
+    center_ra: float,
+    center_dec: float,
+    cdelt_ra: float,
+    cdelt_dec: float,
+    ref_ra: float = 180.0,
+    ref_dec: float = 0.0,
+) -> WCS:
+    """Build an unrotated, shifted astropy.wcs.WCS HPX projection for regional sky views.
+
+    By fixing ref_dec=0.0 (the celestial equator), parallels remain horizontal
+    straight lines, while crpix is dynamically computed so (center_ra, center_dec)
+    is centered at (nx/2, ny/2).
+    """
+    w_base = WCS(naxis=2)
+    w_base.wcs.ctype = ["RA---HPX", "DEC--HPX"]
+    w_base.wcs.cunit = ["deg", "deg"]
+    w_base.wcs.crval = [ref_ra, ref_dec]
+    w_base.wcs.crpix = [0.0, 0.0]
+    w_base.wcs.cdelt = [cdelt_ra, cdelt_dec]
+    px0, py0 = w_base.all_world2pix(center_ra, center_dec, 0)
+
+    w = WCS(naxis=2)
+    w.wcs.ctype = ["RA---HPX", "DEC--HPX"]
+    w.wcs.cunit = ["deg", "deg"]
+    w.wcs.crval = [ref_ra, ref_dec]
+    w.wcs.crpix = [nx / 2.0 - px0, ny / 2.0 - py0]
+    w.wcs.cdelt = [cdelt_ra, cdelt_dec]
+    return w
+
+
 def project_healsparse_to_wcs(
     mask,
     wcs: WCS,
