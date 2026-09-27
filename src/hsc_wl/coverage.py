@@ -610,8 +610,8 @@ def group_configs_by_mask(
             desc = "Full HSC Y3 shape catalog mask across all canonical fields."
         elif is_all_fields and is_s16a:
             label = "s16a_full"
-            title = "S16A Baseline Survey Footprint (S16A ∩ Y3)"
-            desc = "S16A survey area ∩ HSC Y3 shape mask across all fields."
+            title = "S16A Baseline Survey Footprint (S16A & Y3)"
+            desc = "S16A survey area & HSC Y3 shape mask across all fields."
         elif fields == ("HECTOMAP",) and not is_s16a and ra_box is None:
             label = "hectomap_full"
             title = "HECTOMAP Full Field Footprint (HSC Y3 HECTOMAP)"
@@ -622,8 +622,8 @@ def group_configs_by_mask(
             desc = "HSC Y3 HECTOMAP field clipped to RA [210, 250] and Dec [42, 44.5]."
         elif fields == ("HECTOMAP",) and is_s16a:
             label = "hectomap_box_s16a"
-            title = "HECTOMAP Boxed S16A Footprint (Box ∩ S16A ∩ Y3)"
-            desc = "HECTOMAP box [210, 250], [42, 44.5] ∩ S16A survey footprint ∩ Y3."
+            title = "HECTOMAP Boxed S16A Footprint (Box & S16A & Y3)"
+            desc = "HECTOMAP box [210, 250], [42, 44.5] & S16A survey footprint & Y3."
         else:
             label = f"mask_{len(results)}"
             title = f"Custom Mask ({label})"
