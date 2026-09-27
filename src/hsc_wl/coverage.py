@@ -36,7 +36,7 @@ from astropy.cosmology import Planck18
 from astropy.table import Table
 
 if TYPE_CHECKING:
-    from hsc_wl.config import LensCatalogConfig
+    from hsc_wl.config import LensCatalogConfig, WLConfig
 
 logger = logging.getLogger(__name__)
 
@@ -526,3 +526,122 @@ def field_areas_deg2(root: Path | None = None) -> dict[str, float]:
         areas[f] = cnt * pix_area
     areas["Total"] = len(valid_pixels) * pix_area
     return areas
+
+
+def get_mask_signature(lens_cfg: LensCatalogConfig) -> tuple:
+    """Return a hashable signature that uniquely identifies the configuration mask.
+
+    Parameters
+    ----------
+    lens_cfg : LensCatalogConfig
+        Lens catalog configuration.
+
+    Returns
+    -------
+    tuple
+        ``(canonical_fields, survey_overlap, ra_range, dec_range)``.
+    """
+    canonical_fields = expand_field_names(lens_cfg.fields)
+    overlap = (
+        lens_cfg.survey_overlap.strip().lower()
+        if lens_cfg.survey_overlap is not None
+        else None
+    )
+    ra_box = tuple(lens_cfg.ra_range) if lens_cfg.ra_range is not None else None
+    dec_box = tuple(lens_cfg.dec_range) if lens_cfg.dec_range is not None else None
+    return (canonical_fields, overlap, ra_box, dec_box)
+
+
+def group_configs_by_mask(
+    registry: dict[str, WLConfig] | None = None,
+    root: Path | None = None,
+) -> list[dict]:
+    """Group run configurations by their unique HealSparse mask.
+
+    Parameters
+    ----------
+    registry : dict[str, WLConfig] or None, optional
+        Run registry to inspect. Defaults to :data:`hsc_wl.config.RUN_REGISTRY`.
+    root : Path or None, optional
+        Project root directory.
+
+    Returns
+    -------
+    list[dict]
+        List of unique mask group dictionaries, sorted by effective area descending.
+        Each dictionary contains:
+        - ``'signature'``: 4-tuple mask signature.
+        - ``'label'``: short identifier (e.g. ``'full_y3'``).
+        - ``'title'``: human-readable name.
+        - ``'description'``: descriptive summary of the footprint.
+        - ``'sample_config_name'``: representative config name.
+        - ``'all_config_names'``: tuple of all matching config labels.
+        - ``'lens_config'``: the representative :class:`LensCatalogConfig`.
+        - ``'area_deg2'``: effective mask area in deg^2.
+        - ``'volume_factor'``: volume factor relative to S16A reference.
+    """
+    if registry is None:
+        from hsc_wl.config import RUN_REGISTRY
+
+        registry = RUN_REGISTRY
+
+    groups: dict[tuple, list[str]] = {}
+    sample_lens: dict[tuple, LensCatalogConfig] = {}
+
+    for name, cfg in registry.items():
+        sig = get_mask_signature(cfg.lens)
+        if sig not in groups:
+            groups[sig] = []
+            sample_lens[sig] = cfg.lens
+        groups[sig].append(name)
+
+    results = []
+    for sig, config_names in groups.items():
+        lens_cfg = sample_lens[sig]
+        area, factor = resolve_area_and_factor(lens_cfg, root)
+
+        fields, overlap, ra_box, dec_box = sig
+        is_all_fields = len(fields) == len(CANONICAL_FIELDS)
+        is_s16a = overlap == "s16a"
+
+        if is_all_fields and not is_s16a:
+            label = "full_y3"
+            title = "Full HSC Y3 Survey Footprint"
+            desc = "Full HSC Y3 shape catalog mask across all canonical fields."
+        elif is_all_fields and is_s16a:
+            label = "s16a_full"
+            title = "S16A Baseline Survey Footprint (S16A ∩ Y3)"
+            desc = "S16A survey area ∩ HSC Y3 shape mask across all fields."
+        elif fields == ("HECTOMAP",) and not is_s16a and ra_box is None:
+            label = "hectomap_full"
+            title = "HECTOMAP Full Field Footprint (HSC Y3 HECTOMAP)"
+            desc = "Natural HSC Y3 HECTOMAP field (Dec > 30.0), no box cuts."
+        elif fields == ("HECTOMAP",) and not is_s16a and ra_box is not None:
+            label = "hectomap_box"
+            title = "HECTOMAP Boxed Sub-region (RA 210-250, Dec 42-44.5)"
+            desc = "HSC Y3 HECTOMAP field clipped to RA [210, 250] and Dec [42, 44.5]."
+        elif fields == ("HECTOMAP",) and is_s16a:
+            label = "hectomap_box_s16a"
+            title = "HECTOMAP Boxed S16A Footprint (Box ∩ S16A ∩ Y3)"
+            desc = "HECTOMAP box [210, 250], [42, 44.5] ∩ S16A survey footprint ∩ Y3."
+        else:
+            label = f"mask_{len(results)}"
+            title = f"Custom Mask ({label})"
+            desc = f"Fields={fields}, overlap={overlap}, box={ra_box},{dec_box}"
+
+        results.append(
+            {
+                "signature": sig,
+                "label": label,
+                "title": title,
+                "description": desc,
+                "sample_config_name": config_names[0],
+                "all_config_names": tuple(config_names),
+                "lens_config": lens_cfg,
+                "area_deg2": area,
+                "volume_factor": factor,
+            }
+        )
+
+    results.sort(key=lambda item: item["area_deg2"], reverse=True)
+    return results
