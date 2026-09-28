@@ -19,7 +19,9 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from hsc_wl.coverage import (
+    REFERENCE_RANDOM_PATH,
     S23B_PHOTOMETRY_DIR,
+    Y3_MASK_PATH,
     build_config_mask,
     group_configs_by_mask,
     load_s16a_pixset_1024,
@@ -129,11 +131,28 @@ def add_coverage_legend(fig):
     fig.legend(
         handles=points,
         loc="lower center",
+        bbox_to_anchor=(0.5, 0.080),
         ncol=4,
         frameon=False,
         fontsize=8,
         title="S23B: scalar sample; halo / ghost / blooming = False",
         title_fontsize=8,
+    )
+    sources = (
+        f"S16A: random catalog ({Path(REFERENCE_RANDOM_PATH).name}); footprint NSIDE=1024\n"
+        f"Y3: shape catalog footprint mask ({Path(Y3_MASK_PATH).name}); NSIDE=8192\n"
+        "S23B: uncut s23b_{field}_scalar.parquet; BSM-clean sample\n"
+        "Regional points: S23B samples; colors: membership in S16A / Y3 footprints"
+    )
+    fig.text(
+        0.5,
+        0.015,
+        sources,
+        ha="center",
+        va="bottom",
+        fontsize=8,
+        fontweight="normal",
+        linespacing=1.4,
     )
 
 
@@ -153,7 +172,7 @@ def plot_combined_overview(
     # Left Subfigure: Full-Sky HPX Panels
     # ------------------------------------------------------------------
     n_groups = len(mask_groups)
-    subfigs[0].subplots_adjust(top=0.97, bottom=0.03, hspace=0.38)
+    subfigs[0].subplots_adjust(top=0.97, bottom=0.15, hspace=0.38)
     for i, group in enumerate(mask_groups):
         label = group["label"]
         color = palette[i % len(palette)]
@@ -184,7 +203,7 @@ def plot_combined_overview(
         height_ratios=height_ratios,
         hspace=0.48,
         top=0.96,
-        bottom=0.12,
+        bottom=0.20,
         left=0.05,
         right=0.98,
     )
@@ -233,7 +252,7 @@ def plot_standalone_regional_fields(
         height_ratios=height_ratios,
         hspace=0.45,
         top=0.93,
-        bottom=0.10,
+        bottom=0.20,
         left=0.07,
         right=0.97,
     )
