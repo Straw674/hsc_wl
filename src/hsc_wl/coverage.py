@@ -58,6 +58,18 @@ REFERENCE_RANDOM_PATH: str = (
     "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits"
 )
 
+#: S23B Y3-cut HealSparse mask path relative to project root.
+S23B_CUT_MASK_PATH: str = "data/mask/s23b_y3_cut_mask_nside4096.hs"
+
+#: Default directory containing S23B photometry parquet files from cluster_finder.
+S23B_PHOTOMETRY_DIR: Path = Path.home() / "cluster_finder" / "data"
+
+S23B_FIELD_CUT_FILES: dict[str, str] = {
+    "HECTOMAP": "s23b_photometry_hectomap/s23b_hectomap_y3_cut_scalar.parquet",
+    "SPRING": "s23b_photometry_spring/s23b_spring_y3_cut_scalar.parquet",
+    "FALL": "s23b_photometry_fall/s23b_fall_y3_cut_scalar.parquet",
+}
+
 CANONICAL_FIELDS: tuple[str, ...] = (
     "GAMA09H",
     "WIDE12H",
@@ -212,6 +224,146 @@ def load_s16a_pixset_1024(root: Path | None = None) -> set[int]:
     dec = np.asarray(t["dec"], dtype=np.float64)
     pix = hp.ang2pix(1024, ra, dec, nest=True, lonlat=True)
     return set(np.unique(pix).tolist())
+
+
+def load_s23b_cut_mask(
+    root: Path | None = None,
+    nside_sparse: int = 4096,
+    s23b_dir: Path | None = None,
+    cache: bool = True,
+) -> hsp.HealSparseMap:
+    """Load or generate the HealSparse boolean mask for S23B Y3-cut photometric galaxies.
+
+    Parameters
+    ----------
+    root : Path or None
+        Project root directory.
+    nside_sparse : int
+        NSIDE resolution for the HealSparse map (default: 4096).
+    s23b_dir : Path or None
+        Base directory containing ``s23b_photometry_{field}``.
+    cache : bool
+        If True, reads from or caches to ``data/mask/s23b_y3_cut_mask_nside{nside_sparse}.hs``.
+
+    Returns
+    -------
+    hsp.HealSparseMap
+        Bit-packed boolean HealSparseMap for S23B cut galaxies.
+    """
+    root_dir = _find_root(root)
+    cached_path = root_dir / f"data/mask/s23b_y3_cut_mask_nside{nside_sparse}.hs"
+    if cache and cached_path.exists():
+        return hsp.HealSparseMap.read(str(cached_path))
+
+    import pyarrow.parquet as pq
+
+    base_dir = s23b_dir if s23b_dir is not None else S23B_PHOTOMETRY_DIR
+    pix_set: set[int] = set()
+
+    for field_key, rel_path in S23B_FIELD_CUT_FILES.items():
+        file_path = base_dir / rel_path
+        if not file_path.exists():
+            raise FileNotFoundError(
+                f"S23B cut parquet catalog for {field_key} not found at {file_path}"
+            )
+        tab = pq.read_table(file_path, columns=["ra", "dec"])
+        ra = tab["ra"].to_numpy()
+        dec = tab["dec"].to_numpy()
+        pix = hp.ang2pix(nside_sparse, ra, dec, nest=True, lonlat=True)
+        pix_set.update(np.unique(pix))
+
+    unique_pix = np.array(sorted(pix_set), dtype=np.int64)
+    mask = hsp.HealSparseMap.make_empty(
+        nside_coverage=NSIDE_COVERAGE,
+        nside_sparse=nside_sparse,
+        dtype=bool,
+        bit_packed=True,
+        sentinel=False,
+    )
+    if len(unique_pix) > 0:
+        mask.update_values_pix(unique_pix, np.ones(len(unique_pix), dtype=bool))
+
+    if cache:
+        cached_path.parent.mkdir(parents=True, exist_ok=True)
+        mask.write(str(cached_path), clobber=True)
+
+    return mask
+
+
+def load_s23b_cut_pixsets(
+    s23b_dir: Path | None = None,
+    nside: int = 1024,
+) -> dict[str, set[int]]:
+    """Load unique nested HEALPix pixel sets per canonical field for S23B cut galaxies.
+
+    Parameters
+    ----------
+    s23b_dir : Path or None
+        Base directory containing ``s23b_photometry_{field}``.
+    nside : int
+        HEALPix NSIDE resolution (default: 1024).
+
+    Returns
+    -------
+    dict[str, set[int]]
+        Dictionary mapping field names ('HECTOMAP', 'SPRING', 'FALL', 'ALL') to pixel sets.
+    """
+    import pyarrow.parquet as pq
+
+    base_dir = s23b_dir if s23b_dir is not None else S23B_PHOTOMETRY_DIR
+    pixsets: dict[str, set[int]] = {}
+    all_pix: set[int] = set()
+
+    for field_key, rel_path in S23B_FIELD_CUT_FILES.items():
+        file_path = base_dir / rel_path
+        if not file_path.exists():
+            raise FileNotFoundError(
+                f"S23B cut parquet catalog for {field_key} not found at {file_path}"
+            )
+        tab = pq.read_table(file_path, columns=["ra", "dec"])
+        ra = tab["ra"].to_numpy()
+        dec = tab["dec"].to_numpy()
+        pix = set(
+            np.unique(hp.ang2pix(nside, ra, dec, nest=True, lonlat=True)).tolist()
+        )
+        pixsets[field_key] = pix
+        all_pix.update(pix)
+
+    pixsets["ALL"] = all_pix
+    return pixsets
+
+
+def s23b_cut_field_areas_deg2(
+    root: Path | None = None,
+    nside_sparse: int = 4096,
+) -> dict[str, float]:
+    """Compute effective area per field for S23B Y3-cut catalog in deg^2.
+
+    Parameters
+    ----------
+    root : Path or None
+        Project root directory.
+    nside_sparse : int
+        Sparse NSIDE resolution.
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary with areas for HECTOMAP, SPRING, FALL, and Total.
+    """
+    mask = load_s23b_cut_mask(root=root, nside_sparse=nside_sparse)
+    valid_pixels = mask.valid_pixels
+    pix_area = hp.nside2pixarea(mask.nside_sparse, degrees=True)
+    ra_pix, dec_pix = hp.pix2ang(
+        mask.nside_sparse, valid_pixels, nest=True, lonlat=True
+    )
+
+    areas: dict[str, float] = {}
+    for f in ("HECTOMAP", "SPRING", "FALL"):
+        cnt = int(np.sum(in_field(ra_pix, dec_pix, f)))
+        areas[f] = cnt * pix_area
+    areas["Total"] = len(valid_pixels) * pix_area
+    return areas
 
 
 # ---------------------------------------------------------------------------
