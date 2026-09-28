@@ -70,6 +70,7 @@ CANONICAL_FIELDS: tuple[str, ...] = (
 FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "SPRING": ("GAMA09H", "WIDE12H", "GAMA15H"),
     "AUTUMN": ("XMM", "VVDS"),
+    "FALL": ("XMM", "VVDS"),
     "NORTH": ("HECTOMAP",),
     "ALL": CANONICAL_FIELDS,
 }

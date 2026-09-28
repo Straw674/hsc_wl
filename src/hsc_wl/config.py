@@ -352,12 +352,8 @@ _PATH_AMICO = get_latest_cluster_catalog(
 _PATH_PLS = "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog.parquet"
 
 # Direct 2D r-z profile subtraction cluster catalogs (Richness, Total Luminosity)
-_PATH_RZ_DIFF = (
-    "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_cluster_catalog.parquet"
-)
-_PATH_RZ_DIFF_LUM = (
-    "/Users/xinq/cluster_finder/output/rz_diff/rz_diff_lum_cluster_catalog.parquet"
-)
+_PATH_RZ_DIFF = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/rz_diff_cluster_catalog.parquet"
+_PATH_RZ_DIFF_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/rz_diff_lum_cluster_catalog.parquet"
 
 # Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
 _PATH_REGRESSION = (
@@ -518,7 +514,6 @@ def _infer_footprint(
             "pls",
             "cca",
             "regression",
-            "rz_diff",
             "amico",
             "ideal",
         )
@@ -617,14 +612,16 @@ def _cfg(
 #   pls_specz                    – same, with reference spectroscopic redshift (specz)
 #   pls_s16a                     – same, restricted to s16a random ∩ HectoMAP box
 #   pls_s16a_specz               – same, with reference spectroscopic redshift (specz)
-#   rz_diff                      – Direct 2D r-z profile subtraction richness catalog (no model, no NMS)
+#   rz_diff                      – Direct 2D r-z profile subtraction richness catalog (full Y3 footprint)
 #   rz_diff_specz                – same, with reference spectroscopic redshift (specz)
-#   rz_diff_s16a                 – same, restricted to s16a random ∩ HectoMAP box
-#   rz_diff_s16a_specz           – same, with reference spectroscopic redshift (specz)
-#   rz_diff_lum                  – Direct 2D r-z profile subtraction total luminosity catalog (no model, no NMS)
+#   rz_diff_hectomap             – same, HectoMap sub-region
+#   rz_diff_hecto_s16a           – same, HectoMAP box ∩ s16a random footprint
+#   rz_diff_s16a                 – same, restricted to s16a random footprint
+#   rz_diff_lum                  – Direct 2D r-z profile subtraction total luminosity catalog (full Y3 footprint)
 #   rz_diff_lum_specz            – same, with reference spectroscopic redshift (specz)
-#   rz_diff_lum_s16a             – same, restricted to s16a random ∩ HectoMAP box
-#   rz_diff_lum_s16a_specz       – same, with reference spectroscopic redshift (specz)
+#   rz_diff_lum_hectomap         – same, HectoMap sub-region
+#   rz_diff_lum_hecto_s16a       – same, HectoMAP box ∩ s16a random footprint
+#   rz_diff_lum_s16a             – same, restricted to s16a random footprint
 #   regression                   – Linear regression against WL mass (ElasticNet, no NMS)
 #   regression_specz             – same, with reference spectroscopic redshift (specz)
 #   regression_s16a              – same, restricted to s16a random ∩ HectoMAP box
@@ -1171,11 +1168,12 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     ),
     # -----------------------------------------------------------------------
     # Direct 2D r-z profile subtraction cluster catalog (no model, no NMS)
+    # Full footprint (Spring + Fall + HectoMAP, Y3 mask)
     # -----------------------------------------------------------------------
     "rz_diff_4bin": _cfg(
         "rz_diff_4bin",
         _PATH_RZ_DIFF,
-        _RAND_HECTOMAP,
+        _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
@@ -1184,7 +1182,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "rz_diff_1bin": _cfg(
         "rz_diff_1bin",
         _PATH_RZ_DIFF,
-        _RAND_HECTOMAP,
+        _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
@@ -1193,7 +1191,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "rz_diff_specz_4bin": _cfg(
         "rz_diff_specz_4bin",
         _PATH_RZ_DIFF,
-        _RAND_HECTOMAP,
+        _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
@@ -1203,15 +1201,100 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "rz_diff_specz_1bin": _cfg(
         "rz_diff_specz_1bin",
         _PATH_RZ_DIFF,
-        _RAND_HECTOMAP,
+        _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
         redshift_type="specz",
     ),
-    # s16a footprint ∩ HectoMAP box – for direct comparison with s16a-based
-    # and PDR3 catalogs on the same sky patch.
+    # HectoMap sub-region
+    "rz_diff_hectomap_4bin": _cfg(
+        "rz_diff_hectomap_4bin",
+        _PATH_RZ_DIFF,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_hectomap_1bin": _cfg(
+        "rz_diff_hectomap_1bin",
+        _PATH_RZ_DIFF,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_hectomap_specz_4bin": _cfg(
+        "rz_diff_hectomap_specz_4bin",
+        _PATH_RZ_DIFF,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_hectomap_specz_1bin": _cfg(
+        "rz_diff_hectomap_specz_1bin",
+        _PATH_RZ_DIFF,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    # HectoMAP box ∩ s16a random footprint
+    "rz_diff_hecto_s16a_4bin": _cfg(
+        "rz_diff_hecto_s16a_4bin",
+        _PATH_RZ_DIFF,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_hecto_s16a_1bin": _cfg(
+        "rz_diff_hecto_s16a_1bin",
+        _PATH_RZ_DIFF,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_hecto_s16a_specz_4bin": _cfg(
+        "rz_diff_hecto_s16a_specz_4bin",
+        _PATH_RZ_DIFF,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_hecto_s16a_specz_1bin": _cfg(
+        "rz_diff_hecto_s16a_specz_1bin",
+        _PATH_RZ_DIFF,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    # Full survey S16A footprint overlap
     "rz_diff_s16a_4bin": _cfg(
         "rz_diff_s16a_4bin",
         _PATH_RZ_DIFF,
@@ -1220,7 +1303,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
-        **_BOX_HECTOMAP,
     ),
     "rz_diff_s16a_1bin": _cfg(
         "rz_diff_s16a_1bin",
@@ -1230,7 +1312,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
-        **_BOX_HECTOMAP,
     ),
     "rz_diff_s16a_specz_4bin": _cfg(
         "rz_diff_s16a_specz_4bin",
@@ -1241,7 +1322,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
         redshift_type="specz",
-        **_BOX_HECTOMAP,
     ),
     "rz_diff_s16a_specz_1bin": _cfg(
         "rz_diff_s16a_specz_1bin",
@@ -1252,15 +1332,15 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
         redshift_type="specz",
-        **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
-    # Direct 2D r-z profile subtraction: Total Luminosity (Sat + BCG) optimal configuration
+    # Direct 2D r-z profile subtraction: Total Luminosity (Sat + BCG)
+    # Full footprint (Spring + Fall + HectoMAP, Y3 mask)
     # -----------------------------------------------------------------------
     "rz_diff_lum_4bin": _cfg(
         "rz_diff_lum_4bin",
         _PATH_RZ_DIFF_LUM,
-        _RAND_HECTOMAP,
+        _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
@@ -1269,7 +1349,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "rz_diff_lum_1bin": _cfg(
         "rz_diff_lum_1bin",
         _PATH_RZ_DIFF_LUM,
-        _RAND_HECTOMAP,
+        _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
@@ -1278,7 +1358,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "rz_diff_lum_specz_4bin": _cfg(
         "rz_diff_lum_specz_4bin",
         _PATH_RZ_DIFF_LUM,
-        _RAND_HECTOMAP,
+        _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
@@ -1288,13 +1368,100 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     "rz_diff_lum_specz_1bin": _cfg(
         "rz_diff_lum_specz_1bin",
         _PATH_RZ_DIFF_LUM,
-        _RAND_HECTOMAP,
+        _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
         redshift_type="specz",
     ),
+    # HectoMap sub-region
+    "rz_diff_lum_hectomap_4bin": _cfg(
+        "rz_diff_lum_hectomap_4bin",
+        _PATH_RZ_DIFF_LUM,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_hectomap_1bin": _cfg(
+        "rz_diff_lum_hectomap_1bin",
+        _PATH_RZ_DIFF_LUM,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_hectomap_specz_4bin": _cfg(
+        "rz_diff_lum_hectomap_specz_4bin",
+        _PATH_RZ_DIFF_LUM,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_hectomap_specz_1bin": _cfg(
+        "rz_diff_lum_hectomap_specz_1bin",
+        _PATH_RZ_DIFF_LUM,
+        _RAND_HECTOMAP,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    # HectoMAP box ∩ s16a random footprint
+    "rz_diff_lum_hecto_s16a_4bin": _cfg(
+        "rz_diff_lum_hecto_s16a_4bin",
+        _PATH_RZ_DIFF_LUM,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_hecto_s16a_1bin": _cfg(
+        "rz_diff_lum_hecto_s16a_1bin",
+        _PATH_RZ_DIFF_LUM,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_hecto_s16a_specz_4bin": _cfg(
+        "rz_diff_lum_hecto_s16a_specz_4bin",
+        _PATH_RZ_DIFF_LUM,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_4BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    "rz_diff_lum_hecto_s16a_specz_1bin": _cfg(
+        "rz_diff_lum_hecto_s16a_specz_1bin",
+        _PATH_RZ_DIFF_LUM,
+        _RAND_S16A,
+        columns=_COLS_RZ_DIFF,
+        redshift_range=_Z_RANGE,
+        lens_format="parquet",
+        binning=_DEFAULT_BINNING_1BIN,
+        redshift_type="specz",
+        **_BOX_HECTOMAP,
+    ),
+    # Full survey S16A footprint overlap
     "rz_diff_lum_s16a_4bin": _cfg(
         "rz_diff_lum_s16a_4bin",
         _PATH_RZ_DIFF_LUM,
@@ -1303,7 +1470,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
-        **_BOX_HECTOMAP,
     ),
     "rz_diff_lum_s16a_1bin": _cfg(
         "rz_diff_lum_s16a_1bin",
@@ -1313,7 +1479,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         redshift_range=_Z_RANGE,
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
-        **_BOX_HECTOMAP,
     ),
     "rz_diff_lum_s16a_specz_4bin": _cfg(
         "rz_diff_lum_s16a_specz_4bin",
@@ -1324,7 +1489,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_4BIN,
         redshift_type="specz",
-        **_BOX_HECTOMAP,
     ),
     "rz_diff_lum_s16a_specz_1bin": _cfg(
         "rz_diff_lum_s16a_specz_1bin",
@@ -1335,7 +1499,6 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
         binning=_DEFAULT_BINNING_1BIN,
         redshift_type="specz",
-        **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
     # Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
