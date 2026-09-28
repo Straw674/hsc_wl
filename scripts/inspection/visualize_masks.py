@@ -47,13 +47,13 @@ def build_fullsky_mask_images(
 
 
 def build_regional_data(mask_y3, s16a_pix, regions, samples):
-    """Project masks and classify sampled positions without inferring coverage from gaps."""
+    """Project sampled positions and classify their footprint membership."""
     result = []
     for region in regions:
         wcs, shape = region["wcs"].deepcopy(), region["shape"]
         sample = samples[region["name"]]
         sample_x, sample_y = wcs.all_world2pix(sample["ra"], sample["dec"], 0)
-        # Retain the original mask window and include the uncut catalog extent.
+        # Retain the original regional window and include the uncut catalog extent.
         finite_sample = np.isfinite(sample_x) & np.isfinite(sample_y)
         if finite_sample.any():
             lower = np.floor(
@@ -76,17 +76,6 @@ def build_regional_data(mask_y3, s16a_pix, regions, samples):
             ).astype(int)
             wcs.wcs.crpix -= lower
             shape = (int(upper[1] - lower[1]), int(upper[0] - lower[0]))
-        yy, xx = np.indices(shape, dtype=float)
-        ra, dec = wcs.all_pix2world(xx, yy, 0)
-        finite = np.isfinite(ra) & np.isfinite(dec) & (np.abs(dec) <= 90)
-        y3 = mask_y3.get_values_pos(ra[finite], dec[finite], lonlat=True)
-        s16a = np.isin(
-            hp.ang2pix(1024, ra[finite], dec[finite], nest=True, lonlat=True),
-            list(s16a_pix),
-        )
-        img = np.full(shape, np.nan)
-        img[finite] = y3.astype(int) + 2 * s16a.astype(int)
-        sample = samples[region["name"]]
         ra, dec = sample["ra"].to_numpy(), sample["dec"].to_numpy()
         y3 = mask_y3.get_values_pos(ra, dec, lonlat=True)
         s16a = np.isin(
@@ -98,7 +87,6 @@ def build_regional_data(mask_y3, s16a_pix, regions, samples):
                 region,
                 wcs=wcs,
                 shape=shape,
-                img=img,
                 x=x,
                 y=y,
                 membership=y3.astype(int) + 2 * s16a.astype(int),
@@ -108,10 +96,7 @@ def build_regional_data(mask_y3, s16a_pix, regions, samples):
 
 
 def draw_regional_layer(ax, reg):
-    """Overlay sampled S23B points on independently evaluated S16A and Y3 masks."""
-    cmap = mpl.colors.ListedColormap(["#f2f4f7", "#bdd7e7", "#d9d9d9", "#9e9ac8"])
-    cmap.set_bad("white")
-    ax.imshow(reg["img"], origin="lower", cmap=cmap, vmin=-0.5, vmax=3.5)
+    """Plot S23B samples colored by S16A and Y3 footprint membership."""
     for code, color in enumerate(("#e6550d", "#2171b5", "#636363", "#238b45")):
         selected = reg["membership"] == code
         ax.scatter(
@@ -129,15 +114,7 @@ def draw_regional_layer(ax, reg):
 
 
 def add_coverage_legend(fig):
-    """Distinguish mask membership from sampled S23B membership."""
-    patches = [
-        mpl.patches.Patch(facecolor=color, label=label)
-        for color, label in (
-            ("#bdd7e7", "Y3 only (mask)"),
-            ("#d9d9d9", "S16A only (mask)"),
-            ("#9e9ac8", "S16A + Y3 (masks)"),
-        )
-    ]
+    """Label the footprint combinations represented by S23B samples."""
     points = [
         mpl.lines.Line2D(
             [], [], marker="o", linestyle="", markersize=4, color=color, label=label
@@ -150,7 +127,7 @@ def add_coverage_legend(fig):
         )
     ]
     fig.legend(
-        handles=patches + points,
+        handles=points,
         loc="lower center",
         ncol=4,
         frameon=False,
@@ -247,7 +224,7 @@ def plot_standalone_regional_fields(
     regional_data: list[dict],
     output_path: Path,
 ) -> plt.Figure:
-    """Plot a dedicated, high-resolution standalone figure of the 3 survey regions with 3-version composite layers."""
+    """Plot a dedicated, high-resolution standalone figure of the 3 survey regions with sampled coverage combinations."""
     fig = plt.figure(figsize=(15, 8.8))
     height_ratios = [reg["shape"][0] for reg in regional_data]
     gs = fig.add_gridspec(
@@ -361,8 +338,8 @@ WCS_FALL = make_shifted_hpx_wcs(
 # %% [Stage 1: Project Configured Analysis Masks]
 mask_groups, images_full = prepare_masks(project_root, WCS_FULL, SHAPE_FULL)
 
-# %% [Stage 2: Sample Uncut S23B Photometry and Project Regional Masks]
-S23B_SAMPLE_SIZE = 100_000
+# %% [Stage 2: Sample Uncut S23B Photometry and Classify Coverage]
+S23B_SAMPLE_SIZE = 1_000_000
 S23B_RANDOM_SEED = 42
 S23B_BATCH_SIZE = 250_000
 REGIONS = [
