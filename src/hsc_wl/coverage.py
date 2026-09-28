@@ -163,6 +163,13 @@ def in_field(ra: np.ndarray, dec: np.ndarray, field_name: str) -> np.ndarray:
         Boolean array.
     """
     f_upper = field_name.strip().upper()
+    if f_upper in FIELD_ALIASES:
+        sub_fields = FIELD_ALIASES[f_upper]
+        keep = np.zeros(len(ra), dtype=bool)
+        for sf in sub_fields:
+            keep |= in_field(ra, dec, sf)
+        return keep
+
     if f_upper == "HECTOMAP":
         return dec > 30.0
 
