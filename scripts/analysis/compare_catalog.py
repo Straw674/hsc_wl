@@ -528,7 +528,7 @@ def plot_spatial_distribution_regions(
             labels,
             loc="upper center",
             bbox_to_anchor=(0.5, 0.998),
-            ncol=5,
+            ncol=len(handles),
             fontsize=9.5,
             frameon=False,
         )
@@ -951,10 +951,10 @@ def plot_tier_consensus_profiles(
     names_map = display_names or {}
     n_cats = len(catalog_order)
 
-    ncols = 2
+    ncols = 3 if n_cats > 4 else 2
     nrows = (n_cats + ncols - 1) // ncols
 
-    fig = plt.figure(figsize=(13, 9.5))
+    fig = plt.figure(figsize=(14 if ncols == 3 else 13, 10))
     gs = gridspec.GridSpec(2, 1, height_ratios=[1.0, 1.2], hspace=0.35)
 
     # Top Subplot: Transposed Heatmap Matrix (4 bins x n_cats catalogs)
@@ -1014,7 +1014,7 @@ def plot_tier_consensus_profiles(
             solo_val = mat_solo[i, j]
             norm_val = float(norm(np.array([val]))[0])
             text_color = "white" if norm_val > 0.55 else "black"
-            txt = f"{val:.2f}\n({h_val:.0f}% All 4)"
+            txt = f"{val:.2f}\n({h_val:.0f}% All {n_cats})"
             if solo_val > 0:
                 txt += f"\n[{solo_val:.0f}% solo]"
             ax_heat.text(
@@ -1033,18 +1033,22 @@ def plot_tier_consensus_profiles(
     ax_heat.grid(which="minor", color="white", linestyle="-", linewidth=2.5)
     ax_heat.tick_params(which="minor", bottom=False, left=False)
 
-    # Bottom Subplot: Stacked Consensus Spectrum (2x2 grid)
+    # Bottom Subplot: Stacked Consensus Spectrum (Grid)
     gs_spec = gridspec.GridSpecFromSubplotSpec(
-        nrows, ncols, subplot_spec=gs[1], hspace=0.32, wspace=0.22
+        nrows, ncols, subplot_spec=gs[1], hspace=0.35, wspace=0.22
     )
-    spec_colors = ["#d73027", "#fdae61", "#a6d96a", "#313695"]
+    cmap = plt.colormaps["RdYlBu"]
+    spec_colors = [cmap(i / max(1, n_cats - 1)) for i in range(n_cats)]
     spec_labels = [
-        "Solo (k=0)",
-        "Low (k=1)",
-        "Moderate (k=2)",
-        "Full (k=3, All 4)",
+        "Solo (k=0)"
+        if k == 0
+        else f"Full (k={k}, All {n_cats})"
+        if k == n_cats - 1
+        else f"k={k}"
+        for k in range(n_cats)
     ]
 
+    bars = []
     for idx, name in enumerate(catalog_order):
         row_i, col_i = divmod(idx, ncols)
         ax_b = fig.add_subplot(gs_spec[row_i, col_i])
@@ -1053,47 +1057,23 @@ def plot_tier_consensus_profiles(
         )
 
         y_pos = np.arange(4)
-        p_solo = c_df["pct_solo"].values
-        p_low = c_df["pct_low"].values
-        p_med = c_df["pct_med"].values
-        p_high = c_df["pct_high"].values
         means = c_df["mean_matches"].values
 
-        b1 = ax_b.barh(
-            y_pos,
-            p_solo,
-            color=spec_colors[0],
-            edgecolor="white",
-            height=0.65,
-            label=spec_labels[0] if idx == 0 else "",
-        )
-        b2 = ax_b.barh(
-            y_pos,
-            p_low,
-            left=p_solo,
-            color=spec_colors[1],
-            edgecolor="white",
-            height=0.65,
-            label=spec_labels[1] if idx == 0 else "",
-        )
-        b3 = ax_b.barh(
-            y_pos,
-            p_med,
-            left=p_solo + p_low,
-            color=spec_colors[2],
-            edgecolor="white",
-            height=0.65,
-            label=spec_labels[2] if idx == 0 else "",
-        )
-        b4 = ax_b.barh(
-            y_pos,
-            p_high,
-            left=p_solo + p_low + p_med,
-            color=spec_colors[3],
-            edgecolor="white",
-            height=0.65,
-            label=spec_labels[3] if idx == 0 else "",
-        )
+        left_cum = np.zeros(4)
+        for k in range(n_cats):
+            p_k = c_df[f"pct_k_{k}"].values
+            b = ax_b.barh(
+                y_pos,
+                p_k,
+                left=left_cum,
+                color=spec_colors[k],
+                edgecolor="white",
+                height=0.65,
+                label=spec_labels[k] if idx == 0 else "",
+            )
+            left_cum += p_k
+            if idx == 0:
+                bars.append(b)
 
         for y_i, m_val in enumerate(means):
             ax_b.text(
@@ -1118,11 +1098,11 @@ def plot_tier_consensus_profiles(
             ax_b.set_xlabel("Composition (%)", fontsize=9.5)
 
     fig.legend(
-        [b1, b2, b3, b4],
+        bars,
         spec_labels,
         loc="lower center",
         bbox_to_anchor=(0.5, -0.015),
-        ncol=4,
+        ncol=n_cats,
         fontsize=10,
         frameon=True,
         facecolor="white",
@@ -1224,6 +1204,7 @@ LABELS_TO_COMPARE = [
     "redm_r16_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
+    "rz_diff_fixed_1bin",
 ]
 
 DISPLAY_NAMES = {
@@ -1231,6 +1212,7 @@ DISPLAY_NAMES = {
     "redm_r16_1bin": "redMaPPer R16",
     "rz_diff_1bin": "r-z Diff (Richness)",
     "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
+    "rz_diff_fixed_1bin": "r-z Diff (Fixed)",
 }
 
 PALETTE = [
@@ -1238,9 +1220,10 @@ PALETTE = [
     "#4477AA",  # Blue (redMaPPer R16)
     "#228833",  # Green (r-z Richness)
     "#66CCEE",  # Cyan (r-z Luminosity)
+    "#AA3377",  # Purple (r-z Fixed)
 ]
 
-MARKERS = ["s", "x", "^", "D"]
+MARKERS = ["s", "x", "^", "D", "v"]
 
 OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
 OUTPUT_CONSENSUS_BREAKDOWN = (
