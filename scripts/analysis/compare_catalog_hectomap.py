@@ -26,16 +26,22 @@ from initial import *  # noqa: F401,F403
 
 def load_chen2024_clusters(
     root: Path,
+    ra_range: tuple[float, float] = (200.0, 250.0),
+    dec_range: tuple[float, float] = (42.0, 44.5),
     redshift_range: tuple[float, float] = (0.19, 0.52),
 ) -> Table:
     """Load and filter the Chen et al. (2024) WL shear-selected cluster catalog.
 
-    Applies survey redshift range and the full HSC Y3 shape catalog mask.
+    Applies HectoMAP sky footprint, redshift range, and HSC Y3 shape catalog mask.
 
     Parameters
     ----------
     root : Path
         Project root path.
+    ra_range : tuple of (float, float), default (200.0, 250.0)
+        RA bounds in degrees.
+    dec_range : tuple of (float, float), default (42.0, 44.5)
+        Dec bounds in degrees.
     redshift_range : tuple of (float, float), default (0.19, 0.52)
         Redshift bounds.
 
@@ -44,7 +50,7 @@ def load_chen2024_clusters(
     astropy.table.Table
         Filtered Chen+2024 cluster table with columns [peak_id, ra, dec, z, snr, ...].
     """
-    from hsc_wl.coverage import load_y3_mask
+    from hsc_wl.coverage import filter_lens_by_mask
 
     parquet_path = root / "data/chen2024_shear_selected_clusters.parquet"
     if not parquet_path.exists():
@@ -55,18 +61,20 @@ def load_chen2024_clusters(
 
     df = pd.read_parquet(parquet_path)
 
-    # Filter by redshift range
-    mask = (df["z_cl"] >= redshift_range[0]) & (df["z_cl"] <= redshift_range[1])
+    # Filter by spatial box and redshift
+    mask = (
+        (df["ra"] >= ra_range[0])
+        & (df["ra"] <= ra_range[1])
+        & (df["dec"] >= dec_range[0])
+        & (df["dec"] <= dec_range[1])
+        & (df["z_cl"] >= redshift_range[0])
+        & (df["z_cl"] <= redshift_range[1])
+    )
     filtered_df = df[mask].sort_values(by="snr", ascending=False).reset_index(drop=True)
     tbl = Table.from_pandas(filtered_df)
 
-    # Filter by master Y3 shape mask
-    y3_mask = load_y3_mask(root)
-    ra = np.asarray(tbl["ra"], dtype=float)
-    dec = np.asarray(tbl["dec"], dtype=float)
-    inside = y3_mask.get_values_pos(ra, dec, lonlat=True)
-    tbl = tbl[inside]
-
+    # Filter by Y3 shape mask
+    tbl = filter_lens_by_mask(tbl, root=root, ra_col="ra", dec_col="dec")
     tbl["z"] = tbl["z_cl"]
     tbl["rank"] = np.arange(1, len(tbl) + 1)
     return tbl
@@ -78,7 +86,8 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
     Parameters
     ----------
     labels : list of str or tuple
-        Run labels to load, e.g. ["camira_1bin", ...].
+        Run labels to load, e.g. ["redm_s16a_hectomap_1bin", ...] or
+        [("redm_s16a_hectomap", "1bin", ...), ...].
     root : Path
         Project root path.
 
@@ -101,6 +110,7 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
             save_root = cfg.resolved_save_root(root)
             file_path = save_root / f"prepare/{label}_lenses.fits"
         else:
+            # Fallback to standard convention if not found in registry
             catalog_id, nbins = label.rsplit("_", 1)
             file_path = (
                 root / f"output/{catalog_id}/{nbins}/prepare/{label}_lenses.fits"
@@ -111,6 +121,7 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
 
         print(f"Loading prepared lenses from {file_path.name}...")
         tbl = Table.read(file_path)
+        # Add rank column based on order (the preparation pipeline sorts them by richness/mass)
         tbl["rank"] = np.arange(1, len(tbl) + 1)
         dfs[label] = tbl
 
@@ -164,11 +175,14 @@ def compute_pairwise_matches(dfs: dict[str, Table]) -> pd.DataFrame:
             z1 = np.clip(
                 np.asarray(dfs[catalog_names[i]]["z"], dtype=float), 1e-4, None
             )
-            da1 = Planck18.angular_diameter_distance(z1).value  # Mpc
+            da1 = Planck18.angular_diameter_distance(
+                z1
+            ).value  # angular diameter distance in Mpc
 
             # 0.5 Mpc/h in degrees: (0.5 / h) / da1 * (180 / pi)
             match_radius_deg = (0.5 / h) / da1 * (180.0 / np.pi)
 
+            # Compare distance in degrees
             matched = d2d.deg < match_radius_deg
             matrix[i, j] = np.sum(matched)
 
@@ -176,71 +190,76 @@ def compute_pairwise_matches(dfs: dict[str, Table]) -> pd.DataFrame:
     return df_match
 
 
-def plot_matching_heatmap(
-    df_match: pd.DataFrame,
-    save_path: Path,
-    display_names: dict[str, str] | None = None,
-):
+def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
     """Plot pairwise matching statistics as a heatmap grid using matplotlib.
 
-    Parameters
-    ----------
-    df_match : pd.DataFrame
-        Matrix of match counts.
-    save_path : Path
-        Output image path.
-    display_names : dict of str -> str, optional
-        Human-readable labels for catalogs.
+    Applies histogram equalization stretch (HistEqStretch) to emphasize contrast
+    among matching fractions across catalogs.
+
+    Saves results as a PNG file and displays the image.
     """
+    import matplotlib.pyplot as plt
     from astropy.visualization import HistEqStretch, ImageNormalize
 
-    names_map = display_names or {}
-    fig, ax = plt.subplots(figsize=(8.5, 7.2))
+    fig, ax = plt.subplots(figsize=(11, 9))
 
     data = df_match.values
-    labels = [names_map.get(k, k) for k in df_match.index]
+    labels = list(df_match.index)
     n = len(labels)
 
+    # Calculate row-normalized match fraction (percentage)
     # Row i is the source catalog, cell (i, j) is the fraction of row i matched to column j
     row_totals = np.diag(data)
+    # Avoid division by zero just in case
     row_totals_safe = np.where(row_totals == 0, 1, row_totals)
     data_pct = (data / row_totals_safe[:, None]) * 100.0
 
+    # Equalized histogram stretch to make matching rate differences pronounced
     stretch = HistEqStretch(data_pct)
     norm = ImageNormalize(vmin=float(data_pct.min()), vmax=100.0, stretch=stretch)
 
+    # Use a sequential colormap ('YlGnBu') representing matching percentage
     im = ax.imshow(data_pct, cmap="YlGnBu", aspect="equal", norm=norm)
 
+    # Dynamic non-overlapping colorbar ticks mapped from equalized space
     norm_positions = np.linspace(0.05, 0.95, 6)
     tick_vals = norm.inverse(norm_positions)
     ticks = sorted(
         list(set(int(round(t)) for t in tick_vals)) + [int(round(data_pct.min())), 100]
     )
-    cbar = fig.colorbar(im, ax=ax, ticks=ticks, shrink=0.82)
-    cbar.set_label("Match Fraction (%) [Equalized Hist Stretch]", fontsize=10.5)
+    cbar = fig.colorbar(im, ax=ax, ticks=ticks, shrink=0.8)
+    cbar.set_label("Match Fraction (%) [Equalized Hist Stretch]", fontsize=11)
 
+    # Set ticks and labels
     ax.set_xticks(np.arange(n))
     ax.set_yticks(np.arange(n))
-    ax.set_xticklabels(
-        labels, rotation=25, ha="right", rotation_mode="anchor", fontsize=10
-    )
-    ax.set_yticklabels(labels, fontsize=10)
+    ax.set_xticklabels(labels, rotation=45, ha="right", rotation_mode="anchor")
+    ax.set_yticklabels(labels)
 
+    # Adjust ticks parameter and remove spines for a clean grid look
     ax.tick_params(top=False, bottom=True, labeltop=False, labelbottom=True)
     ax.spines[:].set_visible(False)
 
+    # Create white grid boundaries between cells
     ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
     ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
     ax.grid(which="minor", color="white", linestyle="-", linewidth=2.5)
     ax.tick_params(which="minor", bottom=False, left=False)
 
+    # Annotate matching count and percentage inside cells
     for i in range(n):
         for j in range(n):
             val = data[i, j]
             pct = data_pct[i, j]
             total = row_totals[i]
 
-            text = f"{val}\n(100.0%)" if i == j else f"{val}/{total}\n({pct:.1f}%)"
+            # Text layout: Count / Total \n (Pct%)
+            if i == j:
+                text = f"{val}\n(100.0%)"
+            else:
+                text = f"{val}/{total}\n({pct:.1f}%)"
+
+            # Contrasting text color based on normalized cell brightness
             norm_val = float(norm(np.array([pct]))[0])
             text_color = "white" if norm_val > 0.60 else "black"
             ax.text(
@@ -250,16 +269,14 @@ def plot_matching_heatmap(
                 ha="center",
                 va="center",
                 color=text_color,
-                fontweight="normal",
-                fontsize=9.5,
+                fontweight="bold",
+                fontsize=8.5,
             )
 
     ax.set_title(
-        "Pairwise Lens Match Fractions (0.5 Mpc/h Physical Radius)\n"
-        "Full HSC Survey Footprint (439 deg², N=1020 per catalog)",
-        fontsize=11.5,
-        pad=14,
-        fontweight="normal",
+        "Pairwise Lens Match Fractions (0.5 Mpc/h Physical Radius)\nRow Normalized: Fraction of Row Catalog Matched in Column Catalog [HistEq Stretch]",
+        fontsize=12,
+        pad=18,
     )
     fig.tight_layout()
 
@@ -274,6 +291,9 @@ def compute_consensus_breakdown(
     dfs: dict[str, Table],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Compute multi-catalog consensus counts and percentages.
+
+    For each catalog, counts how many objects are matched in exactly k other
+    catalogs (k = 0, 1, ..., n_cats - 1) within 0.5 Mpc/h physical radius.
 
     Parameters
     ----------
@@ -326,7 +346,10 @@ def compute_consensus_breakdown(
         for k in range(n_cats):
             counts_matrix[i, k] = np.sum(matched_counts == k)
 
-    col_labels = [f"{k} Other Catalogs" for k in range(n_cats)]
+    col_labels = [
+        f"{k} Other Catalogs" if k == 1 else f"{k} Other Catalogs"
+        for k in range(n_cats)
+    ]
     df_counts = pd.DataFrame(counts_matrix, index=catalog_names, columns=col_labels)
 
     row_totals = counts_matrix.sum(axis=1)
@@ -343,30 +366,37 @@ def plot_consensus_breakdown(
     colors: list[str],
     markers: list[str],
     save_path: Path,
-    display_names: dict[str, str] | None = None,
 ):
-    """Plot consensus level profiles across catalogs as a multi-line plot."""
-    names_map = display_names or {}
+    """Plot consensus level profiles across catalogs as a clean multi-line plot.
+
+    Shows the fraction of clusters in each catalog that match k other catalogs
+    (k = 0, 1, ..., n_cats - 1) within 0.5 Mpc/h physical radius.
+    """
+    import matplotlib.pyplot as plt
+
     pct_matrix = df_pct.values
     catalog_names = list(df_pct.index)
     n_cats = len(catalog_names)
 
-    fig, ax = plt.subplots(figsize=(8.0, 5.2))
+    fig, ax = plt.subplots(figsize=(8.5, 5.5))
     x_vals = np.arange(n_cats)
 
     for idx, name in enumerate(catalog_names):
         c = colors[idx % len(colors)]
         m = markers[idx % len(markers)]
-        disp_name = names_map.get(name, name)
+        lw = 2.4 if "amico" in name else 1.8
+        alpha = 1.0 if "amico" in name else 0.85
+        zorder = 5 if "amico" in name else 3
         ax.plot(
             x_vals,
             pct_matrix[idx],
-            label=disp_name,
+            label=name,
             color=c,
             marker=m,
-            markersize=7,
-            linewidth=1.8,
-            alpha=0.9,
+            markersize=8,
+            linewidth=lw,
+            alpha=alpha,
+            zorder=zorder,
         )
 
     ax.set_xticks(x_vals)
@@ -383,18 +413,18 @@ def plot_consensus_breakdown(
     )
     ax.set_xlabel(
         "Number of Other Matched Catalogs (Consensus Level)",
-        fontsize=11.0,
-        labelpad=8,
-    )
-    ax.set_ylabel("Cluster Fraction (%)", fontsize=11.0)
-    ax.set_title(
-        "Consensus Profiles across Full Survey Catalogs (0.5 Mpc/h Matching)",
         fontsize=11.5,
-        pad=10,
-        fontweight="normal",
+        labelpad=10,
     )
-    ax.grid(True, linestyle=":", alpha=0.6)
-    ax.set_ylim(0, max(50.0, float(np.max(pct_matrix)) + 8.0))
+    ax.set_ylabel("Cluster Fraction (%)", fontsize=11.5)
+    ax.set_title(
+        "Consensus Profiles across Catalogs (0.5 Mpc/h Matching)",
+        fontsize=12.5,
+        pad=12,
+        fontweight="bold",
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.set_ylim(0, max(45.0, float(np.max(pct_matrix)) + 6.0))
     ax.legend(fontsize=9.5, loc="upper right", framealpha=0.9)
 
     fig.tight_layout()
@@ -405,398 +435,31 @@ def plot_consensus_breakdown(
     plt.close(fig)
 
 
-def plot_spatial_distribution_regions(
-    dfs: dict[str, Table],
-    colors: list[str],
-    markers: list[str],
-    save_path: Path,
-    chen_table: Table | None = None,
-    display_names: dict[str, str] | None = None,
-):
-    """Plot static 3-panel sky distribution partitioned into canonical HSC fields.
-
-    Partitions coordinates into SPRING, FALL, and HECTOMAP to avoid massive blank spaces.
-    Accounts for sky projection aspect ratio and inverts RA per astronomical convention.
-    """
-    from hsc_wl.coverage import in_field
-
-    names_map = display_names or {}
-    fig, axes = plt.subplots(
-        3, 1, figsize=(14, 10.5), gridspec_kw={"height_ratios": [1.2, 1.2, 1.0]}
-    )
-
-    regions_info = [
-        {
-            "name": "SPRING",
-            "title": "SPRING (GAMA09H + WIDE12H + GAMA15H)",
-            "ax": axes[0],
-            "xlim": (230.0, 125.0),
-            "ylim": (-3.0, 6.0),
-            "dec_ref": 1.5,
-            "shift_fall": False,
-        },
-        {
-            "name": "FALL",
-            "title": "FALL (XMM + VVDS)",
-            "ax": axes[1],
-            "xlim": (48.0, -43.0),
-            "ylim": (-8.0, 8.0),
-            "dec_ref": 0.0,
-            "shift_fall": True,
-        },
-        {
-            "name": "HECTOMAP",
-            "title": "HECTOMAP (North)",
-            "ax": axes[2],
-            "xlim": (252.0, 210.0),
-            "ylim": (41.5, 45.0),
-            "dec_ref": 43.3,
-            "shift_fall": False,
-        },
-    ]
-
-    for reg in regions_info:
-        ax = reg["ax"]
-        f_name = reg["name"]
-        shift = reg["shift_fall"]
-
-        for idx, (k, tbl) in enumerate(dfs.items()):
-            ra = np.asarray(tbl["ra"], dtype=float)
-            dec = np.asarray(tbl["dec"], dtype=float)
-            m = in_field(ra, dec, f_name)
-            if not np.any(m):
-                continue
-
-            ra_sel = ra[m]
-            dec_sel = dec[m]
-            if shift:
-                ra_sel = np.where(ra_sel > 180.0, ra_sel - 360.0, ra_sel)
-
-            disp_name = names_map.get(k, k)
-            ax.scatter(
-                ra_sel,
-                dec_sel,
-                s=16,
-                color=colors[idx % len(colors)],
-                marker=markers[idx % len(markers)],
-                alpha=0.75,
-                label=f"{disp_name} (N={np.sum(m)})" if reg["name"] == "SPRING" else "",
-            )
-
-        # Plot Chen+2024 WL shear-selected clusters if available
-        if chen_table is not None and len(chen_table) > 0:
-            c_ra = np.asarray(chen_table["ra"], dtype=float)
-            c_dec = np.asarray(chen_table["dec"], dtype=float)
-            c_m = in_field(c_ra, c_dec, f_name)
-            if np.any(c_m):
-                c_ra_sel = c_ra[c_m]
-                c_dec_sel = c_dec[c_m]
-                if shift:
-                    c_ra_sel = np.where(c_ra_sel > 180.0, c_ra_sel - 360.0, c_ra_sel)
-                ax.scatter(
-                    c_ra_sel,
-                    c_dec_sel,
-                    s=64,
-                    facecolors="none",
-                    edgecolors="#000000",
-                    linewidths=1.6,
-                    marker="o",
-                    label=f"Chen+2024 WL Selected (N={np.sum(c_m)})"
-                    if reg["name"] == "SPRING"
-                    else "",
-                )
-
-        ax.set_xlim(reg["xlim"])
-        ax.set_ylim(reg["ylim"])
-        ax.set_aspect(1.0 / np.cos(np.radians(reg["dec_ref"])))
-        ax.set_title(reg["title"], fontsize=11, fontweight="normal", pad=4)
-        ax.set_ylabel("Dec [deg]", fontsize=10)
-        ax.grid(True, linestyle=":", alpha=0.5)
-
-        if shift:
-            ticks = np.arange(-40, 50, 15)
-            ax.set_xticks(ticks)
-            ax.set_xticklabels([f"{int(t % 360)}°" for t in ticks])
-
-    axes[2].set_xlabel(
-        "RA [deg] (Astronomical Convention: Increasing to Left)", fontsize=10.5
-    )
-    handles, labels = axes[0].get_legend_handles_labels()
-    if handles:
-        fig.legend(
-            handles,
-            labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, 0.998),
-            ncol=5,
-            fontsize=9.5,
-            frameon=False,
-        )
-
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    save_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(save_path, dpi=300, bbox_inches="tight")
-    print(f"Regional spatial distribution plot saved to {save_path}")
-    plt.show()
-    plt.close(fig)
-
-
-def plot_bokeh_spatial_regional(
-    dfs: dict[str, Table],
-    colors: list[str],
-    markers: list[str],
-    save_path: Path,
-    chen_table: Table | None = None,
-    display_names: dict[str, str] | None = None,
-):
-    """Generate an interactive Bokeh layout with 3 dedicated regional panels.
-
-    Saves results as a self-contained HTML file.
-    """
-    from bokeh.layouts import column
-    from bokeh.models import ColumnDataSource, HoverTool, Range1d
-    from bokeh.plotting import figure, output_file, save
-
-    from hsc_wl.coverage import in_field
-
-    names_map = display_names or {}
-    output_file(
-        filename=str(save_path), title="Lens Regional Spatial Distribution Explorer"
-    )
-
-    bokeh_marker_map = {
-        "o": "circle",
-        "s": "square",
-        "^": "triangle",
-        "v": "inverted_triangle",
-        "D": "diamond",
-        "d": "diamond",
-        "h": "hex",
-        "*": "star",
-        "x": "x",
-        "+": "cross",
-    }
-
-    region_defs = [
-        {
-            "name": "SPRING",
-            "title": "SPRING Region (GAMA09H + WIDE12H + GAMA15H)",
-            "x_start": 230.0,
-            "x_end": 125.0,
-            "y_start": -3.0,
-            "y_end": 6.0,
-            "dec_ref": 1.5,
-            "shift_fall": False,
-        },
-        {
-            "name": "FALL",
-            "title": "FALL Region (XMM + VVDS, Continuous RA across 0°)",
-            "x_start": 48.0,
-            "x_end": -43.0,
-            "y_start": -8.0,
-            "y_end": 8.0,
-            "dec_ref": 0.0,
-            "shift_fall": True,
-        },
-        {
-            "name": "HECTOMAP",
-            "title": "HECTOMAP Region (North)",
-            "x_start": 252.0,
-            "x_end": 210.0,
-            "y_start": 41.5,
-            "y_end": 45.0,
-            "dec_ref": 43.3,
-            "shift_fall": False,
-        },
-    ]
-
-    p_list = []
-
-    for r_idx, reg in enumerate(region_defs):
-        f_name = reg["name"]
-        shift = reg["shift_fall"]
-
-        x_span = abs(reg["x_start"] - reg["x_end"])
-        y_span = abs(reg["y_end"] - reg["y_start"])
-        aspect = (x_span * np.cos(np.radians(reg["dec_ref"]))) / y_span
-        plot_height = int(np.clip(1150 / aspect, 220, 360))
-
-        p = figure(
-            title=reg["title"],
-            width=1180,
-            height=plot_height + 50,
-            tools="pan,wheel_zoom,box_zoom,reset,save",
-            x_axis_label="Right Ascension (deg)"
-            if not shift
-            else "RA (deg, RA>180 mapped to RA-360)",
-            y_axis_label="Declination (deg)",
-            toolbar_location="right",
-        )
-
-        p.x_range = Range1d(start=reg["x_start"], end=reg["x_end"])
-        p.y_range = Range1d(start=reg["y_start"], end=reg["y_end"])
-
-        p.background_fill_color = "#1e1e1e"
-        p.border_fill_color = "#181818"
-        p.grid.grid_line_color = "#3a3a3a"
-        p.grid.grid_line_alpha = 0.5
-        p.title.text_color = "#ffffff"
-        p.title.text_font_size = "11pt"
-        p.xaxis.axis_label_text_color = "#cccccc"
-        p.yaxis.axis_label_text_color = "#cccccc"
-        p.xaxis.major_label_text_color = "#aaaaaa"
-        p.yaxis.major_label_text_color = "#aaaaaa"
-
-        for idx, (k, tbl) in enumerate(dfs.items()):
-            ra = np.asarray(tbl["ra"], dtype=float)
-            dec = np.asarray(tbl["dec"], dtype=float)
-            m = in_field(ra, dec, f_name)
-            if not np.any(m):
-                continue
-
-            ra_sel = ra[m]
-            dec_sel = dec[m]
-            z_sel = np.asarray(tbl["z"], dtype=float)[m]
-            rank_sel = np.asarray(tbl["rank"], dtype=int)[m]
-
-            if shift:
-                ra_sel = np.where(ra_sel > 180.0, ra_sel - 360.0, ra_sel)
-
-            disp_name = names_map.get(k, k)
-            source = ColumnDataSource(
-                data={
-                    "ra": ra_sel,
-                    "ra_orig": ra[m],
-                    "dec": dec_sel,
-                    "z": z_sel,
-                    "rank": rank_sel,
-                    "catalog": [disp_name] * len(ra_sel),
-                    "total": [len(tbl)] * len(ra_sel),
-                }
-            )
-
-            marker_name = markers[idx % len(markers)]
-            b_marker = bokeh_marker_map.get(marker_name, "circle")
-            renderer = p.scatter(
-                x="ra",
-                y="dec",
-                source=source,
-                size=10 + idx * 2,
-                marker=b_marker,
-                color=colors[idx % len(colors)],
-                fill_color=None,
-                line_width=2.0,
-                legend_label=f"{disp_name} (N={np.sum(m)})",
-            )
-
-            hover = HoverTool(
-                renderers=[renderer],
-                tooltips=[
-                    ("Catalog", "@catalog"),
-                    ("Rank", "#@rank of @total"),
-                    ("RA", "@ra_orig{0.0000} deg"),
-                    ("Dec", "@dec{0.0000} deg"),
-                    ("Redshift z", "@z{0.0000}"),
-                ],
-            )
-            p.add_tools(hover)
-
-        # Overlay Chen+2024 WL clusters
-        if chen_table is not None and len(chen_table) > 0:
-            c_ra = np.asarray(chen_table["ra"], dtype=float)
-            c_dec = np.asarray(chen_table["dec"], dtype=float)
-            c_m = in_field(c_ra, c_dec, f_name)
-            if np.any(c_m):
-                c_ra_sel = c_ra[c_m]
-                c_dec_sel = c_dec[c_m]
-                c_z_sel = np.asarray(chen_table["z"], dtype=float)[c_m]
-                c_snr_sel = np.asarray(chen_table["snr"], dtype=float)[c_m]
-                c_pk_sel = np.asarray(chen_table["peak_id"], dtype=int)[c_m]
-                c_rich_sel = np.asarray(chen_table["richness"], dtype=float)[c_m]
-                c_opt_sel = [str(x) for x in chen_table["opt_name"][c_m]]
-                c_sep_sel = np.asarray(chen_table["sep_mpc_h"], dtype=float)[c_m]
-
-                if shift:
-                    c_ra_sel = np.where(c_ra_sel > 180.0, c_ra_sel - 360.0, c_ra_sel)
-
-                chen_source = ColumnDataSource(
-                    data={
-                        "ra": c_ra_sel,
-                        "ra_orig": c_ra[c_m],
-                        "dec": c_dec_sel,
-                        "z": c_z_sel,
-                        "snr": c_snr_sel,
-                        "peak_id": c_pk_sel,
-                        "richness": c_rich_sel,
-                        "opt_name": c_opt_sel,
-                        "sep_mpc_h": c_sep_sel,
-                        "catalog": ["Chen+2024 WL Selected"] * len(c_ra_sel),
-                    }
-                )
-
-                chen_renderer = p.scatter(
-                    x="ra",
-                    y="dec",
-                    source=chen_source,
-                    size=22,
-                    marker="circle",
-                    color="#FFFFFF",
-                    fill_color=None,
-                    line_width=2.5,
-                    line_alpha=0.95,
-                    legend_label=f"Chen+2024 WL Selected (N={np.sum(c_m)})",
-                )
-
-                chen_hover = HoverTool(
-                    renderers=[chen_renderer],
-                    tooltips=[
-                        ("Catalog", "@catalog"),
-                        ("Peak ID", "#@peak_id"),
-                        ("WL Peak S/N", "@snr{0.00}"),
-                        ("RA", "@ra_orig{0.0000} deg"),
-                        ("Dec", "@dec{0.0000} deg"),
-                        ("Redshift z", "@z{0.0000}"),
-                        ("Optical Match", "@opt_name (Richness: @richness{0.0})"),
-                        ("Separation", "@sep_mpc_h{0.00} Mpc/h"),
-                    ],
-                )
-                p.add_tools(chen_hover)
-
-        p.legend.location = "top_left"
-        p.legend.click_policy = "hide"
-        p.legend.background_fill_color = "#1e1e1e"
-        p.legend.background_fill_alpha = 0.85
-        p.legend.label_text_color = "#ffffff"
-        p.legend.title_text_color = "#cccccc"
-        p.legend.border_line_color = "#3a3a3a"
-
-        p_list.append(p)
-
-    layout = column(p_list, sizing_mode="scale_width")
-    save(layout)
-
-    html_content = save_path.read_text(encoding="utf-8")
-    style_injection = """
-    <style>
-        html, body {
-            margin: 0 !important;
-            padding: 10px !important;
-            background-color: #181818 !important;
-            color: #ffffff;
-        }
-    </style>
-    """
-    html_content = html_content.replace("</head>", f"{style_injection}</head>")
-    save_path.write_text(html_content, encoding="utf-8")
-    print(f"Interactive Bokeh HTML saved at {save_path}")
-
-
 def compute_tier_consensus_breakdown(
     dfs: dict[str, Table],
     n_bins: int = 4,
     display_names: dict[str, str] | None = None,
 ) -> pd.DataFrame:
-    """Compute consensus statistics for each catalog partitioned into proxy rank tiers."""
+    """Compute consensus statistics for each catalog partitioned into proxy rank tiers.
+
+    Partitions each catalog's top objects (already sorted descending by proxy/richness)
+    into ``n_bins`` (default 4, quartiles) rank bins. For every cluster in a tier,
+    matches against the full top 100 of all other catalogs within 0.5 Mpc/h physical radius.
+
+    Parameters
+    ----------
+    dfs : dict of str -> Table
+        Loaded lens catalogs.
+    n_bins : int, default 4
+        Number of equal-frequency rank tiers per catalog.
+    display_names : dict of str -> str, optional
+        Human-readable catalog labels for display.
+
+    Returns
+    -------
+    pd.DataFrame
+        Table containing tier summary metrics (mean matches, SEM, solo rate, etc.).
+    """
     from astropy import units as u
     from astropy.coordinates import SkyCoord
     from astropy.cosmology import Planck18
@@ -827,6 +490,7 @@ def compute_tier_consensus_breakdown(
         r_i = radii_deg[name_i]
         n_i = len(dfs[name_i])
 
+        # Match each cluster in catalog i against the full top 100 of all other catalogs
         matched_counts = np.zeros(n_i, dtype=int)
         for j, name_j in enumerate(catalog_names):
             if i == j:
@@ -850,16 +514,17 @@ def compute_tier_consensus_breakdown(
             median_val = float(np.median(sub_k))
 
             pct_solo = float(np.mean(sub_k == 0) * 100.0)
-            pct_low = float(np.mean(sub_k == 1) * 100.0)
-            pct_med = float(np.mean(sub_k == 2) * 100.0)
-            pct_high = float(np.mean(sub_k == (n_cats - 1)) * 100.0)
+            pct_low = float(np.mean((sub_k >= 1) & (sub_k <= 2)) * 100.0)
+            pct_med = float(np.mean((sub_k >= 3) & (sub_k <= 4)) * 100.0)
+            pct_high = float(np.mean(sub_k >= 5) * 100.0)
+            pct_ge4 = float(np.mean(sub_k >= 4) * 100.0)
 
             rec = {
                 "catalog": name_i,
                 "display_name": names_map.get(name_i, name_i),
                 "bin_idx": b_idx,
-                "bin_label": f"Tier {b_idx + 1}\n(Ranks {r_start}–{r_end})",
-                "tier_name": f"Tier {b_idx + 1}",
+                "bin_label": f"Bin {b_idx + 1}\n(Ranks {r_start}–{r_end})",
+                "tier_name": f"Bin {b_idx + 1}",
                 "n_clusters": n_sub,
                 "rank_range": (r_start, r_end),
                 "mean_matches": mean_val,
@@ -869,6 +534,7 @@ def compute_tier_consensus_breakdown(
                 "pct_low": pct_low,
                 "pct_med": pct_med,
                 "pct_high": pct_high,
+                "pct_ge4": pct_ge4,
             }
             for k in range(n_cats):
                 rec[f"count_k_{k}"] = int(np.sum(sub_k == k))
@@ -884,7 +550,22 @@ def compute_tier_pairwise_matches(
     n_bins: int = 4,
     display_names: dict[str, str] | None = None,
 ) -> dict[int, pd.DataFrame]:
-    """Compute pairwise match matrices for each proxy tier against full catalog."""
+    """Compute pairwise match matrices for each proxy tier against full top 100.
+
+    Parameters
+    ----------
+    dfs : dict of str -> Table
+        Loaded lens catalogs.
+    n_bins : int, default 4
+        Number of proxy rank bins.
+    display_names : dict of str -> str, optional
+        Human-readable catalog labels.
+
+    Returns
+    -------
+    dict of int -> pd.DataFrame
+        Mapping bin_index (0..n_bins-1) to an N_cats x N_cats match percentage DataFrame.
+    """
     from astropy import units as u
     from astropy.coordinates import SkyCoord
     from astropy.cosmology import Planck18
@@ -944,29 +625,37 @@ def plot_tier_consensus_profiles(
     save_path: Path,
     display_names: dict[str, str] | None = None,
 ):
-    """Plot multi-panel tiered consensus breakdown figure."""
+    """Plot multi-panel tiered consensus breakdown figure.
+
+    Panel (a): Transposed heatmap matrix of mean consensus scores (Tier x Catalog)
+               with equalized histogram stretch (HistEqStretch).
+    Panel (b): Small-multiples stacked horizontal bars showing full consensus composition per tier.
+    """
     import matplotlib.gridspec as gridspec
+    import matplotlib.pyplot as plt
     from astropy.visualization import HistEqStretch, ImageNormalize
 
     names_map = display_names or {}
     n_cats = len(catalog_order)
 
-    ncols = 2
+    # Dynamic layout calculation: 4 columns for small multiples
+    ncols = 4
     nrows = (n_cats + ncols - 1) // ncols
 
-    fig = plt.figure(figsize=(13, 9.5))
-    gs = gridspec.GridSpec(2, 1, height_ratios=[1.0, 1.2], hspace=0.35)
+    fig_height = 5.5 + 3.2 * nrows
+    fig = plt.figure(figsize=(16, fig_height))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[1.0, 0.65 * nrows], hspace=0.32)
 
     # Top Subplot: Transposed Heatmap Matrix (4 bins x n_cats catalogs)
     ax_heat = fig.add_subplot(gs[0])
     mat_mean = np.zeros((4, n_cats))
-    mat_high = np.zeros((4, n_cats))
+    mat_ge4 = np.zeros((4, n_cats))
     mat_solo = np.zeros((4, n_cats))
 
     for j, name in enumerate(catalog_order):
         c_df = tier_df[tier_df["catalog"] == name].sort_values("bin_idx")
         mat_mean[:, j] = c_df["mean_matches"].values
-        mat_high[:, j] = c_df["pct_high"].values
+        mat_ge4[:, j] = c_df["pct_ge4"].values
         mat_solo[:, j] = c_df["pct_solo"].values
 
     stretch = HistEqStretch(mat_mean)
@@ -976,6 +665,7 @@ def plot_tier_consensus_profiles(
 
     im = ax_heat.imshow(mat_mean, cmap="YlGnBu", aspect="auto", norm=norm)
 
+    # Dynamic non-overlapping colorbar ticks mapped from equalized space
     norm_positions = np.linspace(0.05, 0.95, 6)
     tick_vals = norm.inverse(norm_positions)
     ticks = sorted(
@@ -984,37 +674,41 @@ def plot_tier_consensus_profiles(
     )
     cbar = fig.colorbar(im, ax=ax_heat, ticks=ticks, shrink=0.85, pad=0.02)
     cbar.set_label(
-        f"Mean Matched Catalogs (out of {n_cats - 1})",
-        fontsize=10.0,
+        f"Mean Matched Catalogs (out of {n_cats - 1}) [HistEq Stretch]",
+        fontsize=10.5,
+        fontweight="bold",
     )
 
     cat_labels = [names_map.get(name, name) for name in catalog_order]
     bin_row_labels = [
-        "Tier 1 (Q1: Ranks 1–255)",
-        "Tier 2 (Q2: Ranks 256–510)",
-        "Tier 3 (Q3: Ranks 511–765)",
-        "Tier 4 (Q4: Ranks 766–1020)",
+        "Bin 1 (Q1: Ranks 1–25)",
+        "Bin 2 (Q2: Ranks 26–50)",
+        "Bin 3 (Q3: Ranks 51–75)",
+        "Bin 4 (Q4: Ranks 76–100)",
     ]
 
     ax_heat.set_xticks(np.arange(n_cats))
-    ax_heat.set_xticklabels(cat_labels, fontsize=10, rotation=15, ha="right")
+    ax_heat.set_xticklabels(
+        cat_labels, fontsize=10.5, fontweight="bold", rotation=25, ha="right"
+    )
     ax_heat.set_yticks(np.arange(4))
-    ax_heat.set_yticklabels(bin_row_labels, fontsize=10)
+    ax_heat.set_yticklabels(bin_row_labels, fontsize=10.5, fontweight="bold")
     ax_heat.set_title(
-        "(a) Mean Consensus Score by Proxy Tier [Equalized Hist Stretch]",
-        fontsize=11.5,
-        pad=10,
-        fontweight="normal",
+        "(a) Mean Consensus Score by Proxy Tier [Transposed Matrix with Equalized Hist Stretch]",
+        fontsize=13,
+        fontweight="bold",
+        pad=12,
     )
 
+    # Annotate cells
     for i in range(4):
         for j in range(n_cats):
             val = mat_mean[i, j]
-            h_val = mat_high[i, j]
+            ge4_val = mat_ge4[i, j]
             solo_val = mat_solo[i, j]
             norm_val = float(norm(np.array([val]))[0])
             text_color = "white" if norm_val > 0.55 else "black"
-            txt = f"{val:.2f}\n({h_val:.0f}% All 4)"
+            txt = f"{val:.2f}\n({ge4_val:.0f}% ≥4)"
             if solo_val > 0:
                 txt += f"\n[{solo_val:.0f}% solo]"
             ax_heat.text(
@@ -1025,24 +719,25 @@ def plot_tier_consensus_profiles(
                 va="center",
                 color=text_color,
                 fontsize=9,
-                fontweight="normal",
+                fontweight="bold",
             )
 
+    # Gridlines
     ax_heat.set_xticks(np.arange(n_cats + 1) - 0.5, minor=True)
     ax_heat.set_yticks(np.arange(5) - 0.5, minor=True)
     ax_heat.grid(which="minor", color="white", linestyle="-", linewidth=2.5)
     ax_heat.tick_params(which="minor", bottom=False, left=False)
 
-    # Bottom Subplot: Stacked Consensus Spectrum (2x2 grid)
+    # Bottom Subplot: Small Multiples Stacked Consensus Spectrum (nrows x ncols grid)
     gs_spec = gridspec.GridSpecFromSubplotSpec(
-        nrows, ncols, subplot_spec=gs[1], hspace=0.32, wspace=0.22
+        nrows, ncols, subplot_spec=gs[1], hspace=0.35, wspace=0.22
     )
     spec_colors = ["#d73027", "#fdae61", "#a6d96a", "#313695"]
     spec_labels = [
         "Solo (k=0)",
-        "Low (k=1)",
-        "Moderate (k=2)",
-        "Full (k=3, All 4)",
+        "Low (k=1–2)",
+        "Moderate (k=3–4)",
+        f"High (k=5–{n_cats - 1})",
     ]
 
     for idx, name in enumerate(catalog_order):
@@ -1099,31 +794,30 @@ def plot_tier_consensus_profiles(
             ax_b.text(
                 102,
                 y_i,
-                f"μ={m_val:.2f}",
+                f"μ={m_val:.1f}",
                 va="center",
                 ha="left",
                 fontsize=8.5,
+                fontweight="bold",
                 color="#333333",
             )
 
         ax_b.set_yticks(y_pos)
-        ax_b.set_yticklabels(["Tier 4", "Tier 3", "Tier 2", "Tier 1"], fontsize=9.0)
-        ax_b.set_title(
-            names_map.get(name, name), fontsize=10.5, fontweight="normal", pad=4
-        )
-        ax_b.set_xlim(0, 122)
+        ax_b.set_yticklabels(["Bin 4", "Bin 3", "Bin 2", "Bin 1"], fontsize=9.5)
+        ax_b.set_title(names_map.get(name, name), fontsize=11, fontweight="bold", pad=5)
+        ax_b.set_xlim(0, 125)
         ax_b.set_xticks([0, 25, 50, 75, 100])
-        ax_b.grid(axis="x", linestyle=":", alpha=0.5)
-        if row_i == nrows - 1:
-            ax_b.set_xlabel("Composition (%)", fontsize=9.5)
+        ax_b.grid(axis="x", linestyle=":", alpha=0.6)
+        if row_i == nrows - 1 or idx + ncols >= n_cats:
+            ax_b.set_xlabel("Composition (%)", fontsize=10)
 
     fig.legend(
         [b1, b2, b3, b4],
         spec_labels,
         loc="lower center",
-        bbox_to_anchor=(0.5, -0.015),
+        bbox_to_anchor=(0.5, -0.02),
         ncol=4,
-        fontsize=10,
+        fontsize=11,
         frameon=True,
         facecolor="white",
         edgecolor="#cccccc",
@@ -1141,17 +835,18 @@ def plot_tier_pairwise_heatmaps(
     save_path: Path,
 ):
     """Plot 2x2 grid of pairwise match fractions across proxy tiers."""
+    import matplotlib.pyplot as plt
     from matplotlib.colors import Normalize
 
     bin_titles = [
-        "Tier 1: Ranks 1–255 (Highest Proxy / Richness)",
-        "Tier 2: Ranks 256–510 (Upper-Mid Proxy)",
-        "Tier 3: Ranks 511–765 (Lower-Mid Proxy)",
-        "Tier 4: Ranks 766–1020 (Lowest Proxy in Top 1020)",
+        "Tier 1: Ranks 1–25 (Highest Proxy / Richness)",
+        "Tier 2: Ranks 26–50 (Upper-Mid Proxy)",
+        "Tier 3: Ranks 51–75 (Lower-Mid Proxy)",
+        "Tier 4: Ranks 76–100 (Lowest Proxy in Top 100)",
     ]
 
-    fig, axes = plt.subplots(2, 2, figsize=(13, 11), sharex=True, sharey=True)
-    norm = Normalize(vmin=20.0, vmax=100.0)
+    fig, axes = plt.subplots(2, 2, figsize=(16, 15), sharex=True, sharey=True)
+    norm = Normalize(vmin=10.0, vmax=100.0)
 
     for b_idx, ax in enumerate(axes.flat):
         df_mat = tier_pairwise_dict[b_idx]
@@ -1162,15 +857,16 @@ def plot_tier_pairwise_heatmaps(
         im = ax.imshow(data, cmap="YlGnBu", norm=norm, aspect="equal")
         ax.set_title(
             f"({chr(97 + b_idx)}) {bin_titles[b_idx]}",
-            fontsize=10.5,
-            fontweight="normal",
-            pad=8,
+            fontsize=12,
+            fontweight="bold",
+            pad=10,
         )
         ax.set_xticks(np.arange(n))
         ax.set_yticks(np.arange(n))
-        ax.set_xticklabels(labels, rotation=20, ha="right", fontsize=9.0)
-        ax.set_yticklabels(labels, fontsize=9.0)
+        ax.set_xticklabels(labels, rotation=40, ha="right", fontsize=9.5)
+        ax.set_yticklabels(labels, fontsize=9.5)
 
+        # White minor grid
         ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
         ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
         ax.grid(which="minor", color="white", linestyle="-", linewidth=1.8)
@@ -1189,25 +885,25 @@ def plot_tier_pairwise_heatmaps(
                     ha="center",
                     va="center",
                     color=text_col,
-                    fontsize=9.0,
-                    fontweight="normal",
+                    fontsize=8.5,
+                    fontweight="bold",
                 )
 
-    fig.subplots_adjust(right=0.88, hspace=0.22, wspace=0.15)
+    fig.subplots_adjust(right=0.88, hspace=0.25, wspace=0.15)
     cbar_ax = fig.add_axes([0.90, 0.25, 0.02, 0.5])
     cbar = fig.colorbar(im, cax=cbar_ax)
     cbar.set_label(
-        "Fraction of Row Tier Matched in Column Full Top 1020 (%)",
-        fontsize=10.5,
-        fontweight="normal",
+        "Fraction of Row Tier Matched in Column Full Top 100 (%)",
+        fontsize=11,
+        fontweight="bold",
     )
 
     fig.suptitle(
         "Tier-Resolved Pairwise Lens Matching Fractions (0.5 Mpc/h Matching Radius)\n"
-        "Row: Clusters in Given Proxy Tier  |  Column: Matched in Full Top 1020 of Target Catalog",
-        fontsize=12.0,
-        fontweight="normal",
-        y=0.97,
+        "Row: Clusters in Given Proxy Tier of Catalog A  |  Column: Matched in Full Top 100 of Catalog B",
+        fontsize=13.5,
+        fontweight="bold",
+        y=0.96,
     )
 
     save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1217,43 +913,301 @@ def plot_tier_pairwise_heatmaps(
     plt.close(fig)
 
 
+def plot_bokeh_spatial(
+    dfs: dict[str, Table],
+    colors: list[str],
+    markers: list[str],
+    save_path: Path,
+    chen_table: Table | None = None,
+):
+    """Generate an interactive Bokeh plot allowing zoom and hover inspection.
+
+    Saves results as a self-contained, screen-filling HTML file.
+    """
+    from bokeh.models import ColumnDataSource, HoverTool, Range1d
+    from bokeh.plotting import figure, output_file, save
+
+    # Prepare output file
+    output_file(filename=str(save_path), title="Lens Spatial Distribution Explorer")
+
+    # Determine adaptive coordinates and spans
+    all_dfs = list(dfs.values())
+    if chen_table is not None and len(chen_table) > 0:
+        all_dfs.append(chen_table)
+
+    all_dec = np.concatenate([np.asarray(t["dec"]) for t in all_dfs])
+    all_ra = np.concatenate([np.asarray(t["ra"]) for t in all_dfs])
+
+    if len(all_dec) == 0:
+        dec_mean = 0.0
+        ra_min, ra_max = 0.0, 360.0
+        dec_min, dec_max = -90.0, 90.0
+    else:
+        dec_mean = np.mean(all_dec)
+        ra_min, ra_max = np.min(all_ra), np.max(all_ra)
+        dec_min, dec_max = np.min(all_dec), np.max(all_dec)
+
+    cos_dec = np.cos(np.radians(dec_mean))
+
+    ra_span = ra_max - ra_min
+    dec_span = dec_max - dec_min
+
+    if ra_span == 0:
+        ra_span = 1.0
+    if dec_span == 0:
+        dec_span = 1.0
+
+    ra_padding = ra_span * 0.05
+    dec_padding = dec_span * 0.05
+
+    # Coordinates range for Bokeh
+    # RA increases to the left (inverted) per astronomical convention
+    x_start = ra_max + ra_padding
+    x_end = ra_min - ra_padding
+    y_start = dec_min - dec_padding
+    y_end = dec_max + dec_padding
+
+    # Calculate screen aspect ratio so scales match visually
+    ra_span_padded = x_start - x_end
+    dec_span_padded = y_end - y_start
+    aspect = (ra_span_padded * cos_dec) / dec_span_padded
+
+    # Constrain aspect ratio to reasonable limits
+    plot_width = 1200
+    if aspect > 3.0:
+        plot_height = 400
+    elif aspect < 0.3:
+        plot_height = 1000
+    else:
+        plot_height = int(plot_width / aspect)
+
+    p = figure(
+        title="Interactive Lens Spatial Distribution Explorer",
+        width=plot_width,
+        height=plot_height + 80,  # add padding for title/toolbar
+        sizing_mode="scale_both",
+        match_aspect=True,
+        tools="pan,wheel_zoom,box_zoom,reset,save",
+        x_axis_label="Right Ascension (deg)",
+        y_axis_label="Declination (deg)",
+        toolbar_location="above",
+    )
+
+    # Invert x-axis (RA increases to the left)
+    p.x_range = Range1d(start=x_start, end=x_end)
+    p.y_range = Range1d(start=y_start, end=y_end)
+
+    # Apply premium dark theme styling
+    p.background_fill_color = "#1e1e1e"
+    p.border_fill_color = "#181818"
+    p.grid.grid_line_color = "#3a3a3a"
+    p.grid.grid_line_alpha = 0.5
+    p.title.text_color = "#ffffff"
+    p.title.text_font_size = "14pt"
+    p.xaxis.axis_label_text_color = "#cccccc"
+    p.yaxis.axis_label_text_color = "#cccccc"
+    p.xaxis.major_label_text_color = "#aaaaaa"
+    p.yaxis.major_label_text_color = "#aaaaaa"
+
+    # Draw each optical catalog's markers
+    for idx, name in enumerate(dfs.keys()):
+        tbl = dfs[name]
+        color = colors[idx % len(colors)]
+        marker_name = markers[idx % len(markers)]
+
+        # Prepare source data
+        source = ColumnDataSource(
+            data={
+                "ra": np.asarray(tbl["ra"], dtype=float),
+                "dec": np.asarray(tbl["dec"], dtype=float),
+                "z": np.asarray(tbl["z"], dtype=float),
+                "rank": np.arange(1, len(tbl) + 1, dtype=int),
+                "catalog": [name] * len(tbl),
+                "total": [len(tbl)] * len(tbl),
+            }
+        )
+
+        # Plot based on marker style (use larger hollow markers so overlapping can be seen)
+        # Map marker names to Bokeh marker types
+        bokeh_marker_map = {
+            "o": "circle",
+            "s": "square",
+            "^": "triangle",
+            "v": "inverted_triangle",
+            "D": "diamond",
+            "d": "diamond",
+            "h": "hex",
+            "*": "star",
+            "x": "x",
+            "+": "cross",
+        }
+        bokeh_marker = bokeh_marker_map.get(marker_name, "circle")
+        size = 12 + idx * 3
+        line_only = bokeh_marker in {"cross", "x", "plus"}
+        renderer = p.scatter(
+            x="ra",
+            y="dec",
+            source=source,
+            size=size if not line_only else max(8, size - 3),
+            marker=bokeh_marker,
+            color=color,
+            fill_color=None,
+            line_width=2.0 if line_only else 2.5,
+            legend_label=f"{name} (N={len(tbl)})",
+        )
+
+        # Configure individual hover tool for this renderer
+        hover = HoverTool(
+            renderers=[renderer],
+            tooltips=[
+                ("Catalog", "@catalog"),
+                ("Rank", "#@rank of @total"),
+                ("RA", "@ra{0.0000} deg"),
+                ("Dec", "@dec{0.0000} deg"),
+                ("Redshift z", "@z{0.0000}"),
+            ],
+        )
+        p.add_tools(hover)
+
+    # Draw Chen 2024 WL shear-selected clusters with an emphasized larger white hollow marker
+    if chen_table is not None and len(chen_table) > 0:
+        chen_source = ColumnDataSource(
+            data={
+                "ra": np.asarray(chen_table["ra"], dtype=float),
+                "dec": np.asarray(chen_table["dec"], dtype=float),
+                "z": np.asarray(chen_table["z"], dtype=float),
+                "snr": np.asarray(chen_table["snr"], dtype=float),
+                "peak_id": np.asarray(chen_table["peak_id"], dtype=int),
+                "richness": np.asarray(chen_table["richness"], dtype=float),
+                "opt_name": [str(x) for x in chen_table["opt_name"]],
+                "sep_mpc_h": np.asarray(chen_table["sep_mpc_h"], dtype=float),
+                "catalog": ["Chen+2024 WL Shear-Selected"] * len(chen_table),
+            }
+        )
+
+        # Prominent larger white hollow circle (size=26, line_width=3.0) to highlight WL shear-selected clusters
+        chen_renderer = p.scatter(
+            x="ra",
+            y="dec",
+            source=chen_source,
+            size=26,
+            marker="circle",
+            color="#FFFFFF",
+            fill_color=None,
+            line_width=3.0,
+            line_alpha=0.95,
+            legend_label=f"Chen+2024 WL Selected (N={len(chen_table)})",
+        )
+
+        chen_hover = HoverTool(
+            renderers=[chen_renderer],
+            tooltips=[
+                ("Catalog", "@catalog"),
+                ("Peak ID", "#@peak_id"),
+                ("WL Peak S/N", "@snr{0.00}"),
+                ("RA", "@ra{0.0000} deg"),
+                ("Dec", "@dec{0.0000} deg"),
+                ("Redshift z", "@z{0.0000}"),
+                ("Optical Match", "@opt_name (Richness: @richness{0.0})"),
+                ("Separation", "@sep_mpc_h{0.00} Mpc/h"),
+            ],
+        )
+        p.add_tools(chen_hover)
+
+    # Customize layout and legend
+    p.legend.location = "top_left"
+    p.legend.click_policy = "hide"  # Hide/show catalog by clicking legend
+    p.legend.title = "Catalogs (Click to Toggle)"
+    p.legend.background_fill_color = "#1e1e1e"
+    p.legend.background_fill_alpha = 0.85
+    p.legend.label_text_color = "#ffffff"
+    p.legend.title_text_color = "#cccccc"
+    p.legend.border_line_color = "#3a3a3a"
+
+    # Save to file
+    save(p)
+
+    # Post-process HTML to make the layout center and fill the viewport
+    html_content = save_path.read_text(encoding="utf-8")
+    style_injection = """
+    <style>
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background-color: #181818 !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            overflow: hidden !important;
+        }
+        .bk-root {
+            width: 98vw !important;
+            height: 95vh !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+    </style>
+    """
+    html_content = html_content.replace("</head>", f"{style_injection}</head>")
+    save_path.write_text(html_content, encoding="utf-8")
+    print(f"Interactive Bokeh HTML saved and post-processed at {save_path}")
+
+
 # %% Global Configuration
 
 LABELS_TO_COMPARE = [
-    "camira_1bin",
-    "redm_r16_1bin",
+    "redm_pdr3_5band_free_1bin",
+    "camira_hectomap_1bin",
+    "redm_r16_hectomap_1bin",
+    "amico_1bin",
+    "cosine_1bin",
+    "pls_1bin",
+    "regression_1bin",
     "rz_diff_1bin",
-    "rz_diff_lum_1bin",
+    "cca1_1bin",
+    "cca2_1bin",
 ]
 
 DISPLAY_NAMES = {
-    "camira_1bin": "CAMIRA",
-    "redm_r16_1bin": "redMaPPer R16",
-    "rz_diff_1bin": "r-z Diff (Richness)",
-    "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
+    "redm_pdr3_5band_free_1bin": "redMaPPer PDR3",
+    "camira_hectomap_1bin": "CAMIRA",
+    "redm_r16_hectomap_1bin": "redMaPPer R16",
+    "amico_1bin": "AMICO",
+    "cosine_1bin": "Cosine Finder",
+    "pls_1bin": "PLS Finder",
+    "regression_1bin": "Regression Finder",
+    "rz_diff_1bin": "r-z Diff Finder",
+    "cca1_1bin": "CCA1 Finder",
+    "cca2_1bin": "CCA2 Finder",
 }
 
+# Color palette: Paul Tol Bright/Muted adapted (10 distinct hues for high contrast)
 PALETTE = [
-    "#EE6677",  # Red (CAMIRA)
-    "#4477AA",  # Blue (redMaPPer R16)
-    "#228833",  # Green (r-z Richness)
-    "#66CCEE",  # Cyan (r-z Luminosity)
+    "#4477AA",  # Blue
+    "#EE6677",  # Red
+    "#228833",  # Green
+    "#CCBB44",  # Yellow
+    "#66CCEE",  # Cyan
+    "#AA3377",  # Purple
+    "#EE7733",  # Orange
+    "#009988",  # Teal
+    "#332288",  # Indigo
+    "#BBBBBB",  # Gray
 ]
 
-MARKERS = ["s", "x", "^", "D"]
+# Plotting marker config (distinct shapes supported across matplotlib and Bokeh)
+MARKERS = ["o", "s", "^", "v", "D", "h", "*", "d", "x", "+"]
 
-OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
-OUTPUT_CONSENSUS_BREAKDOWN = (
-    project_root / "output/plots_for_agents/consensus_breakdown.png"
-)
-OUTPUT_SPATIAL_PNG = project_root / "output/plots_for_agents/spatial_distribution.png"
-OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
+OUTPUT_MATCH_HEATMAP = project_root / "output/plots/matching_statistics.png"
+OUTPUT_CONSENSUS_BREAKDOWN = project_root / "output/plots/consensus_breakdown.png"
+OUTPUT_BOKEH_HTML = project_root / "output/plots/spatial_distribution.html"
 OUTPUT_TIER_CONSENSUS_PROFILES = (
-    project_root / "output/plots_for_agents/tier_consensus_profiles.png"
+    project_root / "output/plots/tier_consensus_profiles.png"
 )
-OUTPUT_TIER_PAIRWISE_HEATMAPS = (
-    project_root / "output/plots_for_agents/tier_pairwise_heatmaps.png"
-)
+OUTPUT_TIER_PAIRWISE_HEATMAPS = project_root / "output/plots/tier_pairwise_heatmaps.png"
 
 
 # %% [Stage 1: Load and Match Catalogs]
@@ -1262,18 +1216,14 @@ dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
 chen_tbl = load_chen2024_clusters(project_root)
 
 print(
-    f"\nLoaded Chen+2024 WL shear-selected clusters in full survey: N={len(chen_tbl)} (z in [0.19, 0.52], Y3 mask)"
+    f"\nLoaded Chen+2024 WL shear-selected clusters in HectoMAP: N={len(chen_tbl)} (z in [0.19, 0.52], Y3 mask)"
 )
 
 match_df = compute_pairwise_matches(dfs_dict)
 
-
 # %% [Stage 2: Plot Matching Heatmap]
 
-plot_matching_heatmap(
-    match_df, save_path=OUTPUT_MATCH_HEATMAP, display_names=DISPLAY_NAMES
-)
-
+plot_matching_heatmap(match_df, save_path=OUTPUT_MATCH_HEATMAP)
 
 # %% [Stage 3: Overall Consensus Breakdown Analysis]
 
@@ -1285,32 +1235,19 @@ plot_consensus_breakdown(
     colors=PALETTE,
     markers=MARKERS,
     save_path=OUTPUT_CONSENSUS_BREAKDOWN,
-    display_names=DISPLAY_NAMES,
 )
 
+# %% [Stage 4: Plot Bokeh Interactive Visualization]
 
-# %% [Stage 4: Regional Spatial Distribution (Static PNG & Interactive Bokeh)]
-
-plot_spatial_distribution_regions(
-    dfs_dict,
-    colors=PALETTE,
-    markers=MARKERS,
-    save_path=OUTPUT_SPATIAL_PNG,
-    chen_table=chen_tbl,
-    display_names=DISPLAY_NAMES,
-)
-
-plot_bokeh_spatial_regional(
+plot_bokeh_spatial(
     dfs_dict,
     colors=PALETTE,
     markers=MARKERS,
     save_path=OUTPUT_BOKEH_HTML,
     chen_table=chen_tbl,
-    display_names=DISPLAY_NAMES,
 )
 
-
-# %% [Stage 5: Tiered Proxy Consensus Analysis (4 Quartiles per Catalog)]
+# %% [Stage 5: Tiered Proxy Consensus Analysis (4 Bins per Catalog)]
 
 tier_consensus_df = compute_tier_consensus_breakdown(
     dfs_dict, n_bins=4, display_names=DISPLAY_NAMES
@@ -1324,7 +1261,6 @@ plot_tier_consensus_profiles(
     save_path=OUTPUT_TIER_CONSENSUS_PROFILES,
     display_names=DISPLAY_NAMES,
 )
-
 
 # %% [Stage 6: Tier-Resolved Pairwise Matching Heatmaps]
 
