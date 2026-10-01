@@ -77,10 +77,10 @@ def load_comparison_data(configs_to_compare, root_path):
         return present_labels, loaded_tables, label_time_texts
 
     n_bins = len(loaded_tables[0])
-    for tables in loaded_tables:
+    for label, tables in zip(present_labels, loaded_tables):
         if len(tables) != n_bins:
             raise ValueError(
-                f"All labels must have the same number of lens bins. For {display_name}: {len(tables)} != {n_bins}"
+                f"All labels must have the same number of lens bins. For {label}: {len(tables)} != {n_bins}"
             )
 
     return present_labels, loaded_tables, label_time_texts
@@ -336,20 +336,35 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 # Available catalogs include observational sets ("camira", "cosine", "redm_pdr3_5band_free", ...)
 # as well as ideal theoretical zero-scatter upper limits ("ideal_mdpl2", "ideal_colossus").
 # If an ideal catalog is placed first, the ratio plot directly shows DeltaSigma_obs / DeltaSigma_ideal.
+# CONFIGS_TO_COMPARE = [
+#     ("ideal_mdpl2", "1bin", "Y3"),
+#     # ("redm_pdr3_5band_free", "1bin", "Y3"),
+#     # ("logm_s16a", "1bin", "Y3"),
+#     ("redm_r16", "1bin", "Y3"),
+#     ("camira", "1bin", "Y3"),
+#     # ("amico", "1bin", "Y3"),
+#     # ("cosine", "1bin", "Y3"),
+#     # ("pls", "1bin", "Y3"),
+#     # ("regression", "1bin", "Y3"),
+#     ("rz_diff", "1bin", "Y3"),
+#     ("rz_diff_lum", "1bin", "Y3"),
+#     ("rz_diff_fixed", "1bin", "Y3"),
+#     # ("cca1", "1bin", "Y3"),
+#     # ("cca2", "1bin", "Y3"),
+# ]
 CONFIGS_TO_COMPARE = [
-    ("ideal_mdpl2", "1bin", "Y3"),
+    ("ideal_mdpl2", "4bin", "Y3"),
     # ("redm_pdr3_5band_free", "1bin", "Y3"),
-    # ("redm_r16", "1bin", "Y3"),
-    # ("camira", "1bin", "Y3"),
     # ("logm_s16a", "1bin", "Y3"),
-    ("redm_r16_hectomap", "1bin", "Y3"),
-    ("camira_hectomap", "1bin", "Y3"),
-    ("amico", "1bin", "Y3"),
+    # ("redm_r16", "4bin", "Y3"),  # Only has 3 bins (lambda >= 20 cut exhausts catalog before bin3)
+    ("camira", "4bin", "Y3"),
+    # ("amico", "1bin", "Y3"),
     # ("cosine", "1bin", "Y3"),
     # ("pls", "1bin", "Y3"),
     # ("regression", "1bin", "Y3"),
-    ("rz_diff", "1bin", "Y3"),
-    ("rz_diff_lum", "1bin", "Y3"),
+    ("rz_diff", "4bin", "Y3"),
+    ("rz_diff_lum", "4bin", "Y3"),
+    ("rz_diff_fixed", "4bin", "Y3"),
     # ("cca1", "1bin", "Y3"),
     # ("cca2", "1bin", "Y3"),
 ]
