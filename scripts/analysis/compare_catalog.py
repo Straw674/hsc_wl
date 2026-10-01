@@ -663,7 +663,7 @@ def draw_sky_marker(plot, region: dict, source, style: dict, key: str):
     vertices = {
         "diamond": [(0, 1), (1, 0), (0, -1), (-1, 0)],
         "triangle": [(0, 1), (0.87, -0.5), (-0.87, -0.5)],
-        "cross": [(-1, -1), (1, 1), (np.nan, np.nan), (-1, 1), (1, -1)],
+        "inverted_triangle": [(0, -1), (0.87, 0.5), (-0.87, 0.5)],
         "plus": [(-1, 0), (1, 0), (np.nan, np.nan), (0, -1), (0, 1)],
         "hexagon": [
             (np.cos(a), np.sin(a))
@@ -673,7 +673,7 @@ def draw_sky_marker(plot, region: dict, source, style: dict, key: str):
     offsets = np.asarray(vertices) * radius
     source.data["marker_x"] = [x + offsets[:, 0] * scale for x in source.data["ra"]]
     source.data["marker_y"] = [y + offsets[:, 1] for y in source.data["dec"]]
-    if shape in ("cross", "plus"):
+    if shape == "plus":
         return plot.multi_line(xs="marker_x", ys="marker_y", **common)
     return plot.patches(xs="marker_x", ys="marker_y", fill_color=None, **common)
 
@@ -745,7 +745,7 @@ def marker_swatch_html(style: dict) -> str:
         "square": '<rect x="4" y="4" width="12" height="12"/>',
         "diamond": '<path d="M10 3 L17 10 L10 17 L3 10 Z"/>',
         "triangle": '<path d="M10 3 L16 14 L4 14 Z"/>',
-        "cross": '<path d="M4 4 L16 16 M4 16 L16 4"/>',
+        "inverted_triangle": '<path d="M4 6 L16 6 L10 17 Z"/>',
         "plus": '<path d="M3 10 H17 M10 3 V17"/>',
         "hexagon": '<path d="M10 3 L16 6.5 L16 13.5 L10 17 L4 13.5 L4 6.5 Z"/>',
     }
@@ -1628,7 +1628,11 @@ HTML_STYLES = {
         color="#20466E", shape="square", diameter=0.23, line_width=1.9, alpha=0.95
     ),
     "rz_diff_fixed_1bin": dict(
-        color="#C7682E", shape="cross", diameter=0.20, line_width=2.1, alpha=0.95
+        color="#C7682E",
+        shape="inverted_triangle",
+        diameter=0.24,
+        line_width=1.9,
+        alpha=0.95,
     ),
     "act_dr6": dict(
         color="#327D80", shape="square", diameter=0.12, line_width=1.6, alpha=0.8
