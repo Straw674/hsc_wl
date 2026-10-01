@@ -587,11 +587,13 @@ def build_interactive_regions(
 
 
 def configure_sky_aspect(plot, region: dict):
-    """Fit field bounds with equal physical angular scales after browser resizing."""
-    from bokeh.models import CustomJS
+    """Preserve the current view when layout changes while maintaining sky aspect."""
+    from bokeh.models import ColumnDataSource, CustomJS
+
+    state = ColumnDataSource(data={"initialized": [False]})
 
     callback = CustomJS(
-        args=dict(plot=plot, region=region),
+        args=dict(plot=plot, region=region, state=state),
         code="""
         const w = plot.inner_width, h = plot.inner_height;
         if (!(w > 0 && h > 0)) return;
@@ -602,10 +604,18 @@ def configure_sky_aspect(plot, region: dict):
         const cx = (region.x_start + region.x_end) / 2;
         const cy = (region.y_start + region.y_end) / 2;
         const sx = scale * w / c / 2, sy = scale * h / 2;
-        plot.x_range.setv({start: cx + sx, end: cx - sx,
-                          reset_start: cx + sx, reset_end: cx - sx});
-        plot.y_range.setv({start: cy - sy, end: cy + sy,
-                          reset_start: cy - sy, reset_end: cy + sy});
+        plot.x_range.setv({reset_start: cx + sx, reset_end: cx - sx});
+        plot.y_range.setv({reset_start: cy - sy, reset_end: cy + sy});
+        if (!state.data.initialized[0]) {
+            state.data.initialized[0] = true;
+            plot.x_range.setv({start: cx + sx, end: cx - sx});
+            plot.y_range.setv({start: cy - sy, end: cy + sy});
+        } else {
+            // Tick-label layout changes must not reset the user's zoom or pan.
+            const center = (plot.x_range.start + plot.x_range.end) / 2;
+            const half = (plot.y_range.end - plot.y_range.start) * w / h / c / 2;
+            plot.x_range.setv({start: center + half, end: center - half});
+        }
     """,
     )
     plot.js_on_change("inner_width", callback)
@@ -624,6 +634,7 @@ def plot_bokeh_spatial_regional(
     from bokeh.models import (
         BoxZoomTool,
         ColumnDataSource,
+        CustomJS,
         CustomJSTickFormatter,
         HoverTool,
         Range1d,
@@ -789,9 +800,27 @@ def plot_bokeh_spatial_regional(
                 p.add_tools(chen_hover)
 
         if p.legend:
-            p.add_layout(p.legend[0], "below")
-        p.legend.location = "top_left"
-        p.legend.label_text_font_size = "9pt"
+            legend = p.legend[0]
+            p.add_layout(legend, "below")
+            legend.orientation = "horizontal"
+            legend.ncols = 2
+            p.js_on_change(
+                "outer_width",
+                CustomJS(
+                    args=dict(plot=p, legend=legend),
+                    code="""
+                    const columns = Math.max(1, Math.min(legend.items.length,
+                        Math.floor(plot.outer_width / 180)));
+                    if (legend.ncols !== columns) legend.ncols = columns;
+                """,
+                ),
+            )
+        p.legend.location = "center"
+        p.legend.label_text_font_size = "8pt"
+        p.legend.padding = 4
+        p.legend.spacing = 6
+        p.legend.glyph_width = 14
+        p.legend.label_standoff = 4
         p.legend.click_policy = "hide"
         p.legend.background_fill_color = "#1e1e1e"
         p.legend.background_fill_alpha = 0.85
@@ -816,17 +845,15 @@ def plot_bokeh_spatial_regional(
         )
     html_content = (
         """<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>星系团天区对比</title>
+<title>Catalog comparison</title>
 <style>
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #181818; color: #eee; }
 body { font: 15px system-ui, sans-serif; }
 main { width: 100%; margin: 0 auto; padding: 20px clamp(12px, 2vw, 40px); }
-h1 { font-size: 22px; font-weight: normal; margin: 0 0 8px; }
 h2 { font-size: 17px; font-weight: normal; margin: 24px 0 8px; }
-p { color: #bbb; margin: 0 0 12px; }
 .region-row { display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 16px; }
 .sky-panel { min-width: 0; height: clamp(460px, 62vh, 820px); }
 .sky-panel > div { width: 100%; height: 100%; }
@@ -835,8 +862,6 @@ p { color: #bbb; margin: 0 0 12px; }
 """
         + resources
         + """</head><body><main>
-<h1>星系团天区对比</h1>
-<p>滚轮缩放 · 拖动平移 · 点击图例显示或隐藏星表 · 悬停查看详情 · RA 向左增大</p>
 """
         + "".join(sections)
         + "</main>"
