@@ -90,9 +90,18 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
         lens_label, source_label = label
         display_name = display_names.get(label, f"{lens_label} ({source_label})")
 
-        ax.fill_between(x_val, y_val - y_err, y_val + y_err, color=color, alpha=0.2)
-
         offset = 1.0 + 0.05 * (i - (len(data_dict) - 1) / 2.0)
+        ax.errorbar(
+            x_val * offset,
+            y_val,
+            yerr=y_err,
+            fmt="-",
+            color=color,
+            linewidth=1.5,
+            elinewidth=1.2,
+            capsize=3,
+            alpha=0.9,
+        )
         ax.scatter(
             x_val * offset,
             y_val,
@@ -129,13 +138,13 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
 
 
 def plot_grouped_scatter_comparison(
-    data_dict, labels, display_names, rho_bins, colors, output_path
+    data_dict, labels, display_names, rho_bins, colors, offset_width, output_path
 ):
     """Compare scatter within discrete bins using offset points and error bars."""
     available_labels = [label for label in labels if label in data_dict]
     bin_positions = np.arange(1, len(rho_bins) + 1)
     offsets = (
-        np.linspace(-0.27, 0.27, len(available_labels))
+        np.linspace(-offset_width / 2, offset_width / 2, len(available_labels))
         if len(available_labels) > 1
         else np.array([0.0])
     )
@@ -179,6 +188,59 @@ def plot_grouped_scatter_comparison(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(output_path, dpi=300, bbox_inches="tight")
         print(f"Saved grouped scatter comparison: {output_path}")
+        plt.show()
+        plt.close(fig)
+
+
+def plot_panel_scatter_comparison(
+    data_dict, labels, display_names, rho_bins, colors, output_path
+):
+    """Compare samples in one panel per bin using shared scatter limits."""
+    available_labels = [label for label in labels if label in data_dict]
+    sample_names = [
+        display_names.get(label, f"{label[0].removesuffix('_4bin')} ({label[1]})")
+        for label in available_labels
+    ]
+    with plt.rc_context({"font.size": 12, "font.weight": "normal"}):
+        fig, axes = plt.subplots(
+            1,
+            len(rho_bins),
+            figsize=(12, 4),
+            sharex=True,
+            sharey=True,
+            squeeze=False,
+            layout="constrained",
+        )
+        for ax, bin_index in zip(
+            axes.flat, reversed(range(len(rho_bins))), strict=True
+        ):
+            for sample_index, label in enumerate(available_labels):
+                summary = data_dict[label]
+                ax.errorbar(
+                    np.asarray(summary["sig_med_bt"])[bin_index],
+                    sample_index,
+                    xerr=np.asarray(summary["sig_err_bt"])[bin_index],
+                    fmt="o",
+                    color=colors[labels.index(label) % len(colors)],
+                    markersize=5,
+                    elinewidth=1.2,
+                    capsize=3,
+                )
+            ax.set_title(f"Bin {bin_index + 1}", fontweight="normal")
+            ax.set_axisbelow(True)
+            ax.grid(False)
+            ax.xaxis.grid(True, color="0.9", linewidth=0.7)
+            ax.spines[["top", "right"]].set_visible(False)
+            ax.set_yticks(np.arange(len(available_labels)), sample_names)
+
+        axes[0, 0].set_ylim(len(available_labels) - 0.5, -0.5)
+        axes[0, 0].invert_xaxis()
+        fig.supxlabel(
+            r"$\sigma_{\mathcal{M}|\mathcal{O}}\ [\rm dex]$", fontweight="normal"
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Saved panel scatter comparison: {output_path}")
         plt.show()
         plt.close(fig)
 
@@ -235,6 +297,7 @@ else:
 
 
 # %% [Stage 3: Plot grouped comparison]
+GROUPED_OFFSET_WIDTH = 0.15
 GROUPED_OUTPUT_FIG = (
     project_root / "output/plots_for_agents/compare_scatter_grouped.png"
 )
@@ -246,7 +309,24 @@ if data_dict:
         display_names=DISPLAY_NAMES,
         rho_bins=RHO_BINS,
         colors=COLORS,
+        offset_width=GROUPED_OFFSET_WIDTH,
         output_path=GROUPED_OUTPUT_FIG,
     )
 else:
     print("No data loaded. Skipping grouped plot.")
+
+
+# %% [Stage 4: Plot panel comparison]
+PANEL_OUTPUT_FIG = project_root / "output/plots_for_agents/compare_scatter_panels.png"
+
+if data_dict:
+    plot_panel_scatter_comparison(
+        data_dict=data_dict,
+        labels=LABELS,
+        display_names=DISPLAY_NAMES,
+        rho_bins=RHO_BINS,
+        colors=COLORS,
+        output_path=PANEL_OUTPUT_FIG,
+    )
+else:
+    print("No data loaded. Skipping panel plot.")
