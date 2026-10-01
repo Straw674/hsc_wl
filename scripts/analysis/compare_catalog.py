@@ -587,7 +587,7 @@ def build_interactive_regions(
 
 
 def configure_sky_aspect(plot, region: dict):
-    """Preserve the current view when layout changes while maintaining sky aspect."""
+    """Size each frame to its field aspect without resetting zoom or pan."""
     from bokeh.models import ColumnDataSource, CustomJS
 
     state = ColumnDataSource(data={"initialized": [False]})
@@ -600,6 +600,14 @@ def configure_sky_aspect(plot, region: dict):
         const c = Math.cos(region.dec_ref * Math.PI / 180);
         const dx = region.x_start - region.x_end;
         const dy = region.y_end - region.y_start;
+        // Use the full-field aspect for layout, independent of interactive zoom.
+        const frameHeight = Math.max(1, Math.round(w * dy / (dx * c)));
+        const chromeHeight = plot.outer_height - h;
+        const height = frameHeight + chromeHeight;
+        if (Math.abs(h - frameHeight) > 1) {
+            if (plot.height !== height) plot.height = height;
+            return;
+        }
         const scale = Math.max(dx * c / w, dy / h);
         const cx = (region.x_start + region.x_end) / 2;
         const cy = (region.y_start + region.y_end) / 2;
@@ -656,7 +664,8 @@ def plot_bokeh_spatial_regional(
         p = figure(
             name=f_name,
             title=reg["title"],
-            sizing_mode="stretch_both",
+            sizing_mode="stretch_width",
+            height=360,
             tools="pan,wheel_zoom,box_zoom,reset,save",
             active_scroll="wheel_zoom",
             x_axis_label="RA [deg]",
@@ -672,18 +681,22 @@ def plot_bokeh_spatial_regional(
                 code="return ((tick % 360) + 360) % 360;"
             )
 
-        p.background_fill_color = "#1e1e1e"
-        p.border_fill_color = "#181818"
-        p.grid.grid_line_color = "#3a3a3a"
-        p.grid.grid_line_alpha = 0.5
-        p.title.text_color = "#ffffff"
+        p.background_fill_color = "#ffffff"
+        p.border_fill_color = "#ffffff"
+        p.grid.grid_line_color = "#dce1e6"
+        p.grid.grid_line_alpha = 0.7
+        p.outline_line_color = "#dce1e6"
+        p.axis.axis_line_color = "#c4cbd3"
+        p.axis.major_tick_line_color = "#c4cbd3"
+        p.axis.minor_tick_line_color = None
+        p.title.text_color = "#374151"
         p.title.text_font_size = "11pt"
         p.title.text_font_style = "normal"
         p.axis.axis_label_text_font_style = "normal"
-        p.xaxis.axis_label_text_color = "#cccccc"
-        p.yaxis.axis_label_text_color = "#cccccc"
-        p.xaxis.major_label_text_color = "#aaaaaa"
-        p.yaxis.major_label_text_color = "#aaaaaa"
+        p.xaxis.axis_label_text_color = "#4b5563"
+        p.yaxis.axis_label_text_color = "#4b5563"
+        p.xaxis.major_label_text_color = "#64748b"
+        p.yaxis.major_label_text_color = "#64748b"
 
         for idx, (k, tbl) in enumerate(dfs.items()):
             ra = np.asarray(tbl["ra"], dtype=float)
@@ -777,7 +790,7 @@ def plot_bokeh_spatial_regional(
                     source=chen_source,
                     width=0.36 / np.cos(np.radians(reg["dec_ref"])),
                     height=0.36,
-                    color="#FFFFFF",
+                    color="#242b35",
                     fill_color=None,
                     line_width=2.5,
                     line_alpha=0.95,
@@ -822,11 +835,11 @@ def plot_bokeh_spatial_regional(
         p.legend.glyph_width = 14
         p.legend.label_standoff = 4
         p.legend.click_policy = "hide"
-        p.legend.background_fill_color = "#1e1e1e"
+        p.legend.background_fill_color = "#ffffff"
         p.legend.background_fill_alpha = 0.85
-        p.legend.label_text_color = "#ffffff"
-        p.legend.title_text_color = "#cccccc"
-        p.legend.border_line_color = "#3a3a3a"
+        p.legend.label_text_color = "#374151"
+        p.legend.title_text_color = "#4b5563"
+        p.legend.border_line_color = None
 
         p_list.append(p)
 
@@ -840,8 +853,7 @@ def plot_bokeh_spatial_regional(
     for title, indices in (("SPRING", (0, 1, 2)), ("FALL", (3, 4)), ("HECTOMAP", (5,))):
         panels = "".join(f'<div class="sky-panel">{divs[i]}</div>' for i in indices)
         sections.append(
-            f'<section><h2>{title}</h2><div class="region-row" '
-            f'style="--columns:{len(indices)}">{panels}</div></section>'
+            f'<section><h2>{title}</h2><div class="region-panels">{panels}</div></section>'
         )
     html_content = (
         """<!DOCTYPE html>
@@ -850,14 +862,14 @@ def plot_bokeh_spatial_regional(
 <title>Catalog comparison</title>
 <style>
 * { box-sizing: border-box; }
-html, body { margin: 0; background: #181818; color: #eee; }
+html, body { margin: 0; background: #f5f6f8; color: #374151; }
 body { font: 15px system-ui, sans-serif; }
 main { width: 100%; margin: 0 auto; padding: 20px clamp(12px, 2vw, 40px); }
-h2 { font-size: 17px; font-weight: normal; margin: 24px 0 8px; }
-.region-row { display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 16px; }
-.sky-panel { min-width: 0; height: clamp(460px, 62vh, 820px); }
-.sky-panel > div { width: 100%; height: 100%; }
-@media (max-width: 900px) { .region-row { grid-template-columns: 1fr; } }
+section + section { border-top: 1px solid #cbd2da; margin-top: 28px; padding-top: 16px; }
+h2 { font-size: 12px; font-weight: normal; color: #64748b; margin: 0 0 12px; }
+.region-panels { display: flex; flex-direction: column; gap: 20px; }
+.sky-panel { min-width: 0; width: 100%; background: #fff; }
+.sky-panel > div { width: 100%; }
 </style>
 """
         + resources
