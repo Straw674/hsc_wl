@@ -121,9 +121,66 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
         )
 
     plt.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    print(f"Saved scatter comparison: {output_path}")
     plt.show()
     plt.close(fig)
+
+
+def plot_grouped_scatter_comparison(
+    data_dict, labels, display_names, rho_bins, colors, output_path
+):
+    """Compare scatter within discrete bins using offset points and error bars."""
+    available_labels = [label for label in labels if label in data_dict]
+    bin_positions = np.arange(1, len(rho_bins) + 1)
+    offsets = (
+        np.linspace(-0.27, 0.27, len(available_labels))
+        if len(available_labels) > 1
+        else np.array([0.0])
+    )
+
+    with plt.rc_context({"font.size": 12, "font.weight": "normal"}):
+        fig, ax = plt.subplots(figsize=(9, 5), layout="constrained")
+        for label, offset in zip(available_labels, offsets, strict=True):
+            summary = data_dict[label]
+            color = colors[labels.index(label) % len(colors)]
+            run_label, version = label
+            display_name = display_names.get(
+                label, f"{run_label.removesuffix('_4bin')} ({version})"
+            )
+            ax.errorbar(
+                bin_positions + offset,
+                np.asarray(summary["sig_med_bt"]),
+                yerr=np.asarray(summary["sig_err_bt"]),
+                fmt="o",
+                color=color,
+                markersize=5,
+                markeredgewidth=1,
+                elinewidth=1.2,
+                capsize=3,
+                label=display_name,
+            )
+
+        ax.set_xticks(bin_positions, [f"Bin {i}" for i in bin_positions])
+        ax.set_xlim(len(rho_bins) + 0.55, 0.45)
+        ax.set_ylabel(r"$\sigma_{\mathcal{M}|\mathcal{O}}\ [\rm dex]$")
+        ax.set_axisbelow(True)
+        ax.grid(False)
+        ax.yaxis.grid(True, color="0.9", linewidth=0.7)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.legend(
+            loc="lower center",
+            bbox_to_anchor=(0.5, 1.02),
+            ncol=min(2, len(available_labels)),
+            frameon=False,
+            fontsize=11,
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Saved grouped scatter comparison: {output_path}")
+        plt.show()
+        plt.close(fig)
 
 
 # %% Global Configuration
@@ -175,3 +232,21 @@ if data_dict:
     )
 else:
     print("No data loaded. Skipping plot.")
+
+
+# %% [Stage 3: Plot grouped comparison]
+GROUPED_OUTPUT_FIG = (
+    project_root / "output/plots_for_agents/compare_scatter_grouped.png"
+)
+
+if data_dict:
+    plot_grouped_scatter_comparison(
+        data_dict=data_dict,
+        labels=LABELS,
+        display_names=DISPLAY_NAMES,
+        rho_bins=RHO_BINS,
+        colors=COLORS,
+        output_path=GROUPED_OUTPUT_FIG,
+    )
+else:
+    print("No data loaded. Skipping grouped plot.")
