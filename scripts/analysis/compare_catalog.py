@@ -541,100 +541,125 @@ def plot_spatial_distribution_regions(
     plt.close(fig)
 
 
+def build_interactive_regions(
+    dfs: dict[str, Table], chen_table: Table | None
+) -> list[dict]:
+    """Use canonical field membership and padded catalog bounds for six panels."""
+    from hsc_wl.coverage import in_field
+
+    tables = list(dfs.values()) + ([] if chen_table is None else [chen_table])
+    ra = np.concatenate([np.asarray(tbl["ra"], float) for tbl in tables])
+    dec = np.concatenate([np.asarray(tbl["dec"], float) for tbl in tables])
+    regions = []
+    # Keep each row in decreasing RA order, matching the coordinate axes.
+    for name, bounds in (
+        ("GAMA15H", (203, 235, -3, 6)),
+        ("WIDE12H", (153.5, 203, -3, 6)),
+        ("GAMA09H", (125, 153.5, -3, 6)),
+        ("XMM", (25, 45, -8, 8)),
+        ("VVDS", (-40, 15, -8, 8)),
+        ("HECTOMAP", (210, 252, 41.5, 45)),
+    ):
+        mask = in_field(ra, dec, name) & np.isfinite(ra) & np.isfinite(dec)
+        x = ra[mask]
+        y = dec[mask]
+        if name == "VVDS":
+            x = np.where(x > 180, x - 360, x)
+        if len(x):
+            xmin, xmax, ymin, ymax = x.min(), x.max(), y.min(), y.max()
+        else:
+            xmin, xmax, ymin, ymax = bounds
+        xpad = max(0.4, (xmax - xmin) * 0.04)
+        ypad = max(0.4, (ymax - ymin) * 0.06)
+        regions.append(
+            dict(
+                name=name,
+                title=name,
+                x_start=float(xmax + xpad),
+                x_end=float(xmin - xpad),
+                y_start=float(ymin - ypad),
+                y_end=float(ymax + ypad),
+                dec_ref=float((ymin + ymax) / 2),
+                shift_fall=name == "VVDS",
+            )
+        )
+    return regions
+
+
+def configure_sky_aspect(plot, region: dict):
+    """Fit field bounds with equal physical angular scales after browser resizing."""
+    from bokeh.models import CustomJS
+
+    callback = CustomJS(
+        args=dict(plot=plot, region=region),
+        code="""
+        const w = plot.inner_width, h = plot.inner_height;
+        if (!(w > 0 && h > 0)) return;
+        const c = Math.cos(region.dec_ref * Math.PI / 180);
+        const dx = region.x_start - region.x_end;
+        const dy = region.y_end - region.y_start;
+        const scale = Math.max(dx * c / w, dy / h);
+        const cx = (region.x_start + region.x_end) / 2;
+        const cy = (region.y_start + region.y_end) / 2;
+        const sx = scale * w / c / 2, sy = scale * h / 2;
+        plot.x_range.setv({start: cx + sx, end: cx - sx,
+                          reset_start: cx + sx, reset_end: cx - sx});
+        plot.y_range.setv({start: cy - sy, end: cy + sy,
+                          reset_start: cy - sy, reset_end: cy + sy});
+    """,
+    )
+    plot.js_on_change("inner_width", callback)
+    plot.js_on_change("inner_height", callback)
+
+
 def plot_bokeh_spatial_regional(
     dfs: dict[str, Table],
     colors: list[str],
-    markers: list[str],
     save_path: Path,
     chen_table: Table | None = None,
     display_names: dict[str, str] | None = None,
 ):
-    """Generate an interactive Bokeh layout with 3 dedicated regional panels.
-
-    Saves results as a self-contained HTML file.
-    """
-    from bokeh.layouts import column
-    from bokeh.models import ColumnDataSource, HoverTool, Range1d
-    from bokeh.plotting import figure, output_file, save
+    """Save six responsive sky panels grouped by survey season as offline HTML."""
+    from bokeh.embed import components
+    from bokeh.models import (
+        BoxZoomTool,
+        ColumnDataSource,
+        CustomJSTickFormatter,
+        HoverTool,
+        Range1d,
+    )
+    from bokeh.plotting import figure
+    from bokeh.resources import Resources
 
     from hsc_wl.coverage import in_field
 
     names_map = display_names or {}
-    output_file(
-        filename=str(save_path), title="Lens Regional Spatial Distribution Explorer"
-    )
-
-    bokeh_marker_map = {
-        "o": "circle",
-        "s": "square",
-        "^": "triangle",
-        "v": "inverted_triangle",
-        "D": "diamond",
-        "d": "diamond",
-        "h": "hex",
-        "*": "star",
-        "x": "x",
-        "+": "cross",
-    }
-
-    region_defs = [
-        {
-            "name": "SPRING",
-            "title": "SPRING Region (GAMA09H + WIDE12H + GAMA15H)",
-            "x_start": 230.0,
-            "x_end": 125.0,
-            "y_start": -3.0,
-            "y_end": 6.0,
-            "dec_ref": 1.5,
-            "shift_fall": False,
-        },
-        {
-            "name": "FALL",
-            "title": "FALL Region (XMM + VVDS, Continuous RA across 0°)",
-            "x_start": 48.0,
-            "x_end": -43.0,
-            "y_start": -8.0,
-            "y_end": 8.0,
-            "dec_ref": 0.0,
-            "shift_fall": True,
-        },
-        {
-            "name": "HECTOMAP",
-            "title": "HECTOMAP Region (North)",
-            "x_start": 252.0,
-            "x_end": 210.0,
-            "y_start": 41.5,
-            "y_end": 45.0,
-            "dec_ref": 43.3,
-            "shift_fall": False,
-        },
-    ]
+    region_defs = build_interactive_regions(dfs, chen_table)
 
     p_list = []
 
-    for r_idx, reg in enumerate(region_defs):
+    for reg in region_defs:
         f_name = reg["name"]
         shift = reg["shift_fall"]
 
-        x_span = abs(reg["x_start"] - reg["x_end"])
-        y_span = abs(reg["y_end"] - reg["y_start"])
-        aspect = (x_span * np.cos(np.radians(reg["dec_ref"]))) / y_span
-        plot_height = int(np.clip(1150 / aspect, 220, 360))
-
         p = figure(
+            name=f_name,
             title=reg["title"],
-            width=1180,
-            height=plot_height + 50,
+            sizing_mode="stretch_both",
             tools="pan,wheel_zoom,box_zoom,reset,save",
-            x_axis_label="Right Ascension (deg)"
-            if not shift
-            else "RA (deg, RA>180 mapped to RA-360)",
-            y_axis_label="Declination (deg)",
-            toolbar_location="right",
+            active_scroll="wheel_zoom",
+            x_axis_label="RA [deg]",
+            y_axis_label="Dec [deg]",
+            toolbar_location="above",
         )
-
         p.x_range = Range1d(start=reg["x_start"], end=reg["x_end"])
         p.y_range = Range1d(start=reg["y_start"], end=reg["y_end"])
+        configure_sky_aspect(p, reg)
+        p.select_one(BoxZoomTool).match_aspect = True
+        if shift:
+            p.xaxis.formatter = CustomJSTickFormatter(
+                code="return ((tick % 360) + 360) % 360;"
+            )
 
         p.background_fill_color = "#1e1e1e"
         p.border_fill_color = "#181818"
@@ -642,6 +667,8 @@ def plot_bokeh_spatial_regional(
         p.grid.grid_line_alpha = 0.5
         p.title.text_color = "#ffffff"
         p.title.text_font_size = "11pt"
+        p.title.text_font_style = "normal"
+        p.axis.axis_label_text_font_style = "normal"
         p.xaxis.axis_label_text_color = "#cccccc"
         p.yaxis.axis_label_text_color = "#cccccc"
         p.xaxis.major_label_text_color = "#aaaaaa"
@@ -675,14 +702,13 @@ def plot_bokeh_spatial_regional(
                 }
             )
 
-            marker_name = markers[idx % len(markers)]
-            b_marker = bokeh_marker_map.get(marker_name, "circle")
-            renderer = p.scatter(
+            diameter = 0.14 + idx * 0.035
+            renderer = p.ellipse(
                 x="ra",
                 y="dec",
                 source=source,
-                size=10 + idx * 2,
-                marker=b_marker,
+                width=diameter / np.cos(np.radians(reg["dec_ref"])),
+                height=diameter,
                 color=colors[idx % len(colors)],
                 fill_color=None,
                 line_width=2.0,
@@ -734,12 +760,12 @@ def plot_bokeh_spatial_regional(
                     }
                 )
 
-                chen_renderer = p.scatter(
+                chen_renderer = p.ellipse(
                     x="ra",
                     y="dec",
                     source=chen_source,
-                    size=22,
-                    marker="circle",
+                    width=0.36 / np.cos(np.radians(reg["dec_ref"])),
+                    height=0.36,
                     color="#FFFFFF",
                     fill_color=None,
                     line_width=2.5,
@@ -762,7 +788,10 @@ def plot_bokeh_spatial_regional(
                 )
                 p.add_tools(chen_hover)
 
+        if p.legend:
+            p.add_layout(p.legend[0], "below")
         p.legend.location = "top_left"
+        p.legend.label_text_font_size = "9pt"
         p.legend.click_policy = "hide"
         p.legend.background_fill_color = "#1e1e1e"
         p.legend.background_fill_alpha = 0.85
@@ -772,21 +801,49 @@ def plot_bokeh_spatial_regional(
 
         p_list.append(p)
 
-    layout = column(p_list, sizing_mode="scale_width")
-    save(layout)
-
-    html_content = save_path.read_text(encoding="utf-8")
-    style_injection = """
-    <style>
-        html, body {
-            margin: 0 !important;
-            padding: 10px !important;
-            background-color: #181818 !important;
-            color: #ffffff;
-        }
-    </style>
-    """
-    html_content = html_content.replace("</head>", f"{style_injection}</head>")
+    script, divs = components(p_list)
+    # Include only the core runtime used by these plots, not imported Panel extensions.
+    resources = "\n".join(
+        f"<script>{code}</script>"
+        for code in Resources(mode="inline", components=["bokeh"]).js_raw
+    )
+    sections = []
+    for title, indices in (("SPRING", (0, 1, 2)), ("FALL", (3, 4)), ("HECTOMAP", (5,))):
+        panels = "".join(f'<div class="sky-panel">{divs[i]}</div>' for i in indices)
+        sections.append(
+            f'<section><h2>{title}</h2><div class="region-row" '
+            f'style="--columns:{len(indices)}">{panels}</div></section>'
+        )
+    html_content = (
+        """<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>星系团天区对比</title>
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #181818; color: #eee; }
+body { font: 15px system-ui, sans-serif; }
+main { width: 100%; margin: 0 auto; padding: 20px clamp(12px, 2vw, 40px); }
+h1 { font-size: 22px; font-weight: normal; margin: 0 0 8px; }
+h2 { font-size: 17px; font-weight: normal; margin: 24px 0 8px; }
+p { color: #bbb; margin: 0 0 12px; }
+.region-row { display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 16px; }
+.sky-panel { min-width: 0; height: clamp(460px, 62vh, 820px); }
+.sky-panel > div { width: 100%; height: 100%; }
+@media (max-width: 900px) { .region-row { grid-template-columns: 1fr; } }
+</style>
+"""
+        + resources
+        + """</head><body><main>
+<h1>星系团天区对比</h1>
+<p>滚轮缩放 · 拖动平移 · 点击图例显示或隐藏星表 · 悬停查看详情 · RA 向左增大</p>
+"""
+        + "".join(sections)
+        + "</main>"
+        + script
+        + "</body></html>"
+    )
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     save_path.write_text(html_content, encoding="utf-8")
     print(f"Interactive Bokeh HTML saved at {save_path}")
 
@@ -1286,7 +1343,6 @@ plot_spatial_distribution_regions(
 plot_bokeh_spatial_regional(
     dfs_dict,
     colors=PALETTE,
-    markers=MARKERS,
     save_path=OUTPUT_BOKEH_HTML,
     chen_table=chen_tbl,
     display_names=DISPLAY_NAMES,
