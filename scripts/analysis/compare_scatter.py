@@ -53,7 +53,15 @@ def load_scatter_summaries(labels, root_path):
     return data_dict
 
 
-def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_path):
+def get_sample_style(label, sample_styles, default_style):
+    """Resolve catalog-family styles independently of sample order or presence."""
+    catalog_family = label[0].split("_", 1)[0]
+    return sample_styles.get(catalog_family, default_style)
+
+
+def plot_scatter_comparison(
+    data_dict, labels, display_names, rho_bins, styles, output_path
+):
     """Plot a scatter comparison figure in the style of fig8 in jianbing.
 
     Parameters
@@ -66,6 +74,8 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
         Optional display-name overrides for legend entries.
     rho_bins : np.ndarray
         Number-density bin edges/centers (Mpc^-3).
+    styles : dict
+        Mapping from label tuple to color, marker, and fill settings.
     output_path : Path
         Destination for saving the figure.
     """
@@ -77,15 +87,16 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
     ax.set_xscale("log", nonpositive="clip")
     ax.grid(False)
 
-    for i, label in enumerate(data_dict.keys()):
+    available_labels = [label for label in labels if label in data_dict]
+    for i, label in enumerate(available_labels):
         sum_tab = data_dict[label]
         x_val = rho_bins
         y_val = sum_tab["sig_med_bt"]
         y_err = sum_tab["sig_err_bt"]
 
-        idx = labels.index(label)
-        color = COLORS[idx % len(COLORS)]
-        marker = MARKERS[idx % len(MARKERS)]
+        style = styles[label]
+        color = style["color"]
+        marker = style["marker"]
 
         lens_label, source_label = label
         display_name = display_names.get(label, f"{lens_label} ({source_label})")
@@ -108,8 +119,8 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
             s=150,
             marker=marker,
             alpha=0.9,
-            facecolor=color,
-            edgecolor="k",
+            facecolor=color if style["filled"] else "none",
+            edgecolor="k" if style["filled"] else color,
             linewidth=1.5,
             label=display_name,
         )
@@ -138,7 +149,7 @@ def plot_scatter_comparison(data_dict, labels, display_names, rho_bins, output_p
 
 
 def plot_grouped_scatter_comparison(
-    data_dict, labels, display_names, rho_bins, colors, offset_width, output_path
+    data_dict, labels, display_names, rho_bins, styles, offset_width, output_path
 ):
     """Compare scatter within discrete bins using offset points and error bars."""
     available_labels = [label for label in labels if label in data_dict]
@@ -153,7 +164,7 @@ def plot_grouped_scatter_comparison(
         fig, ax = plt.subplots(figsize=(9, 5), layout="constrained")
         for label, offset in zip(available_labels, offsets, strict=True):
             summary = data_dict[label]
-            color = colors[labels.index(label) % len(colors)]
+            color = styles[label]["color"]
             run_label, version = label
             display_name = display_names.get(
                 label, f"{run_label.removesuffix('_4bin')} ({version})"
@@ -193,7 +204,7 @@ def plot_grouped_scatter_comparison(
 
 
 def plot_panel_scatter_comparison(
-    data_dict, labels, display_names, rho_bins, colors, output_path
+    data_dict, labels, display_names, rho_bins, styles, output_path
 ):
     """Compare samples in one panel per bin using shared scatter limits."""
     available_labels = [label for label in labels if label in data_dict]
@@ -221,7 +232,7 @@ def plot_panel_scatter_comparison(
                     sample_index,
                     xerr=np.asarray(summary["sig_err_bt"])[bin_index],
                     fmt="o",
-                    color=colors[labels.index(label) % len(colors)],
+                    color=styles[label]["color"],
                     markersize=5,
                     elinewidth=1.2,
                     capsize=3,
@@ -261,9 +272,18 @@ LABELS = [
 # Optional: display names for labels in the legend
 DISPLAY_NAMES = {}
 
-# Style palette (consistent across stages if reused)
-COLORS = ["#33a02c", "#984ea3", "#ff7f00", "#1f78b4", "#e41a1c", "#a65628", "#f781bf"]
-MARKERS = ["H", "P", "s", "o", "D", "v", "^"]
+# Bind styles to catalog families, across run variants and source versions.
+# Reference: [50, 100] -> logm; redMaPPer -> redm; CAMIRA -> camira.
+# The grouped and panel figures use only the colors and retain circular markers.
+SAMPLE_STYLES = {
+    "logm": {"color": "#1f78b4", "marker": "o", "filled": True},
+    "redm": {"color": "#e41a1c", "marker": "D", "filled": True},
+    "camira": {"color": "#e41a1c", "marker": "s", "filled": False},
+    "rz": {"color": "#984ea3", "marker": "P", "filled": True},
+    "cosine": {"color": "#33a02c", "marker": "H", "filled": True},
+    "amico": {"color": "#ff7f00", "marker": "^", "filled": True},
+}
+DEFAULT_STYLE = {"color": "#7f7f7f", "marker": "v", "filled": True}
 
 # Hardcoded rho bins (Mpc^-3) as they might be missing from some pkl files
 RHO_BINS = np.array(
@@ -281,6 +301,9 @@ OUTPUT_FIG = project_root / "output/plots_for_agents/compare_scatter.png"
 
 # %% [Stage 1: Load data]
 data_dict = load_scatter_summaries(LABELS, project_root)
+styles = {
+    label: get_sample_style(label, SAMPLE_STYLES, DEFAULT_STYLE) for label in LABELS
+}
 
 
 # %% [Stage 2: Plot comparison]
@@ -290,6 +313,7 @@ if data_dict:
         labels=LABELS,
         display_names=DISPLAY_NAMES,
         rho_bins=RHO_BINS,
+        styles=styles,
         output_path=OUTPUT_FIG,
     )
 else:
@@ -308,7 +332,7 @@ if data_dict:
         labels=LABELS,
         display_names=DISPLAY_NAMES,
         rho_bins=RHO_BINS,
-        colors=COLORS,
+        styles=styles,
         offset_width=GROUPED_OFFSET_WIDTH,
         output_path=GROUPED_OUTPUT_FIG,
     )
@@ -325,7 +349,7 @@ if data_dict:
         labels=LABELS,
         display_names=DISPLAY_NAMES,
         rho_bins=RHO_BINS,
-        colors=COLORS,
+        styles=styles,
         output_path=PANEL_OUTPUT_FIG,
     )
 else:
