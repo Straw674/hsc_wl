@@ -341,9 +341,9 @@ _PATH_FORCED = (
 # CAMIRA S23b wide
 _PATH_CAMIRA = "data/camira_s23b_wide_sm_v3.dat"
 
-# AMICO cluster finder
+# AMICO cluster finder (Fall, HectoMAP, Spring Y3 survey)
 _PATH_AMICO = get_latest_cluster_catalog(
-    "/Users/xinq/cluster_finder/output/amico/cluster"
+    "/Users/xinq/cluster_finder/output/fall_hectomap_spring/amico/cluster"
 )
 
 # PLS cluster finder (2D CoG PLS decomposition)
@@ -507,7 +507,6 @@ def _infer_footprint(
             "pls",
             "cca",
             "regression",
-            "amico",
             "ideal",
         )
     )
@@ -774,14 +773,22 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         lens_format="parquet",
     ),
     # -----------------------------------------------------------------------
-    # AMICO cluster finder (natural HectoMap footprint)
+    # AMICO cluster finder (full Y3 footprint and HectoMap sub-region)
     # -----------------------------------------------------------------------
     **_make_pair(
         "amico",
         _PATH_AMICO,
+        _RAND_Y3,
+        columns=_COLS_AMICO,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "amico_hectomap",
+        _PATH_AMICO,
         _RAND_HECTOMAP,
         columns=_COLS_AMICO,
         lens_format="parquet",
+        **_BOX_HECTOMAP,
     ),
     # -----------------------------------------------------------------------
     # Linear regression against WL mass (natural HectoMap footprint)

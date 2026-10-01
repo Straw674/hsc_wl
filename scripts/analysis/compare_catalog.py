@@ -1536,6 +1536,7 @@ def plot_tier_pairwise_heatmaps(
 LABELS_TO_COMPARE = [
     "camira_1bin",
     "redm_r16_1bin",
+    "amico_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
     "rz_diff_fixed_1bin",
@@ -1544,6 +1545,7 @@ LABELS_TO_COMPARE = [
 DISPLAY_NAMES = {
     "camira_1bin": "CAMIRA",
     "redm_r16_1bin": "redMaPPer R16",
+    "amico_1bin": "AMICO",
     "rz_diff_1bin": "r-z Diff (Richness)",
     "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
     "rz_diff_fixed_1bin": "r-z Diff (Fixed)",
@@ -1552,12 +1554,13 @@ DISPLAY_NAMES = {
 PALETTE = [
     "#EE6677",  # Red (CAMIRA)
     "#4477AA",  # Blue (redMaPPer R16)
-    "#228833",  # Green (r-z Richness)
+    "#10B981",  # Green (AMICO)
+    "#228833",  # Dark Green (r-z Richness)
     "#66CCEE",  # Cyan (r-z Luminosity)
     "#AA3377",  # Purple (r-z Fixed)
 ]
 
-MARKERS = ["s", "x", "^", "D", "v"]
+MARKERS = ["s", "x", "o", "^", "D", "v"]
 
 REFERENCE_KEYS = tuple(REFERENCE_CATALOGS)
 REDSHIFT_RANGE = (0.19, 0.52)
@@ -1615,12 +1618,13 @@ plot_consensus_breakdown(
 HTML_MAIN_KEYS = (
     "camira_1bin",
     "redm_r16_1bin",
+    "amico_1bin",
     "rz_diff_fixed_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
 )
 HTML_GROUPS = {
-    "CAMIRA / redMaPPer": ("camira_1bin", "redm_r16_1bin"),
+    "CAMIRA / redMaPPer / AMICO": ("camira_1bin", "redm_r16_1bin", "amico_1bin"),
     "RZ diff": ("rz_diff_fixed_1bin", "rz_diff_1bin", "rz_diff_lum_1bin"),
     "Reference catalogs": (
         "act_dr6",
@@ -1646,6 +1650,14 @@ HTML_STYLES = {
         color="#20466E",
         shape="square",
         diameter=0.23,
+        line_width=1.9,
+        alpha=0.95,
+        visible=True,
+    ),
+    "amico_1bin": dict(
+        color="#10B981",
+        shape="diamond",
+        diameter=0.20,
         line_width=1.9,
         alpha=0.95,
         visible=True,

@@ -50,7 +50,7 @@ def load_chen2024_clusters(
     astropy.table.Table
         Filtered Chen+2024 cluster table with columns [peak_id, ra, dec, z, snr, ...].
     """
-    from hsc_wl.coverage import filter_lens_by_mask
+    from hsc_wl.coverage import load_y3_mask
 
     parquet_path = root / "data/chen2024_shear_selected_clusters.parquet"
     if not parquet_path.exists():
@@ -74,7 +74,11 @@ def load_chen2024_clusters(
     tbl = Table.from_pandas(filtered_df)
 
     # Filter by Y3 shape mask
-    tbl = filter_lens_by_mask(tbl, root=root, ra_col="ra", dec_col="dec")
+    y3_mask = load_y3_mask(root)
+    ra = np.asarray(tbl["ra"], dtype=float)
+    dec = np.asarray(tbl["dec"], dtype=float)
+    inside = y3_mask.get_values_pos(ra, dec, lonlat=True)
+    tbl = tbl[inside]
     tbl["z"] = tbl["z_cl"]
     tbl["rank"] = np.arange(1, len(tbl) + 1)
     return tbl
@@ -1162,7 +1166,7 @@ LABELS_TO_COMPARE = [
     "redm_pdr3_5band_free_1bin",
     "camira_hectomap_1bin",
     "redm_r16_hectomap_1bin",
-    "amico_1bin",
+    "amico_hectomap_1bin",
     "cosine_1bin",
     "pls_1bin",
     "regression_1bin",
@@ -1175,7 +1179,7 @@ DISPLAY_NAMES = {
     "redm_pdr3_5band_free_1bin": "redMaPPer PDR3",
     "camira_hectomap_1bin": "CAMIRA",
     "redm_r16_hectomap_1bin": "redMaPPer R16",
-    "amico_1bin": "AMICO",
+    "amico_hectomap_1bin": "AMICO",
     "cosine_1bin": "Cosine Finder",
     "pls_1bin": "PLS Finder",
     "regression_1bin": "Regression Finder",
