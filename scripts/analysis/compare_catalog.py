@@ -665,11 +665,9 @@ def draw_sky_marker(plot, region: dict, source, style: dict, key: str):
         "triangle": [(0, 1), (0.87, -0.5), (-0.87, -0.5)],
         "cross": [(-1, -1), (1, 1), (np.nan, np.nan), (-1, 1), (1, -1)],
         "plus": [(-1, 0), (1, 0), (np.nan, np.nan), (0, -1), (0, 1)],
-        "star": [
-            (np.cos(a) * r, np.sin(a) * r)
-            for a, r in zip(
-                np.linspace(np.pi / 2, 5 * np.pi / 2, 10, endpoint=False), [1, 0.45] * 5
-            )
+        "hexagon": [
+            (np.cos(a), np.sin(a))
+            for a in np.linspace(np.pi / 2, 5 * np.pi / 2, 6, endpoint=False)
         ],
     }[shape]
     offsets = np.asarray(vertices) * radius
@@ -749,7 +747,7 @@ def marker_swatch_html(style: dict) -> str:
         "triangle": '<path d="M10 3 L16 14 L4 14 Z"/>',
         "cross": '<path d="M4 4 L16 16 M4 16 L16 4"/>',
         "plus": '<path d="M3 10 H17 M10 3 V17"/>',
-        "star": '<path d="M10 2 L12 7 L18 8 L14 12 L15 18 L10 15 L5 18 L6 12 L2 8 L8 7 Z"/>',
+        "hexagon": '<path d="M10 3 L16 6.5 L16 13.5 L10 17 L4 13.5 L4 6.5 Z"/>',
     }
     return (
         f'<svg class="marker-swatch" viewBox="0 0 20 20" aria-hidden="true" '
@@ -1609,7 +1607,7 @@ plot_consensus_breakdown(
 
 HTML_MAIN_KEYS = ("camira_1bin", "redm_r16_1bin", "rz_diff_fixed_1bin")
 HTML_GROUPS = {
-    "CAMIRA / redMaPPer": ("camira_1bin", "redm_r16_1bin", "des_y3_redmapper"),
+    "CAMIRA / redMaPPer": ("camira_1bin", "redm_r16_1bin"),
     "RZ diff": ("rz_diff_fixed_1bin",),
     "Reference catalogs": (
         "act_dr6",
@@ -1617,6 +1615,7 @@ HTML_GROUPS = {
         "efeds",
         "xxl_dr2",
         "des_y6_wazp",
+        "des_y3_redmapper",
         "kids_dr3_amico",
         "chen2024",
     ),
@@ -1627,9 +1626,6 @@ HTML_STYLES = {
     ),
     "redm_r16_1bin": dict(
         color="#20466E", shape="square", diameter=0.23, line_width=1.9, alpha=0.95
-    ),
-    "des_y3_redmapper": dict(
-        color="#6A94BD", shape="diamond", diameter=0.28, line_width=1.7, alpha=0.9
     ),
     "rz_diff_fixed_1bin": dict(
         color="#C7682E", shape="cross", diameter=0.20, line_width=2.1, alpha=0.95
@@ -1649,11 +1645,14 @@ HTML_STYLES = {
     "des_y6_wazp": dict(
         color="#7C8A58", shape="triangle", diameter=0.13, line_width=1.5, alpha=0.7
     ),
+    "des_y3_redmapper": dict(
+        color="#6A94BD", shape="diamond", diameter=0.28, line_width=1.7, alpha=0.9
+    ),
     "kids_dr3_amico": dict(
         color="#8A99A7", shape="plus", diameter=0.09, line_width=1.2, alpha=0.65
     ),
     "chen2024": dict(
-        color="#3B424A", shape="star", diameter=0.36, line_width=1.8, alpha=0.95
+        color="#3B424A", shape="hexagon", diameter=0.36, line_width=1.8, alpha=0.95
     ),
 }
 
