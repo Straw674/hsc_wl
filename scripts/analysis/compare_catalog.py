@@ -638,7 +638,49 @@ def configure_sky_aspect(plot, region: dict):
     plot.js_on_change("inner_height", callback)
 
 
-def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame):
+def draw_sky_marker(plot, region: dict, source, style: dict, key: str):
+    """Draw consistent outline symbols in sky coordinates, including polygon glyphs."""
+    radius = style["diameter"] / 2
+    scale = 1 / np.cos(np.radians(region["dec_ref"]))
+    common = dict(
+        source=source,
+        name=f"catalog_{key}_{region['name']}",
+        line_color=style["color"],
+        line_width=style["line_width"],
+        line_alpha=style["alpha"],
+    )
+    shape = style["shape"]
+    if shape in ("circle", "square"):
+        glyph = plot.ellipse if shape == "circle" else plot.rect
+        return glyph(
+            x="ra",
+            y="dec",
+            width=radius * 2 * scale,
+            height=radius * 2,
+            fill_color=None,
+            **common,
+        )
+    vertices = {
+        "diamond": [(0, 1), (1, 0), (0, -1), (-1, 0)],
+        "triangle": [(0, 1), (0.87, -0.5), (-0.87, -0.5)],
+        "cross": [(-1, -1), (1, 1), (np.nan, np.nan), (-1, 1), (1, -1)],
+        "plus": [(-1, 0), (1, 0), (np.nan, np.nan), (0, -1), (0, 1)],
+        "star": [
+            (np.cos(a) * r, np.sin(a) * r)
+            for a, r in zip(
+                np.linspace(np.pi / 2, 5 * np.pi / 2, 10, endpoint=False), [1, 0.45] * 5
+            )
+        ],
+    }[shape]
+    offsets = np.asarray(vertices) * radius
+    source.data["marker_x"] = [x + offsets[:, 0] * scale for x in source.data["ra"]]
+    source.data["marker_y"] = [y + offsets[:, 1] for y in source.data["dec"]]
+    if shape in ("cross", "plus"):
+        return plot.multi_line(xs="marker_x", ys="marker_y", **common)
+    return plot.patches(xs="marker_x", ys="marker_y", fill_color=None, **common)
+
+
+def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame, style: dict):
     """Overlay one native catalog center using glyph dimensions in sky degrees."""
     from bokeh.models import ColumnDataSource, HoverTool
 
@@ -656,20 +698,12 @@ def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame):
             selected["ra"] > 180, selected["ra"] - 360, selected["ra"]
         )
     source = ColumnDataSource(selected)
-    glyph = plot.rect if spec["glyph"] == "rect" else plot.ellipse
-    renderer = glyph(
-        x="ra",
-        y="dec",
-        source=source,
-        name=f"reference_{key}_{region['name']}",
-        width=0.12 / np.cos(np.radians(region["dec_ref"])),
-        height=0.12,
-        fill_color=None,
-        line_color=spec["color"],
-        line_width=1.8,
-        line_dash=spec["line_dash"],
-        line_alpha=0.9,
-        legend_label=f"{spec['label']} (N={len(selected)})",
+    renderer = draw_sky_marker(
+        plot,
+        region,
+        source,
+        style,
+        key,
     )
     tooltips = [
         ("Catalog", spec["label"]),
@@ -706,33 +740,86 @@ def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame):
     plot.add_tools(HoverTool(renderers=[renderer], tooltips=tooltips))
 
 
-def build_reference_controls_html(
-    catalogs: dict[str, pd.DataFrame], redshift_range: tuple[float, float]
+def marker_swatch_html(style: dict) -> str:
+    """Match the control swatch to the plotted outline symbol."""
+    shapes = {
+        "circle": '<circle cx="10" cy="10" r="6"/>',
+        "square": '<rect x="4" y="4" width="12" height="12"/>',
+        "diamond": '<path d="M10 3 L17 10 L10 17 L3 10 Z"/>',
+        "triangle": '<path d="M10 3 L16 14 L4 14 Z"/>',
+        "cross": '<path d="M4 4 L16 16 M4 16 L16 4"/>',
+        "plus": '<path d="M3 10 H17 M10 3 V17"/>',
+        "star": '<path d="M10 2 L12 7 L18 8 L14 12 L15 18 L10 15 L5 18 L6 12 L2 8 L8 7 Z"/>',
+    }
+    return (
+        f'<svg class="marker-swatch" viewBox="0 0 20 20" aria-hidden="true" '
+        f'fill="none" stroke="{style["color"]}" stroke-width="1.8">'
+        + shapes[style["shape"]]
+        + "</svg>"
+    )
+
+
+def build_catalog_controls_html(
+    layers: dict[str, dict],
+    groups: dict[str, tuple[str, ...]],
+    redshift_range: tuple[float, float],
 ) -> str:
-    """Render compact reference layer switches and the displayed redshift interval."""
+    """Group all layer switches and counts using their plotted color and shape."""
     from html import escape
 
-    switches = []
-    for key, frame in catalogs.items():
-        spec = REFERENCE_CATALOGS[key]
-        label = escape(spec["label"])
-        switches.append(
-            f'<label><input type="checkbox" class="reference-toggle" data-catalog="{key}" checked> '
-            f'<span style="color:{spec["color"]}">{label}</span> ({len(frame)})</label>'
+    rows = []
+    for group, keys in groups.items():
+        switches = []
+        for key in keys:
+            layer = layers[key]
+            switches.append(
+                f'<label><input type="checkbox" class="catalog-toggle" data-catalog="{key}" checked>'
+                + marker_swatch_html(layer)
+                + f'<span>{escape(layer["label"])}</span><span class="count">{layer["count"]}</span></label>'
+            )
+        rows.append(
+            '<div class="catalog-group">'
+            f'<label class="group-label"><input type="checkbox" class="group-toggle" checked>'
+            f'{escape(group)}</label><div class="catalog-switches">'
+            + "".join(switches)
+            + "</div></div>"
         )
     return (
         "<header><h1>Catalog comparison</h1>"
         f"<p>{redshift_range[0]} ≤ z ≤ {redshift_range[1]}</p>"
-        '<div class="reference-switches">' + "".join(switches) + "</div></header>"
+        + "".join(rows)
+        + "</header>"
     )
+
+
+def build_panel_legend_html(plot, layers: dict[str, dict], order: list[str]) -> str:
+    """Use actual marker swatches and field counts for clickable panel legends."""
+    from html import escape
+
+    renderers = {renderer.name: renderer for renderer in plot.renderers}
+    buttons = []
+    for key in order:
+        renderer = renderers.get(f"catalog_{key}_{plot.name}")
+        if renderer is None:
+            continue
+        layer = layers[key]
+        count = len(renderer.data_source.data["ra"])
+        buttons.append(
+            f'<button type="button" class="panel-layer" data-catalog="{key}" '
+            f'data-field="{plot.name}" aria-pressed="true">'
+            + marker_swatch_html(layer)
+            + f'{escape(layer["label"])} <span class="count">{count}</span></button>'
+        )
+    return '<div class="panel-legend">' + "".join(buttons) + "</div>"
 
 
 def plot_bokeh_spatial_regional(
     dfs: dict[str, Table],
-    colors: list[str],
     save_path: Path,
     reference_catalogs: dict[str, pd.DataFrame],
     redshift_range: tuple[float, float],
+    styles: dict[str, dict],
+    groups: dict[str, tuple[str, ...]],
     chen_table: Table | None = None,
     display_names: dict[str, str] | None = None,
 ):
@@ -741,7 +828,6 @@ def plot_bokeh_spatial_regional(
     from bokeh.models import (
         BoxZoomTool,
         ColumnDataSource,
-        CustomJS,
         CustomJSTickFormatter,
         HoverTool,
         Range1d,
@@ -753,6 +839,23 @@ def plot_bokeh_spatial_regional(
 
     names_map = display_names or {}
     region_defs = build_interactive_regions(dfs, chen_table, reference_catalogs)
+    layers = {
+        key: dict(**styles[key], label=names_map.get(key, key), count=len(tbl))
+        for key, tbl in dfs.items()
+    }
+    layers.update(
+        {
+            key: dict(
+                **styles[key], label=REFERENCE_CATALOGS[key]["label"], count=len(frame)
+            )
+            for key, frame in reference_catalogs.items()
+        }
+    )
+    if chen_table is not None:
+        layers["chen2024"] = dict(
+            **styles["chen2024"], label="Chen+2024 WL", count=len(chen_table)
+        )
+    layer_order = [key for keys in groups.values() for key in keys]
 
     p_list = []
 
@@ -796,7 +899,11 @@ def plot_bokeh_spatial_regional(
         p.xaxis.major_label_text_color = "#64748b"
         p.yaxis.major_label_text_color = "#64748b"
 
-        for idx, (k, tbl) in enumerate(dfs.items()):
+        # Draw subdued references first so the main catalogs remain legible at overlaps.
+        for key, frame in reference_catalogs.items():
+            add_reference_layer(p, reg, key, frame, styles[key])
+
+        for k, tbl in dfs.items():
             ra = np.asarray(tbl["ra"], dtype=float)
             dec = np.asarray(tbl["dec"], dtype=float)
             m = in_field(ra, dec, f_name)
@@ -824,17 +931,12 @@ def plot_bokeh_spatial_regional(
                 }
             )
 
-            diameter = 0.14 + idx * 0.035
-            renderer = p.ellipse(
-                x="ra",
-                y="dec",
-                source=source,
-                width=diameter / np.cos(np.radians(reg["dec_ref"])),
-                height=diameter,
-                color=colors[idx % len(colors)],
-                fill_color=None,
-                line_width=2.0,
-                legend_label=f"{disp_name} (N={np.sum(m)})",
+            renderer = draw_sky_marker(
+                p,
+                reg,
+                source,
+                styles[k],
+                k,
             )
 
             hover = HoverTool(
@@ -882,17 +984,12 @@ def plot_bokeh_spatial_regional(
                     }
                 )
 
-                chen_renderer = p.ellipse(
-                    x="ra",
-                    y="dec",
-                    source=chen_source,
-                    width=0.36 / np.cos(np.radians(reg["dec_ref"])),
-                    height=0.36,
-                    color="#242b35",
-                    fill_color=None,
-                    line_width=2.5,
-                    line_alpha=0.95,
-                    legend_label=f"Chen+2024 WL Selected (N={np.sum(c_m)})",
+                chen_renderer = draw_sky_marker(
+                    p,
+                    reg,
+                    chen_source,
+                    styles["chen2024"],
+                    "chen2024",
                 )
 
                 chen_hover = HoverTool(
@@ -910,38 +1007,6 @@ def plot_bokeh_spatial_regional(
                 )
                 p.add_tools(chen_hover)
 
-        for key, frame in reference_catalogs.items():
-            add_reference_layer(p, reg, key, frame)
-
-        if p.legend:
-            legend = p.legend[0]
-            p.add_layout(legend, "below")
-            legend.orientation = "horizontal"
-            legend.ncols = 2
-            p.js_on_change(
-                "outer_width",
-                CustomJS(
-                    args=dict(plot=p, legend=legend),
-                    code="""
-                    const columns = Math.max(1, Math.min(legend.items.length,
-                        Math.floor(plot.outer_width / 180)));
-                    if (legend.ncols !== columns) legend.ncols = columns;
-                """,
-                ),
-            )
-        p.legend.location = "center"
-        p.legend.label_text_font_size = "8pt"
-        p.legend.padding = 4
-        p.legend.spacing = 6
-        p.legend.glyph_width = 14
-        p.legend.label_standoff = 4
-        p.legend.click_policy = "hide"
-        p.legend.background_fill_color = "#ffffff"
-        p.legend.background_fill_alpha = 0.85
-        p.legend.label_text_color = "#374151"
-        p.legend.title_text_color = "#4b5563"
-        p.legend.border_line_color = None
-
         p_list.append(p)
 
     script, divs = components(p_list)
@@ -952,7 +1017,12 @@ def plot_bokeh_spatial_regional(
     )
     sections = []
     for title, indices in (("SPRING", (0, 1, 2)), ("FALL", (3, 4)), ("HECTOMAP", (5,))):
-        panels = "".join(f'<div class="sky-panel">{divs[i]}</div>' for i in indices)
+        panels = "".join(
+            f'<div class="sky-panel">{divs[i]}'
+            + build_panel_legend_html(p_list[i], layers, layer_order)
+            + "</div>"
+            for i in indices
+        )
         sections.append(
             f'<section><h2>{title}</h2><div class="region-panels">{panels}</div></section>'
         )
@@ -969,8 +1039,18 @@ main { width: 100%; margin: 0 auto; padding: 20px clamp(12px, 2vw, 40px); }
 h1 { font-size: 19px; font-weight: normal; margin: 0 0 10px; }
 header { margin-bottom: 24px; line-height: 1.6; }
 header p { color: #64748b; font-size: 13px; }
-.reference-switches { display: flex; flex-wrap: wrap; gap: 8px 24px; }
-.reference-switches label { cursor: pointer; font-size: 13px; }
+.catalog-group { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid #e2e7ed; }
+.group-label { width: 175px; flex-shrink: 0; color: #475569; font-size: 12px; }
+.catalog-switches { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.catalog-switches label { display: flex; align-items: center; gap: 5px; font-size: 13px; }
+header label { cursor: pointer; }
+.marker-swatch { width: 20px; height: 20px; flex-shrink: 0; }
+.count { color: #84909e; font-size: 11px; font-variant-numeric: tabular-nums; }
+.panel-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 3px 14px; padding: 8px 12px 14px; }
+.panel-layer { display: flex; align-items: center; gap: 5px; border: 0; background: none; color: #475569; font: 12px system-ui, sans-serif; padding: 3px 0; cursor: pointer; }
+.panel-layer[aria-pressed="false"] { opacity: 0.35; }
+.panel-layer:hover { color: #111827; }
+@media (max-width: 700px) { .catalog-group { flex-direction: column; gap: 5px; } }
 section + section { border-top: 1px solid #cbd2da; margin-top: 28px; padding-top: 16px; }
 h2 { font-size: 12px; font-weight: normal; color: #64748b; margin: 0 0 12px; }
 .region-panels { display: flex; flex-direction: column; gap: 20px; }
@@ -981,19 +1061,56 @@ h2 { font-size: 12px; font-weight: normal; color: #64748b; margin: 0 0 12px; }
         + resources
         + """</head><body><main>
 """
-        + build_reference_controls_html(reference_catalogs, redshift_range)
+        + build_catalog_controls_html(layers, groups, redshift_range)
         + "".join(sections)
         + "</main>"
         + script
         + """<script>
-document.querySelectorAll('.reference-toggle').forEach(input => {
-    input.addEventListener('change', () => {
-        for (const doc of Bokeh.documents) {
-            for (const field of ['GAMA15H', 'WIDE12H', 'GAMA09H', 'XMM', 'VVDS', 'HECTOMAP']) {
-                const renderer = doc.get_model_by_name(`reference_${input.dataset.catalog}_${field}`);
-                if (renderer) renderer.visible = input.checked;
-            }
+function setCatalogVisibility(key, visible, field = null) {
+    for (const doc of Bokeh.documents) {
+        for (const name of ['GAMA15H', 'WIDE12H', 'GAMA09H', 'XMM', 'VVDS', 'HECTOMAP']) {
+            if (field && name !== field) continue;
+            const renderer = doc.get_model_by_name(`catalog_${key}_${name}`);
+            if (renderer) renderer.visible = visible;
         }
+    }
+    document.querySelectorAll('.panel-layer').forEach(button => {
+        if (button.dataset.catalog === key && (!field || button.dataset.field === field)) {
+            button.setAttribute('aria-pressed', String(visible));
+        }
+    });
+}
+function syncCatalogControls() {
+    document.querySelectorAll('.catalog-toggle').forEach(input => {
+        const buttons = [...document.querySelectorAll('.panel-layer')].filter(button => button.dataset.catalog === input.dataset.catalog);
+        input.checked = buttons.every(button => button.getAttribute('aria-pressed') === 'true');
+        input.indeterminate = buttons.some(button => button.getAttribute('aria-pressed') === 'true') && !input.checked;
+    });
+    document.querySelectorAll('.group-toggle').forEach(input => {
+        const members = [...input.closest('.catalog-group').querySelectorAll('.catalog-toggle')];
+        input.checked = members.every(member => member.checked);
+        input.indeterminate = members.some(member => member.checked || member.indeterminate) && !input.checked;
+    });
+}
+document.querySelectorAll('.catalog-toggle').forEach(input => {
+    input.addEventListener('change', () => {
+        setCatalogVisibility(input.dataset.catalog, input.checked);
+        syncCatalogControls();
+    });
+});
+document.querySelectorAll('.group-toggle').forEach(input => {
+    input.addEventListener('change', () => {
+        input.closest('.catalog-group').querySelectorAll('.catalog-toggle').forEach(member => {
+            member.checked = input.checked;
+            setCatalogVisibility(member.dataset.catalog, input.checked);
+        });
+        syncCatalogControls();
+    });
+});
+document.querySelectorAll('.panel-layer').forEach(button => {
+    button.addEventListener('click', () => {
+        setCatalogVisibility(button.dataset.catalog, button.getAttribute('aria-pressed') !== 'true', button.dataset.field);
+        syncCatalogControls();
     });
 });
 </script></body></html>"""
@@ -1490,6 +1607,56 @@ plot_consensus_breakdown(
 
 # %% [Stage 4: Regional Spatial Distribution (Static PNG & Interactive Bokeh)]
 
+HTML_MAIN_KEYS = ("camira_1bin", "redm_r16_1bin", "rz_diff_fixed_1bin")
+HTML_GROUPS = {
+    "CAMIRA / redMaPPer": ("camira_1bin", "redm_r16_1bin", "des_y3_redmapper"),
+    "RZ diff": ("rz_diff_fixed_1bin",),
+    "Reference catalogs": (
+        "act_dr6",
+        "erass1",
+        "efeds",
+        "xxl_dr2",
+        "des_y6_wazp",
+        "kids_dr3_amico",
+        "chen2024",
+    ),
+}
+HTML_STYLES = {
+    "camira_1bin": dict(
+        color="#286FA5", shape="circle", diameter=0.18, line_width=1.9, alpha=0.95
+    ),
+    "redm_r16_1bin": dict(
+        color="#20466E", shape="square", diameter=0.23, line_width=1.9, alpha=0.95
+    ),
+    "des_y3_redmapper": dict(
+        color="#6A94BD", shape="diamond", diameter=0.28, line_width=1.7, alpha=0.9
+    ),
+    "rz_diff_fixed_1bin": dict(
+        color="#C7682E", shape="cross", diameter=0.20, line_width=2.1, alpha=0.95
+    ),
+    "act_dr6": dict(
+        color="#327D80", shape="square", diameter=0.12, line_width=1.6, alpha=0.8
+    ),
+    "erass1": dict(
+        color="#527568", shape="circle", diameter=0.30, line_width=1.5, alpha=0.8
+    ),
+    "efeds": dict(
+        color="#88768F", shape="diamond", diameter=0.14, line_width=1.5, alpha=0.8
+    ),
+    "xxl_dr2": dict(
+        color="#66798C", shape="triangle", diameter=0.19, line_width=1.5, alpha=0.8
+    ),
+    "des_y6_wazp": dict(
+        color="#7C8A58", shape="triangle", diameter=0.13, line_width=1.5, alpha=0.7
+    ),
+    "kids_dr3_amico": dict(
+        color="#8A99A7", shape="plus", diameter=0.09, line_width=1.2, alpha=0.65
+    ),
+    "chen2024": dict(
+        color="#3B424A", shape="star", diameter=0.36, line_width=1.8, alpha=0.95
+    ),
+}
+
 plot_spatial_distribution_regions(
     dfs_dict,
     colors=PALETTE,
@@ -1500,11 +1667,12 @@ plot_spatial_distribution_regions(
 )
 
 plot_bokeh_spatial_regional(
-    dfs_dict,
-    colors=PALETTE,
+    {key: dfs_dict[key] for key in HTML_MAIN_KEYS},
     save_path=OUTPUT_BOKEH_HTML,
     reference_catalogs=reference_dfs,
     redshift_range=REDSHIFT_RANGE,
+    styles=HTML_STYLES,
+    groups=HTML_GROUPS,
     chen_table=chen_tbl,
     display_names=DISPLAY_NAMES,
 )
