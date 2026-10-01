@@ -648,6 +648,7 @@ def draw_sky_marker(plot, region: dict, source, style: dict, key: str):
         line_color=style["color"],
         line_width=style["line_width"],
         line_alpha=style["alpha"],
+        visible=style.get("visible", True),
     )
     shape = style["shape"]
     if shape in ("circle", "square"):
@@ -770,14 +771,17 @@ def build_catalog_controls_html(
         switches = []
         for key in keys:
             layer = layers[key]
+            checked_attr = " checked" if layer.get("visible", True) else ""
             switches.append(
-                f'<label><input type="checkbox" class="catalog-toggle" data-catalog="{key}" checked>'
+                f'<label><input type="checkbox" class="catalog-toggle" data-catalog="{key}"{checked_attr}>'
                 + marker_swatch_html(layer)
                 + f'<span>{escape(layer["label"])}</span><span class="count">{layer["count"]}</span></label>'
             )
+        group_all_checked = all(layers[k].get("visible", True) for k in keys)
+        group_checked_attr = " checked" if group_all_checked else ""
         rows.append(
             '<div class="catalog-group">'
-            f'<label class="group-label"><input type="checkbox" class="group-toggle" checked>'
+            f'<label class="group-label"><input type="checkbox" class="group-toggle"{group_checked_attr}>'
             f'{escape(group)}</label><div class="catalog-switches">'
             + "".join(switches)
             + "</div></div>"
@@ -802,9 +806,11 @@ def build_panel_legend_html(plot, layers: dict[str, dict], order: list[str]) -> 
             continue
         layer = layers[key]
         count = len(renderer.data_source.data["ra"])
+        is_visible = getattr(renderer, "visible", True)
+        pressed_attr = "true" if is_visible else "false"
         buttons.append(
             f'<button type="button" class="panel-layer" data-catalog="{key}" '
-            f'data-field="{plot.name}" aria-pressed="true">'
+            f'data-field="{plot.name}" aria-pressed="{pressed_attr}">'
             + marker_swatch_html(layer)
             + f'{escape(layer["label"])} <span class="count">{count}</span></button>'
         )
@@ -1111,6 +1117,7 @@ document.querySelectorAll('.panel-layer').forEach(button => {
         syncCatalogControls();
     });
 });
+syncCatalogControls();
 </script></body></html>"""
     )
     save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1605,10 +1612,16 @@ plot_consensus_breakdown(
 
 # %% [Stage 4: Regional Spatial Distribution (Static PNG & Interactive Bokeh)]
 
-HTML_MAIN_KEYS = ("camira_1bin", "redm_r16_1bin", "rz_diff_fixed_1bin")
+HTML_MAIN_KEYS = (
+    "camira_1bin",
+    "redm_r16_1bin",
+    "rz_diff_fixed_1bin",
+    "rz_diff_1bin",
+    "rz_diff_lum_1bin",
+)
 HTML_GROUPS = {
     "CAMIRA / redMaPPer": ("camira_1bin", "redm_r16_1bin"),
-    "RZ diff": ("rz_diff_fixed_1bin",),
+    "RZ diff": ("rz_diff_fixed_1bin", "rz_diff_1bin", "rz_diff_lum_1bin"),
     "Reference catalogs": (
         "act_dr6",
         "erass1",
@@ -1622,10 +1635,20 @@ HTML_GROUPS = {
 }
 HTML_STYLES = {
     "camira_1bin": dict(
-        color="#286FA5", shape="circle", diameter=0.18, line_width=1.9, alpha=0.95
+        color="#286FA5",
+        shape="circle",
+        diameter=0.18,
+        line_width=1.9,
+        alpha=0.95,
+        visible=True,
     ),
     "redm_r16_1bin": dict(
-        color="#20466E", shape="square", diameter=0.23, line_width=1.9, alpha=0.95
+        color="#20466E",
+        shape="square",
+        diameter=0.23,
+        line_width=1.9,
+        alpha=0.95,
+        visible=True,
     ),
     "rz_diff_fixed_1bin": dict(
         color="#C7682E",
@@ -1633,30 +1656,87 @@ HTML_STYLES = {
         diameter=0.24,
         line_width=1.9,
         alpha=0.95,
+        visible=True,
+    ),
+    "rz_diff_1bin": dict(
+        color="#D97706",
+        shape="inverted_triangle",
+        diameter=0.21,
+        line_width=1.7,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_lum_1bin": dict(
+        color="#9A3412",
+        shape="inverted_triangle",
+        diameter=0.27,
+        line_width=1.7,
+        alpha=0.95,
+        visible=False,
     ),
     "act_dr6": dict(
-        color="#327D80", shape="square", diameter=0.12, line_width=1.6, alpha=0.8
+        color="#327D80",
+        shape="square",
+        diameter=0.12,
+        line_width=1.6,
+        alpha=0.8,
+        visible=True,
     ),
     "erass1": dict(
-        color="#527568", shape="circle", diameter=0.30, line_width=1.5, alpha=0.8
+        color="#527568",
+        shape="circle",
+        diameter=0.30,
+        line_width=1.5,
+        alpha=0.8,
+        visible=True,
     ),
     "efeds": dict(
-        color="#88768F", shape="diamond", diameter=0.14, line_width=1.5, alpha=0.8
+        color="#88768F",
+        shape="diamond",
+        diameter=0.14,
+        line_width=1.5,
+        alpha=0.8,
+        visible=True,
     ),
     "xxl_dr2": dict(
-        color="#66798C", shape="triangle", diameter=0.19, line_width=1.5, alpha=0.8
+        color="#66798C",
+        shape="triangle",
+        diameter=0.19,
+        line_width=1.5,
+        alpha=0.8,
+        visible=True,
     ),
     "des_y6_wazp": dict(
-        color="#7C8A58", shape="triangle", diameter=0.13, line_width=1.5, alpha=0.7
+        color="#7C8A58",
+        shape="triangle",
+        diameter=0.13,
+        line_width=1.5,
+        alpha=0.7,
+        visible=True,
     ),
     "des_y3_redmapper": dict(
-        color="#6A94BD", shape="diamond", diameter=0.28, line_width=1.7, alpha=0.9
+        color="#6A94BD",
+        shape="diamond",
+        diameter=0.28,
+        line_width=1.7,
+        alpha=0.9,
+        visible=True,
     ),
     "kids_dr3_amico": dict(
-        color="#8A99A7", shape="plus", diameter=0.09, line_width=1.2, alpha=0.65
+        color="#8A99A7",
+        shape="plus",
+        diameter=0.09,
+        line_width=1.2,
+        alpha=0.65,
+        visible=False,
     ),
     "chen2024": dict(
-        color="#3B424A", shape="hexagon", diameter=0.36, line_width=1.8, alpha=0.95
+        color="#3B424A",
+        shape="hexagon",
+        diameter=0.36,
+        line_width=1.8,
+        alpha=0.95,
+        visible=True,
     ),
 }
 
