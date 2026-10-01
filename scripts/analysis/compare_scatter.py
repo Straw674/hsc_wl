@@ -148,7 +148,7 @@ def plot_scatter_comparison(
 
 
 def plot_grouped_scatter_comparison(
-    data_dict, labels, display_names, rho_bins, styles, offset_width, output_path
+    data_dict, labels, display_names, rho_bins, colors, offset_width, output_path
 ):
     """Compare scatter within discrete bins using offset points and error bars."""
     available_labels = [label for label in labels if label in data_dict]
@@ -163,7 +163,7 @@ def plot_grouped_scatter_comparison(
         fig, ax = plt.subplots(figsize=(9, 5), layout="constrained")
         for label, offset in zip(available_labels, offsets, strict=True):
             summary = data_dict[label]
-            color = styles[label]["color"]
+            color = colors[labels.index(label) % len(colors)]
             run_label, version = label
             display_name = display_names.get(
                 label, f"{run_label.removesuffix('_4bin')} ({version})"
@@ -203,7 +203,7 @@ def plot_grouped_scatter_comparison(
 
 
 def plot_panel_scatter_comparison(
-    data_dict, labels, display_names, rho_bins, styles, output_path
+    data_dict, labels, display_names, rho_bins, colors, output_path
 ):
     """Compare samples in one panel per bin using shared scatter limits."""
     available_labels = [label for label in labels if label in data_dict]
@@ -231,7 +231,7 @@ def plot_panel_scatter_comparison(
                     sample_index,
                     xerr=np.asarray(summary["sig_err_bt"])[bin_index],
                     fmt="o",
-                    color=styles[label]["color"],
+                    color=colors[labels.index(label) % len(colors)],
                     markersize=5,
                     elinewidth=1.2,
                     capsize=3,
@@ -271,9 +271,8 @@ LABELS = [
 # Optional: display names for labels in the legend
 DISPLAY_NAMES = {}
 
-# Bind styles to catalog families, across run variants and source versions.
+# Bind first-figure styles to catalog families across run and source versions.
 # Reference: [50, 100] -> logm; redMaPPer -> redm; CAMIRA -> camira.
-# The grouped and panel figures use only the colors and retain circular markers.
 SAMPLE_STYLES = {
     "logm": {"color": "#1f78b4", "marker": "o", "filled": True},
     "redm": {"color": "#e41a1c", "marker": "D", "filled": True},
@@ -283,6 +282,17 @@ SAMPLE_STYLES = {
     "amico": {"color": "#ff7f00", "marker": "^", "filled": True},
 }
 DEFAULT_STYLE = {"color": "#7f7f7f", "marker": "v", "filled": True}
+
+# Assign colors by LABELS order in the grouped and panel figures.
+COMPARISON_COLORS = [
+    "#33a02c",
+    "#984ea3",
+    "#ff7f00",
+    "#1f78b4",
+    "#e41a1c",
+    "#a65628",
+    "#f781bf",
+]
 
 # Hardcoded rho bins (Mpc^-3) as they might be missing from some pkl files
 RHO_BINS = np.array(
@@ -331,7 +341,7 @@ if data_dict:
         labels=LABELS,
         display_names=DISPLAY_NAMES,
         rho_bins=RHO_BINS,
-        styles=styles,
+        colors=COMPARISON_COLORS,
         offset_width=GROUPED_OFFSET_WIDTH,
         output_path=GROUPED_OUTPUT_FIG,
     )
@@ -348,7 +358,7 @@ if data_dict:
         labels=LABELS,
         display_names=DISPLAY_NAMES,
         rho_bins=RHO_BINS,
-        styles=styles,
+        colors=COMPARISON_COLORS,
         output_path=PANEL_OUTPUT_FIG,
     )
 else:
