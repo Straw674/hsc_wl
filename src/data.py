@@ -1,4 +1,4 @@
-"""Bounded-memory catalog sampling for inspection plots."""
+"""Catalog import, public downloads, and bounded-memory inspection samples."""
 
 import logging
 from pathlib import Path
@@ -6,6 +6,84 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+
+
+def read_catalog_frame(
+    path: Path,
+    columns: tuple[str, ...] | None = None,
+    hdf5_dataset: str | None = None,
+    hdf5_selection: str | None = None,
+) -> pd.DataFrame:
+    """Read scalar catalog columns without coercing integer identifiers to floats."""
+    import h5py
+    from astropy.table import Table
+
+    if path.suffix == ".parquet":
+        return pd.read_parquet(path, columns=None if columns is None else list(columns))
+    if path.suffix == ".h5":
+        if hdf5_dataset is None:
+            raise ValueError("An explicit HDF5 dataset is required")
+        with h5py.File(path, "r") as handle:
+            group = handle[hdf5_dataset]
+            names = (
+                columns
+                if columns is not None
+                else tuple(name for name, dataset in group.items() if dataset.ndim == 1)
+            )
+            table = Table({name: group[name][:] for name in names})
+            if hdf5_selection is not None:
+                table = table[handle[hdf5_selection][:]]
+    elif path.suffix == ".tgz":
+        import tarfile
+        from io import BytesIO
+
+        with tarfile.open(path) as archive:
+            members = [
+                member
+                for member in archive.getmembers()
+                if member.isfile() and member.name.endswith(".fits")
+            ]
+            if len(members) != 1:
+                raise ValueError(f"Expected one FITS catalog in {path}")
+            table = Table.read(
+                BytesIO(archive.extractfile(members[0]).read()), format="fits"
+            )
+    else:
+        table = Table.read(path, format="fits")
+    names = (
+        columns
+        if columns is not None
+        else tuple(name for name in table.colnames if table[name].ndim == 1)
+    )
+    frame = table[list(names)].to_pandas()
+    for name in frame.select_dtypes(include="object"):
+        frame[name] = frame[name].map(
+            lambda value: value.decode("utf-8").strip()
+            if isinstance(value, bytes)
+            else value
+        )
+    return frame
+
+
+def download_public_catalog(url: str, destination: Path) -> Path:
+    """Cache a public catalog atomically; leave no partial file after failure."""
+    import requests
+
+    if destination.exists():
+        return destination
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_suffix(destination.suffix + ".part")
+    logging.info("Downloading %s", destination.name)
+    try:
+        with requests.get(url, stream=True, timeout=(20, 120)) as response:
+            response.raise_for_status()
+            with partial.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    handle.write(chunk)
+        partial.replace(destination)
+    finally:
+        partial.unlink(missing_ok=True)
+    return destination
 
 
 def load_s23b_scalar_sample(

@@ -19,7 +19,9 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from hsc_wl.reference_catalogs import REFERENCE_CATALOGS, load_reference_catalogs
 from initial import *  # noqa: F401,F403
+from src.data import read_catalog_frame
 
 # %% Local Functions
 
@@ -53,7 +55,7 @@ def load_chen2024_clusters(
             "Ensure data/chen2024_shear_selected_clusters.parquet exists."
         )
 
-    df = pd.read_parquet(parquet_path)
+    df = read_catalog_frame(parquet_path)
 
     # Filter by redshift range
     mask = (df["z_cl"] >= redshift_range[0]) & (df["z_cl"] <= redshift_range[1])
@@ -110,7 +112,7 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
             raise FileNotFoundError(f"Prepared lens catalog not found at {file_path}")
 
         print(f"Loading prepared lenses from {file_path.name}...")
-        tbl = Table.read(file_path)
+        tbl = Table.from_pandas(read_catalog_frame(file_path))
         tbl["rank"] = np.arange(1, len(tbl) + 1)
         dfs[label] = tbl
 
@@ -231,7 +233,7 @@ def plot_matching_heatmap(
 
     ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
     ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
-    ax.grid(which="minor", color="white", linestyle="-", linewidth=2.5)
+    ax.grid(False, which="both")
     ax.tick_params(which="minor", bottom=False, left=False)
 
     for i in range(n):
@@ -393,7 +395,7 @@ def plot_consensus_breakdown(
         pad=10,
         fontweight="normal",
     )
-    ax.grid(True, linestyle=":", alpha=0.6)
+    ax.grid(False, which="both")
     ax.set_ylim(0, max(50.0, float(np.max(pct_matrix)) + 8.0))
     ax.legend(fontsize=9.5, loc="upper right", framealpha=0.9)
 
@@ -511,7 +513,7 @@ def plot_spatial_distribution_regions(
         ax.set_aspect(1.0 / np.cos(np.radians(reg["dec_ref"])))
         ax.set_title(reg["title"], fontsize=11, fontweight="normal", pad=4)
         ax.set_ylabel("Dec [deg]", fontsize=10)
-        ax.grid(True, linestyle=":", alpha=0.5)
+        ax.grid(False, which="both")
 
         if shift:
             ticks = np.arange(-40, 50, 15)
@@ -542,12 +544,18 @@ def plot_spatial_distribution_regions(
 
 
 def build_interactive_regions(
-    dfs: dict[str, Table], chen_table: Table | None
+    dfs: dict[str, Table],
+    chen_table: Table | None,
+    reference_catalogs: dict[str, pd.DataFrame],
 ) -> list[dict]:
     """Use canonical field membership and padded catalog bounds for six panels."""
     from hsc_wl.coverage import in_field
 
-    tables = list(dfs.values()) + ([] if chen_table is None else [chen_table])
+    tables = (
+        list(dfs.values())
+        + ([] if chen_table is None else [chen_table])
+        + list(reference_catalogs.values())
+    )
     ra = np.concatenate([np.asarray(tbl["ra"], float) for tbl in tables])
     dec = np.concatenate([np.asarray(tbl["dec"], float) for tbl in tables])
     regions = []
@@ -630,10 +638,101 @@ def configure_sky_aspect(plot, region: dict):
     plot.js_on_change("inner_height", callback)
 
 
+def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame):
+    """Overlay one native catalog center using glyph dimensions in sky degrees."""
+    from bokeh.models import ColumnDataSource, HoverTool
+
+    from hsc_wl.coverage import in_field
+
+    selected = frame.loc[
+        in_field(frame["ra"].to_numpy(), frame["dec"].to_numpy(), region["name"])
+    ].copy()
+    if selected.empty:
+        return
+    spec = REFERENCE_CATALOGS[key]
+    selected["ra_orig"] = selected["ra"]
+    if region["shift_fall"]:
+        selected["ra"] = np.where(
+            selected["ra"] > 180, selected["ra"] - 360, selected["ra"]
+        )
+    source = ColumnDataSource(selected)
+    glyph = plot.rect if spec["glyph"] == "rect" else plot.ellipse
+    renderer = glyph(
+        x="ra",
+        y="dec",
+        source=source,
+        name=f"reference_{key}_{region['name']}",
+        width=0.12 / np.cos(np.radians(region["dec_ref"])),
+        height=0.12,
+        fill_color=None,
+        line_color=spec["color"],
+        line_width=1.8,
+        line_dash=spec["line_dash"],
+        line_alpha=0.9,
+        legend_label=f"{spec['label']} (N={len(selected)})",
+    )
+    tooltips = [
+        ("Catalog", spec["label"]),
+        ("Name / ID", "@name"),
+        ("RA", "@ra_orig{0.0000} deg"),
+        ("Dec", "@dec{0.0000} deg"),
+        ("Redshift z", "@z{0.0000}"),
+    ]
+    for column, label in (
+        ("snr", "S/N"),
+        ("richness", "Richness"),
+        ("contamination", "Pcont / Fcont"),
+    ):
+        if selected[column].notna().any():
+            tooltips.append((label, f"@{column}{{0.000}}"))
+    if selected["mass"].notna().any():
+        tooltips.append((str(selected["mass_definition"].iloc[0]), "@mass{0.000}"))
+    if selected["ra_opt"].notna().any():
+        tooltips.extend(
+            [
+                ("Optical RA", "@ra_opt{0.0000} deg"),
+                ("Optical Dec", "@dec_opt{0.0000} deg"),
+            ]
+        )
+    quality_labels = {
+        "des_y6_wazp": "COVER_FRAC_1MPC",
+        "act_dr6": "flags",
+        "erass1": "EXT_LIKE",
+        "des_y3_redmapper": "maskfrac",
+        "xxl_dr2": "Class",
+    }
+    if key in quality_labels:
+        tooltips.append((quality_labels[key], "@quality"))
+    plot.add_tools(HoverTool(renderers=[renderer], tooltips=tooltips))
+
+
+def build_reference_controls_html(
+    catalogs: dict[str, pd.DataFrame], redshift_range: tuple[float, float]
+) -> str:
+    """Render compact reference layer switches and the displayed redshift interval."""
+    from html import escape
+
+    switches = []
+    for key, frame in catalogs.items():
+        spec = REFERENCE_CATALOGS[key]
+        label = escape(spec["label"])
+        switches.append(
+            f'<label><input type="checkbox" class="reference-toggle" data-catalog="{key}" checked> '
+            f'<span style="color:{spec["color"]}">{label}</span> ({len(frame)})</label>'
+        )
+    return (
+        "<header><h1>Catalog comparison</h1>"
+        f"<p>{redshift_range[0]} ≤ z ≤ {redshift_range[1]}</p>"
+        '<div class="reference-switches">' + "".join(switches) + "</div></header>"
+    )
+
+
 def plot_bokeh_spatial_regional(
     dfs: dict[str, Table],
     colors: list[str],
     save_path: Path,
+    reference_catalogs: dict[str, pd.DataFrame],
+    redshift_range: tuple[float, float],
     chen_table: Table | None = None,
     display_names: dict[str, str] | None = None,
 ):
@@ -653,7 +752,7 @@ def plot_bokeh_spatial_regional(
     from hsc_wl.coverage import in_field
 
     names_map = display_names or {}
-    region_defs = build_interactive_regions(dfs, chen_table)
+    region_defs = build_interactive_regions(dfs, chen_table, reference_catalogs)
 
     p_list = []
 
@@ -683,8 +782,7 @@ def plot_bokeh_spatial_regional(
 
         p.background_fill_color = "#ffffff"
         p.border_fill_color = "#ffffff"
-        p.grid.grid_line_color = "#dce1e6"
-        p.grid.grid_line_alpha = 0.7
+        p.grid.grid_line_color = None
         p.outline_line_color = "#dce1e6"
         p.axis.axis_line_color = "#c4cbd3"
         p.axis.major_tick_line_color = "#c4cbd3"
@@ -812,6 +910,9 @@ def plot_bokeh_spatial_regional(
                 )
                 p.add_tools(chen_hover)
 
+        for key, frame in reference_catalogs.items():
+            add_reference_layer(p, reg, key, frame)
+
         if p.legend:
             legend = p.legend[0]
             p.add_layout(legend, "below")
@@ -865,6 +966,11 @@ def plot_bokeh_spatial_regional(
 html, body { margin: 0; background: #f5f6f8; color: #374151; }
 body { font: 15px system-ui, sans-serif; }
 main { width: 100%; margin: 0 auto; padding: 20px clamp(12px, 2vw, 40px); }
+h1 { font-size: 19px; font-weight: normal; margin: 0 0 10px; }
+header { margin-bottom: 24px; line-height: 1.6; }
+header p { color: #64748b; font-size: 13px; }
+.reference-switches { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.reference-switches label { cursor: pointer; font-size: 13px; }
 section + section { border-top: 1px solid #cbd2da; margin-top: 28px; padding-top: 16px; }
 h2 { font-size: 12px; font-weight: normal; color: #64748b; margin: 0 0 12px; }
 .region-panels { display: flex; flex-direction: column; gap: 20px; }
@@ -875,10 +981,22 @@ h2 { font-size: 12px; font-weight: normal; color: #64748b; margin: 0 0 12px; }
         + resources
         + """</head><body><main>
 """
+        + build_reference_controls_html(reference_catalogs, redshift_range)
         + "".join(sections)
         + "</main>"
         + script
-        + "</body></html>"
+        + """<script>
+document.querySelectorAll('.reference-toggle').forEach(input => {
+    input.addEventListener('change', () => {
+        for (const doc of Bokeh.documents) {
+            for (const field of ['GAMA15H', 'WIDE12H', 'GAMA09H', 'XMM', 'VVDS', 'HECTOMAP']) {
+                const renderer = doc.get_model_by_name(`reference_${input.dataset.catalog}_${field}`);
+                if (renderer) renderer.visible = input.checked;
+            }
+        }
+    });
+});
+</script></body></html>"""
     )
     save_path.parent.mkdir(parents=True, exist_ok=True)
     save_path.write_text(html_content, encoding="utf-8")
@@ -1124,7 +1242,7 @@ def plot_tier_consensus_profiles(
 
     ax_heat.set_xticks(np.arange(n_cats + 1) - 0.5, minor=True)
     ax_heat.set_yticks(np.arange(5) - 0.5, minor=True)
-    ax_heat.grid(which="minor", color="white", linestyle="-", linewidth=2.5)
+    ax_heat.grid(False, which="both")
     ax_heat.tick_params(which="minor", bottom=False, left=False)
 
     # Bottom Subplot: Stacked Consensus Spectrum (Grid)
@@ -1187,7 +1305,7 @@ def plot_tier_consensus_profiles(
         )
         ax_b.set_xlim(0, 122)
         ax_b.set_xticks([0, 25, 50, 75, 100])
-        ax_b.grid(axis="x", linestyle=":", alpha=0.5)
+        ax_b.grid(False, which="both")
         if row_i == nrows - 1:
             ax_b.set_xlabel("Composition (%)", fontsize=9.5)
 
@@ -1247,7 +1365,7 @@ def plot_tier_pairwise_heatmaps(
 
         ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
         ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
-        ax.grid(which="minor", color="white", linestyle="-", linewidth=1.8)
+        ax.grid(False, which="both")
         ax.tick_params(which="minor", bottom=False, left=False)
         ax.spines[:].set_visible(False)
 
@@ -1319,6 +1437,9 @@ PALETTE = [
 
 MARKERS = ["s", "x", "^", "D", "v"]
 
+REFERENCE_KEYS = tuple(REFERENCE_CATALOGS)
+REDSHIFT_RANGE = (0.19, 0.52)
+
 OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
 OUTPUT_CONSENSUS_BREAKDOWN = (
     project_root / "output/plots_for_agents/consensus_breakdown.png"
@@ -1336,7 +1457,8 @@ OUTPUT_TIER_PAIRWISE_HEATMAPS = (
 # %% [Stage 1: Load and Match Catalogs]
 
 dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
-chen_tbl = load_chen2024_clusters(project_root)
+chen_tbl = load_chen2024_clusters(project_root, redshift_range=REDSHIFT_RANGE)
+reference_dfs = load_reference_catalogs(project_root, REFERENCE_KEYS, REDSHIFT_RANGE)
 
 print(
     f"\nLoaded Chen+2024 WL shear-selected clusters in full survey: N={len(chen_tbl)} (z in [0.19, 0.52], Y3 mask)"
@@ -1381,6 +1503,8 @@ plot_bokeh_spatial_regional(
     dfs_dict,
     colors=PALETTE,
     save_path=OUTPUT_BOKEH_HTML,
+    reference_catalogs=reference_dfs,
+    redshift_range=REDSHIFT_RANGE,
     chen_table=chen_tbl,
     display_names=DISPLAY_NAMES,
 )

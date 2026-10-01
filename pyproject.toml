@@ -18,6 +18,7 @@ dependencies = [
 	"corner>=2.2.3",
 	"clmm",
 	"pyccl>=3.3.4",
+	"requests>=2.33.1",
 ]
 
 [dependency-groups]
