@@ -159,10 +159,22 @@ def plot_matching_heatmap(
     row_totals_safe = np.where(row_totals == 0, 1, row_totals)
     data_pct = (data / row_totals_safe[:, None]) * 100.0
 
-    vmin = float(np.floor(data_pct.min() / 5.0) * 5.0)
-    norm = Normalize(vmin=vmin, vmax=100.0)
+    mask = np.eye(n, dtype=bool)
+    off_diag = data_pct[~mask]
+    if len(off_diag) > 0:
+        vmin = max(0.0, float(np.floor(off_diag.min() / 5.0) * 5.0))
+        vmax = min(100.0, float(np.ceil(off_diag.max() / 5.0) * 5.0))
+        if vmin >= vmax:
+            vmax = min(100.0, vmin + 5.0)
+    else:
+        vmin, vmax = 0.0, 100.0
 
-    im = ax.imshow(data_pct, cmap="YlGnBu", aspect="equal", norm=norm)
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    cmap = plt.colormaps["YlGnBu"].copy()
+    cmap.set_bad(color="#E5E7EB")
+    data_pct_masked = np.ma.masked_array(data_pct, mask=mask)
+
+    im = ax.imshow(data_pct_masked, cmap=cmap, aspect="equal", norm=norm)
 
     cbar = fig.colorbar(im, ax=ax, shrink=0.82)
     cbar.set_label("Match Fraction (%)", fontsize=10.5)
@@ -188,9 +200,14 @@ def plot_matching_heatmap(
             pct = data_pct[i, j]
             total = row_totals[i]
 
-            text = f"{val}\n(100.0%)" if i == j else f"{val}/{total}\n({pct:.1f}%)"
-            norm_val = norm(pct)
-            text_color = "white" if norm_val > 0.60 else "black"
+            if i == j:
+                text = f"{val}\n(100.0%)"
+                text_color = "#4B5563"
+            else:
+                text = f"{val}/{total}\n({pct:.1f}%)"
+                norm_val = norm(pct)
+                text_color = "white" if norm_val > 0.60 else "black"
+
             ax.text(
                 j,
                 i,
