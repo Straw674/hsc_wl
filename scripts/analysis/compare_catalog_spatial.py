@@ -1295,12 +1295,22 @@ RZ_DIFF_KEYS = [
     "rz_diff_lum_1bin",
 ]
 
+REFERENCE_BENCHMARK_ORDER = [
+    # X-ray
+    "erass1",
+    "efeds",
+    "xxl_dr2",
+    # SZ
+    "act_dr6",
+    # WL
+    "chen2024",
+    # Optical
+    "des_y3_redmapper",
+    "des_y6_wazp",
+    "kids_dr3_amico",
+]
+
 REFERENCE_METADATA = {
-    "act_dr6": {
-        "label": "ACT DR6 SZ",
-        "type": "SZ",
-        "region": "Spring+Fall",
-    },
     "erass1": {
         "label": "eRASS1 + eROMaPPer",
         "type": "X-ray",
@@ -1316,6 +1326,16 @@ REFERENCE_METADATA = {
         "type": "X-ray",
         "region": "XMM",
     },
+    "act_dr6": {
+        "label": "ACT DR6 SZ",
+        "type": "SZ",
+        "region": "Spring+Fall",
+    },
+    "chen2024": {
+        "label": "Chen+2024 WL",
+        "type": "WL Shear",
+        "region": "Full Survey",
+    },
     "des_y3_redmapper": {
         "label": "DES Y3 redMaPPer",
         "type": "Optical",
@@ -1330,11 +1350,6 @@ REFERENCE_METADATA = {
         "label": "KiDS DR3 AMICO",
         "type": "Optical",
         "region": "Spring",
-    },
-    "chen2024": {
-        "label": "Chen+2024 WL",
-        "type": "WL Shear",
-        "region": "Full Survey",
     },
 }
 
@@ -1538,11 +1553,16 @@ plot_bokeh_spatial_regional(
 
 # %% [Stage 4: Reference Benchmark Matching & Global Scorecard]
 
-all_references_dict = {
+raw_references_dict = {
     **reference_dfs,
     "chen2024": pd.DataFrame(
         {col: np.asarray(chen_tbl[col]) for col in chen_tbl.colnames}
     ),
+}
+all_references_dict = {
+    k: raw_references_dict[k]
+    for k in REFERENCE_BENCHMARK_ORDER
+    if k in raw_references_dict
 }
 
 all_benchmark_matches = compute_reference_matches_dict(
