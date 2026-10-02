@@ -759,6 +759,7 @@ LABELS_TO_COMPARE = [
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
     "rz_diff_fixed_1bin",
+    "rz_diff_fixed_lum_1bin",
 ]
 
 DISPLAY_NAMES = {
@@ -768,6 +769,7 @@ DISPLAY_NAMES = {
     "rz_diff_1bin": "r-z Diff (Richness)",
     "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
     "rz_diff_fixed_1bin": "r-z Diff (Fixed)",
+    "rz_diff_fixed_lum_1bin": "r-z Diff (Fixed Lum)",
 }
 
 PALETTE = [
@@ -777,9 +779,10 @@ PALETTE = [
     "#228833",  # Dark Green (r-z Richness)
     "#66CCEE",  # Cyan (r-z Luminosity)
     "#AA3377",  # Purple (r-z Fixed)
+    "#CCBB44",  # Yellow (r-z Fixed Lum)
 ]
 
-MARKERS = ["s", "x", "o", "^", "D", "v"]
+MARKERS = ["s", "x", "o", "^", "D", "v", "<"]
 
 OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
 OUTPUT_CONSENSUS_BREAKDOWN = (
