@@ -1049,18 +1049,26 @@ def plot_differential_advantage_heatmaps(
     if n_plots == 0:
         return
 
-    if n_plots == 1:
-        fig, axes = plt.subplots(1, 1, figsize=(7.2, 5.4))
-        axes = np.array([axes])
-        ncols = 1
-    else:
-        ncols = 4 if n_plots >= 4 else n_plots
-        nrows = (n_plots + ncols - 1) // ncols
-        fig, axes = plt.subplots(nrows, ncols, figsize=(4.8 * ncols, 4.4 * nrows))
-        axes = np.atleast_1d(axes).flatten()
+    # Compute global maximum of absolute percentage across all references
+    all_abs_pct = []
+    for ref_k in keys_to_plot:
+        df_d = diff_dict[ref_k]
+        if len(df_d) > 0:
+            all_abs_pct.extend(np.abs(df_d["delta_pct"].values))
+    max_pct = max(float(np.max(all_abs_pct)), 1.0) if len(all_abs_pct) > 0 else 10.0
+    vlim = float(np.ceil(max_pct / 5.0) * 5.0)
+    norm = Normalize(vmin=-vlim, vmax=vlim)
+    cmap = plt.colormaps["coolwarm"]
+
+    ncols = 4 if n_plots >= 4 else n_plots
+    nrows = (n_plots + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.8 * ncols + 0.6, 4.4 * nrows))
+    axes = np.atleast_1d(axes).flatten()
 
     y_labels = [names_map.get(k, k) for k in rz_keys]
     x_labels = [names_map.get(k, k) for k in first_class_keys]
+
+    im_ref = None
 
     for p_idx, ref_k in enumerate(keys_to_plot):
         ax = axes[p_idx]
@@ -1069,24 +1077,23 @@ def plot_differential_advantage_heatmaps(
         ref_title = ref_info.get("label", ref_k)
         n_ref = df_diff["n_ref"].iloc[0] if len(df_diff) > 0 else 0
 
-        delta_mat = np.zeros((len(rz_keys), len(first_class_keys)), dtype=int)
-        both_mat = np.zeros_like(delta_mat)
-        only_b_mat = np.zeros_like(delta_mat)
-        only_a_mat = np.zeros_like(delta_mat)
+        delta_pct_mat = np.zeros((len(rz_keys), len(first_class_keys)), dtype=float)
+        delta_n_mat = np.zeros((len(rz_keys), len(first_class_keys)), dtype=int)
+        both_mat = np.zeros_like(delta_n_mat)
+        only_b_mat = np.zeros_like(delta_n_mat)
+        only_a_mat = np.zeros_like(delta_n_mat)
 
         for _, row in df_diff.iterrows():
             r_idx = rz_keys.index(row["rz_catalog"])
             c_idx = first_class_keys.index(row["first_class_catalog"])
-            delta_mat[r_idx, c_idx] = int(row["delta_n"])
+            delta_pct_mat[r_idx, c_idx] = float(row["delta_pct"])
+            delta_n_mat[r_idx, c_idx] = int(row["delta_n"])
             both_mat[r_idx, c_idx] = int(row["both"])
             only_b_mat[r_idx, c_idx] = int(row["only_b"])
             only_a_mat[r_idx, c_idx] = int(row["only_a"])
 
-        lim = max(float(np.max(np.abs(delta_mat))), 1.0)
-        norm = Normalize(vmin=-lim, vmax=lim)
-        cmap = plt.colormaps["coolwarm"]
-
-        ax.imshow(delta_mat, cmap=cmap, norm=norm, aspect="auto")
+        im = ax.imshow(delta_pct_mat, cmap=cmap, norm=norm, aspect="auto")
+        im_ref = im
 
         ax.set_xticks(np.arange(len(first_class_keys)))
         ax.set_yticks(np.arange(len(rz_keys)))
@@ -1104,17 +1111,22 @@ def plot_differential_advantage_heatmaps(
 
         for r_i in range(len(rz_keys)):
             for c_j in range(len(first_class_keys)):
-                d_val = delta_mat[r_i, c_j]
+                d_pct = delta_pct_mat[r_i, c_j]
+                d_val = delta_n_mat[r_i, c_j]
                 b_val = only_b_mat[r_i, c_j]
                 a_val = only_a_mat[r_i, c_j]
                 both_val = both_mat[r_i, c_j]
 
-                norm_val = norm(d_val)
+                norm_val = norm(d_pct)
                 text_color = (
-                    "white" if (norm_val < 0.25 or norm_val > 0.75) else "black"
+                    "white" if (norm_val < 0.22 or norm_val > 0.78) else "black"
                 )
 
-                cell_txt = f"Δ={d_val:+d}\n+{b_val} / -{a_val}\nboth:{both_val}"
+                cell_txt = (
+                    f"Δ={d_val:+d} ({d_pct:+.1f}%)\n"
+                    f"+{b_val} / -{a_val}\n"
+                    f"both:{both_val}"
+                )
                 ax.text(
                     c_j,
                     r_i,
@@ -1122,7 +1134,7 @@ def plot_differential_advantage_heatmaps(
                     ha="center",
                     va="center",
                     color=text_color,
-                    fontsize=8.5,
+                    fontsize=8.0,
                     fontweight="normal",
                     linespacing=1.2,
                 )
@@ -1130,7 +1142,12 @@ def plot_differential_advantage_heatmaps(
     for empty_idx in range(n_plots, len(axes)):
         axes[empty_idx].set_visible(False)
 
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 0.93, 0.98])
+    if im_ref is not None:
+        cbar_ax = fig.add_axes([0.942, 0.18, 0.012, 0.64])
+        cbar = fig.colorbar(im_ref, cax=cbar_ax)
+        cbar.set_label("Net Differential Advantage Δ / N_ref (%)", fontsize=10.0)
+
     save_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
     print(f"Differential advantage heatmap saved to {save_path}")
@@ -1328,15 +1345,6 @@ OUTPUT_SCORECARD_PNG = (
 )
 OUTPUT_DIFF_HEATMAPS_ALL_PNG = (
     project_root / "output/plots_for_agents/differential_advantage_all_references.png"
-)
-OUTPUT_DIFF_HEATMAP_ACT_PNG = (
-    project_root / "output/plots_for_agents/differential_advantage_act_dr6.png"
-)
-OUTPUT_DIFF_HEATMAP_ERASS1_PNG = (
-    project_root / "output/plots_for_agents/differential_advantage_erass1.png"
-)
-OUTPUT_DIFF_HEATMAP_EFEDS_PNG = (
-    project_root / "output/plots_for_agents/differential_advantage_efeds.png"
 )
 
 
@@ -1578,44 +1586,12 @@ diff_matrices = {
     for ref_k in all_references_dict
 }
 
-# 1. Multi-panel overview covering all reference catalogs
 plot_differential_advantage_heatmaps(
     diff_matrices,
     first_class_keys=FIRST_CLASS_KEYS,
     rz_keys=RZ_DIFF_KEYS,
     save_path=OUTPUT_DIFF_HEATMAPS_ALL_PNG,
     ref_keys=list(all_references_dict.keys()),
-    display_names=DISPLAY_NAMES,
-    ref_metadata=REFERENCE_METADATA,
-)
-
-# 2. Individual high-resolution plots for major references
-plot_differential_advantage_heatmaps(
-    diff_matrices,
-    first_class_keys=FIRST_CLASS_KEYS,
-    rz_keys=RZ_DIFF_KEYS,
-    save_path=OUTPUT_DIFF_HEATMAP_ACT_PNG,
-    ref_keys=["act_dr6"],
-    display_names=DISPLAY_NAMES,
-    ref_metadata=REFERENCE_METADATA,
-)
-
-plot_differential_advantage_heatmaps(
-    diff_matrices,
-    first_class_keys=FIRST_CLASS_KEYS,
-    rz_keys=RZ_DIFF_KEYS,
-    save_path=OUTPUT_DIFF_HEATMAP_ERASS1_PNG,
-    ref_keys=["erass1"],
-    display_names=DISPLAY_NAMES,
-    ref_metadata=REFERENCE_METADATA,
-)
-
-plot_differential_advantage_heatmaps(
-    diff_matrices,
-    first_class_keys=FIRST_CLASS_KEYS,
-    rz_keys=RZ_DIFF_KEYS,
-    save_path=OUTPUT_DIFF_HEATMAP_EFEDS_PNG,
-    ref_keys=["efeds"],
     display_names=DISPLAY_NAMES,
     ref_metadata=REFERENCE_METADATA,
 )
