@@ -194,7 +194,7 @@ def plot_matching_heatmap(
     display_names : dict of str -> str, optional
         Human-readable labels for catalogs.
     """
-    from astropy.visualization import HistEqStretch, ImageNormalize
+    from matplotlib.colors import Normalize
 
     names_map = display_names or {}
     fig, ax = plt.subplots(figsize=(8.5, 7.2))
@@ -208,18 +208,13 @@ def plot_matching_heatmap(
     row_totals_safe = np.where(row_totals == 0, 1, row_totals)
     data_pct = (data / row_totals_safe[:, None]) * 100.0
 
-    stretch = HistEqStretch(data_pct)
-    norm = ImageNormalize(vmin=float(data_pct.min()), vmax=100.0, stretch=stretch)
+    vmin = float(np.floor(data_pct.min() / 5.0) * 5.0)
+    norm = Normalize(vmin=vmin, vmax=100.0)
 
     im = ax.imshow(data_pct, cmap="YlGnBu", aspect="equal", norm=norm)
 
-    norm_positions = np.linspace(0.05, 0.95, 6)
-    tick_vals = norm.inverse(norm_positions)
-    ticks = sorted(
-        list(set(int(round(t)) for t in tick_vals)) + [int(round(data_pct.min())), 100]
-    )
-    cbar = fig.colorbar(im, ax=ax, ticks=ticks, shrink=0.82)
-    cbar.set_label("Match Fraction (%) [Equalized Hist Stretch]", fontsize=10.5)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.82)
+    cbar.set_label("Match Fraction (%)", fontsize=10.5)
 
     ax.set_xticks(np.arange(n))
     ax.set_yticks(np.arange(n))
@@ -243,7 +238,7 @@ def plot_matching_heatmap(
             total = row_totals[i]
 
             text = f"{val}\n(100.0%)" if i == j else f"{val}/{total}\n({pct:.1f}%)"
-            norm_val = float(norm(np.array([pct]))[0])
+            norm_val = norm(pct)
             text_color = "white" if norm_val > 0.60 else "black"
             ax.text(
                 j,
@@ -1280,7 +1275,7 @@ def plot_tier_consensus_profiles(
 ):
     """Plot multi-panel tiered consensus breakdown figure."""
     import matplotlib.gridspec as gridspec
-    from astropy.visualization import HistEqStretch, ImageNormalize
+    from matplotlib.colors import Normalize
 
     names_map = display_names or {}
     n_cats = len(catalog_order)
@@ -1303,20 +1298,11 @@ def plot_tier_consensus_profiles(
         mat_high[:, j] = c_df["pct_high"].values
         mat_solo[:, j] = c_df["pct_solo"].values
 
-    stretch = HistEqStretch(mat_mean)
-    norm = ImageNormalize(
-        vmin=float(mat_mean.min()), vmax=float(mat_mean.max()), stretch=stretch
-    )
+    norm = Normalize(vmin=float(mat_mean.min()), vmax=float(mat_mean.max()))
 
     im = ax_heat.imshow(mat_mean, cmap="YlGnBu", aspect="auto", norm=norm)
 
-    norm_positions = np.linspace(0.05, 0.95, 6)
-    tick_vals = norm.inverse(norm_positions)
-    ticks = sorted(
-        list(set(round(float(t), 1) for t in tick_vals))
-        + [round(float(mat_mean.min()), 1), round(float(mat_mean.max()), 1)]
-    )
-    cbar = fig.colorbar(im, ax=ax_heat, ticks=ticks, shrink=0.85, pad=0.02)
+    cbar = fig.colorbar(im, ax=ax_heat, shrink=0.85, pad=0.02)
     cbar.set_label(
         f"Mean Matched Catalogs (out of {n_cats - 1})",
         fontsize=10.0,
@@ -1335,7 +1321,7 @@ def plot_tier_consensus_profiles(
     ax_heat.set_yticks(np.arange(4))
     ax_heat.set_yticklabels(bin_row_labels, fontsize=10)
     ax_heat.set_title(
-        "(a) Mean Consensus Score by Proxy Tier [Equalized Hist Stretch]",
+        "(a) Mean Consensus Score by Proxy Tier",
         fontsize=11.5,
         pad=10,
         fontweight="normal",
@@ -1346,7 +1332,7 @@ def plot_tier_consensus_profiles(
             val = mat_mean[i, j]
             h_val = mat_high[i, j]
             solo_val = mat_solo[i, j]
-            norm_val = float(norm(np.array([val]))[0])
+            norm_val = norm(val)
             text_color = "white" if norm_val > 0.55 else "black"
             txt = f"{val:.2f}\n({h_val:.0f}% All {n_cats})"
             if solo_val > 0:

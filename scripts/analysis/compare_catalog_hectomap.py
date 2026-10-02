@@ -203,7 +203,7 @@ def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
     Saves results as a PNG file and displays the image.
     """
     import matplotlib.pyplot as plt
-    from astropy.visualization import HistEqStretch, ImageNormalize
+    from matplotlib.colors import Normalize
 
     fig, ax = plt.subplots(figsize=(11, 9))
 
@@ -218,21 +218,14 @@ def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
     row_totals_safe = np.where(row_totals == 0, 1, row_totals)
     data_pct = (data / row_totals_safe[:, None]) * 100.0
 
-    # Equalized histogram stretch to make matching rate differences pronounced
-    stretch = HistEqStretch(data_pct)
-    norm = ImageNormalize(vmin=float(data_pct.min()), vmax=100.0, stretch=stretch)
+    vmin = float(np.floor(data_pct.min() / 5.0) * 5.0)
+    norm = Normalize(vmin=vmin, vmax=100.0)
 
     # Use a sequential colormap ('YlGnBu') representing matching percentage
     im = ax.imshow(data_pct, cmap="YlGnBu", aspect="equal", norm=norm)
 
-    # Dynamic non-overlapping colorbar ticks mapped from equalized space
-    norm_positions = np.linspace(0.05, 0.95, 6)
-    tick_vals = norm.inverse(norm_positions)
-    ticks = sorted(
-        list(set(int(round(t)) for t in tick_vals)) + [int(round(data_pct.min())), 100]
-    )
-    cbar = fig.colorbar(im, ax=ax, ticks=ticks, shrink=0.8)
-    cbar.set_label("Match Fraction (%) [Equalized Hist Stretch]", fontsize=11)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label("Match Fraction (%)", fontsize=11)
 
     # Set ticks and labels
     ax.set_xticks(np.arange(n))
@@ -264,7 +257,7 @@ def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
                 text = f"{val}/{total}\n({pct:.1f}%)"
 
             # Contrasting text color based on normalized cell brightness
-            norm_val = float(norm(np.array([pct]))[0])
+            norm_val = norm(pct)
             text_color = "white" if norm_val > 0.60 else "black"
             ax.text(
                 j,
@@ -278,7 +271,7 @@ def plot_matching_heatmap(df_match: pd.DataFrame, save_path: Path):
             )
 
     ax.set_title(
-        "Pairwise Lens Match Fractions (0.5 Mpc/h Physical Radius)\nRow Normalized: Fraction of Row Catalog Matched in Column Catalog [HistEq Stretch]",
+        "Pairwise Lens Match Fractions (0.5 Mpc/h Physical Radius)\nRow Normalized: Fraction of Row Catalog Matched in Column Catalog",
         fontsize=12,
         pad=18,
     )
@@ -637,7 +630,7 @@ def plot_tier_consensus_profiles(
     """
     import matplotlib.gridspec as gridspec
     import matplotlib.pyplot as plt
-    from astropy.visualization import HistEqStretch, ImageNormalize
+    from matplotlib.colors import Normalize
 
     names_map = display_names or {}
     n_cats = len(catalog_order)
@@ -662,23 +655,13 @@ def plot_tier_consensus_profiles(
         mat_ge4[:, j] = c_df["pct_ge4"].values
         mat_solo[:, j] = c_df["pct_solo"].values
 
-    stretch = HistEqStretch(mat_mean)
-    norm = ImageNormalize(
-        vmin=float(mat_mean.min()), vmax=float(mat_mean.max()), stretch=stretch
-    )
+    norm = Normalize(vmin=float(mat_mean.min()), vmax=float(mat_mean.max()))
 
     im = ax_heat.imshow(mat_mean, cmap="YlGnBu", aspect="auto", norm=norm)
 
-    # Dynamic non-overlapping colorbar ticks mapped from equalized space
-    norm_positions = np.linspace(0.05, 0.95, 6)
-    tick_vals = norm.inverse(norm_positions)
-    ticks = sorted(
-        list(set(round(float(t), 1) for t in tick_vals))
-        + [round(float(mat_mean.min()), 1), round(float(mat_mean.max()), 1)]
-    )
-    cbar = fig.colorbar(im, ax=ax_heat, ticks=ticks, shrink=0.85, pad=0.02)
+    cbar = fig.colorbar(im, ax=ax_heat, shrink=0.85, pad=0.02)
     cbar.set_label(
-        f"Mean Matched Catalogs (out of {n_cats - 1}) [HistEq Stretch]",
+        f"Mean Matched Catalogs (out of {n_cats - 1})",
         fontsize=10.5,
         fontweight="bold",
     )
@@ -698,7 +681,7 @@ def plot_tier_consensus_profiles(
     ax_heat.set_yticks(np.arange(4))
     ax_heat.set_yticklabels(bin_row_labels, fontsize=10.5, fontweight="bold")
     ax_heat.set_title(
-        "(a) Mean Consensus Score by Proxy Tier [Transposed Matrix with Equalized Hist Stretch]",
+        "(a) Mean Consensus Score by Proxy Tier",
         fontsize=13,
         fontweight="bold",
         pad=12,
@@ -710,7 +693,7 @@ def plot_tier_consensus_profiles(
             val = mat_mean[i, j]
             ge4_val = mat_ge4[i, j]
             solo_val = mat_solo[i, j]
-            norm_val = float(norm(np.array([val]))[0])
+            norm_val = norm(val)
             text_color = "white" if norm_val > 0.55 else "black"
             txt = f"{val:.2f}\n({ge4_val:.0f}% ≥4)"
             if solo_val > 0:
