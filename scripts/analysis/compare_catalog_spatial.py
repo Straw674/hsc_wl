@@ -837,6 +837,396 @@ syncCatalogControls();
     print(f"Interactive Bokeh HTML saved at {save_path}")
 
 
+def match_reference_to_candidate(
+    ref_table_or_df: pd.DataFrame | Table,
+    cand_table_or_df: pd.DataFrame | Table,
+    r_phys_mpc_h: float = 0.5,
+) -> np.ndarray:
+    """Cross-match reference clusters to candidate lenses within physical radius.
+
+    When reference has valid redshift, evaluates physical transverse radius at
+    reference redshift. When reference lacks redshift, falls back to matched
+    candidate lens redshift.
+
+    Parameters
+    ----------
+    ref_table_or_df : pd.DataFrame or Table
+        Reference clusters containing coordinates and optional redshifts.
+    cand_table_or_df : pd.DataFrame or Table
+        Candidate lens catalog containing coordinates and redshifts.
+    r_phys_mpc_h : float, default 0.5
+        Physical transverse matching radius in Mpc/h.
+
+    Returns
+    -------
+    np.ndarray of bool
+        Boolean array indicating whether each reference cluster was matched.
+    """
+    n_ref = len(ref_table_or_df)
+    if n_ref == 0:
+        return np.zeros(0, dtype=bool)
+
+    c_ref = SkyCoord(
+        ra=np.asarray(ref_table_or_df["ra"], dtype=float) * u.deg,
+        dec=np.asarray(ref_table_or_df["dec"], dtype=float) * u.deg,
+    )
+    c_cand = SkyCoord(
+        ra=np.asarray(cand_table_or_df["ra"], dtype=float) * u.deg,
+        dec=np.asarray(cand_table_or_df["dec"], dtype=float) * u.deg,
+    )
+
+    idx_match, d2d, _ = c_ref.match_to_catalog_sky(c_cand)
+
+    has_ref_z = (
+        "z" in ref_table_or_df.colnames
+        if isinstance(ref_table_or_df, Table)
+        else "z" in ref_table_or_df
+    )
+    ref_z = (
+        np.asarray(ref_table_or_df["z"], dtype=float)
+        if has_ref_z
+        else np.full(n_ref, np.nan)
+    )
+    ref_z_valid = np.isfinite(ref_z) & (ref_z > 0)
+
+    cand_z = np.asarray(cand_table_or_df["z"], dtype=float)
+    matched_cand_z = cand_z[idx_match]
+
+    z_eval = np.where(ref_z_valid, ref_z, matched_cand_z)
+    z_eval = np.clip(z_eval, 1e-4, None)
+
+    da = Planck18.angular_diameter_distance(z_eval).value  # Mpc
+    h = Planck18.h
+    r_deg = (r_phys_mpc_h / h) / da * (180.0 / np.pi)
+
+    matched = d2d.deg < r_deg
+    return matched
+
+
+def compute_reference_matches_dict(
+    reference_dict: dict[str, pd.DataFrame | Table],
+    lens_dict: dict[str, Table],
+    r_phys_mpc_h: float = 0.5,
+) -> dict[str, dict[str, np.ndarray]]:
+    """Compute boolean match arrays for each reference catalog against candidate lenses."""
+    matches = {}
+    for ref_key, ref_df in reference_dict.items():
+        matches[ref_key] = {}
+        for cand_key, cand_df in lens_dict.items():
+            matches[ref_key][cand_key] = match_reference_to_candidate(
+                ref_df, cand_df, r_phys_mpc_h=r_phys_mpc_h
+            )
+    return matches
+
+
+def compute_differential_advantage(
+    matches_dict: dict[str, np.ndarray],
+    first_class_keys: list[str],
+    rz_keys: list[str],
+    n_ref: int,
+) -> pd.DataFrame:
+    """Compute differential advantage matrix between rz_diff variants and 1st-class catalogs."""
+    records = []
+    for b_key in rz_keys:
+        m_b = matches_dict[b_key]
+        n_b = int(np.sum(m_b))
+        for a_key in first_class_keys:
+            m_a = matches_dict[a_key]
+            n_a = int(np.sum(m_a))
+
+            both = int(np.sum(m_a & m_b))
+            only_b = int(np.sum(~m_a & m_b))
+            only_a = int(np.sum(m_a & ~m_b))
+            neither = int(np.sum(~m_a & ~m_b))
+
+            delta_n = only_b - only_a
+            discordant = only_b + only_a
+            adv_ratio = (delta_n / discordant) if discordant > 0 else 0.0
+
+            records.append(
+                {
+                    "rz_catalog": b_key,
+                    "first_class_catalog": a_key,
+                    "n_ref": n_ref,
+                    "n_a": n_a,
+                    "n_b": n_b,
+                    "both": both,
+                    "only_b": only_b,
+                    "only_a": only_a,
+                    "neither": neither,
+                    "delta_n": delta_n,
+                    "delta_pct": (delta_n / n_ref * 100.0) if n_ref > 0 else 0.0,
+                    "adv_ratio": adv_ratio,
+                }
+            )
+    return pd.DataFrame(records)
+
+
+def compute_global_benchmark_scorecard(
+    reference_dict: dict[str, pd.DataFrame | Table],
+    all_matches: dict[str, dict[str, np.ndarray]],
+    candidate_order: list[str],
+    baseline_key: str = "camira_1bin",
+    ref_metadata: dict[str, dict[str, str]] | None = None,
+) -> pd.DataFrame:
+    """Compute benchmark completeness and delta vs baseline across all reference catalogs."""
+    records = []
+    meta = ref_metadata or {}
+    for ref_key, ref_df in reference_dict.items():
+        n_ref = len(ref_df)
+        m_dict = all_matches[ref_key]
+        baseline_m = m_dict.get(baseline_key, np.zeros(n_ref, dtype=bool))
+        baseline_pct = (np.mean(baseline_m) * 100.0) if n_ref > 0 else 0.0
+
+        ref_info = meta.get(ref_key, {})
+        rec = {
+            "ref_key": ref_key,
+            "ref_name": ref_info.get("label", ref_key),
+            "ref_type": ref_info.get("type", "General"),
+            "ref_region": ref_info.get("region", "Survey"),
+            "n_ref": n_ref,
+        }
+        for cand_key in candidate_order:
+            m = m_dict[cand_key]
+            n_match = int(np.sum(m))
+            pct = (n_match / n_ref * 100.0) if n_ref > 0 else 0.0
+            delta_pct = pct - baseline_pct
+            rec[f"{cand_key}_count"] = n_match
+            rec[f"{cand_key}_pct"] = pct
+            rec[f"{cand_key}_delta_pct"] = delta_pct
+
+        records.append(rec)
+    return pd.DataFrame(records)
+
+
+def print_scorecard_markdown_table(
+    scorecard_df: pd.DataFrame,
+    candidate_order: list[str],
+    display_names: dict[str, str],
+):
+    """Print formatted markdown summary table to console."""
+    headers = ["Reference", "Type", "Region", "N_ref"] + [
+        display_names.get(k, k) for k in candidate_order
+    ]
+    sep = ["---"] * len(headers)
+    print("\n| " + " | ".join(headers) + " |")
+    print("| " + " | ".join(sep) + " |")
+    for _, row in scorecard_df.iterrows():
+        line = [
+            str(row["ref_name"]),
+            str(row["ref_type"]),
+            str(row["ref_region"]),
+            str(row["n_ref"]),
+        ]
+        for k in candidate_order:
+            cnt = int(row[f"{k}_count"])
+            pct = float(row[f"{k}_pct"])
+            d_pct = float(row[f"{k}_delta_pct"])
+            if k == "camira_1bin":
+                line.append(f"{pct:.1f}% ({cnt})")
+            else:
+                line.append(f"{pct:.1f}% ({d_pct:+.1f}%)")
+        print("| " + " | ".join(line) + " |")
+    print()
+
+
+def plot_differential_advantage_heatmaps(
+    diff_dict: dict[str, pd.DataFrame],
+    first_class_keys: list[str],
+    rz_keys: list[str],
+    save_path: Path,
+    ref_keys: list[str] | None = None,
+    display_names: dict[str, str] | None = None,
+    ref_metadata: dict[str, dict[str, str]] | None = None,
+):
+    """Plot differential advantage heatmaps (rz_diff vs Class 1) across reference catalogs."""
+    from matplotlib.colors import Normalize
+
+    names_map = display_names or {}
+    meta = ref_metadata or {}
+    keys_to_plot = ref_keys or list(diff_dict.keys())
+    n_plots = len(keys_to_plot)
+    if n_plots == 0:
+        return
+
+    if n_plots == 1:
+        fig, axes = plt.subplots(1, 1, figsize=(7.2, 5.4))
+        axes = np.array([axes])
+        ncols = 1
+    else:
+        ncols = 4 if n_plots >= 4 else n_plots
+        nrows = (n_plots + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(4.8 * ncols, 4.4 * nrows))
+        axes = np.atleast_1d(axes).flatten()
+
+    y_labels = [names_map.get(k, k) for k in rz_keys]
+    x_labels = [names_map.get(k, k) for k in first_class_keys]
+
+    for p_idx, ref_k in enumerate(keys_to_plot):
+        ax = axes[p_idx]
+        df_diff = diff_dict[ref_k]
+        ref_info = meta.get(ref_k, {})
+        ref_title = ref_info.get("label", ref_k)
+        n_ref = df_diff["n_ref"].iloc[0] if len(df_diff) > 0 else 0
+
+        delta_mat = np.zeros((len(rz_keys), len(first_class_keys)), dtype=int)
+        both_mat = np.zeros_like(delta_mat)
+        only_b_mat = np.zeros_like(delta_mat)
+        only_a_mat = np.zeros_like(delta_mat)
+
+        for _, row in df_diff.iterrows():
+            r_idx = rz_keys.index(row["rz_catalog"])
+            c_idx = first_class_keys.index(row["first_class_catalog"])
+            delta_mat[r_idx, c_idx] = int(row["delta_n"])
+            both_mat[r_idx, c_idx] = int(row["both"])
+            only_b_mat[r_idx, c_idx] = int(row["only_b"])
+            only_a_mat[r_idx, c_idx] = int(row["only_a"])
+
+        lim = max(float(np.max(np.abs(delta_mat))), 1.0)
+        norm = Normalize(vmin=-lim, vmax=lim)
+        cmap = plt.colormaps["coolwarm"]
+
+        ax.imshow(delta_mat, cmap=cmap, norm=norm, aspect="auto")
+
+        ax.set_xticks(np.arange(len(first_class_keys)))
+        ax.set_yticks(np.arange(len(rz_keys)))
+        ax.set_xticklabels(x_labels, rotation=20, ha="right", fontsize=9.0)
+        ax.set_yticklabels(y_labels if (p_idx % ncols == 0) else [], fontsize=9.0)
+
+        region_str = ref_info.get("region", "")
+        reg_annot = f" ({region_str})" if region_str else ""
+        ax.set_title(
+            f"{ref_title}{reg_annot}\nN={n_ref} Clusters",
+            fontsize=10.0,
+            pad=8,
+            fontweight="normal",
+        )
+
+        for r_i in range(len(rz_keys)):
+            for c_j in range(len(first_class_keys)):
+                d_val = delta_mat[r_i, c_j]
+                b_val = only_b_mat[r_i, c_j]
+                a_val = only_a_mat[r_i, c_j]
+                both_val = both_mat[r_i, c_j]
+
+                norm_val = norm(d_val)
+                text_color = (
+                    "white" if (norm_val < 0.25 or norm_val > 0.75) else "black"
+                )
+
+                cell_txt = f"Δ={d_val:+d}\n+{b_val} / -{a_val}\nboth:{both_val}"
+                ax.text(
+                    c_j,
+                    r_i,
+                    cell_txt,
+                    ha="center",
+                    va="center",
+                    color=text_color,
+                    fontsize=8.5,
+                    fontweight="normal",
+                    linespacing=1.2,
+                )
+
+    for empty_idx in range(n_plots, len(axes)):
+        axes[empty_idx].set_visible(False)
+
+    fig.tight_layout()
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Differential advantage heatmap saved to {save_path}")
+    plt.show()
+    plt.close(fig)
+
+
+def plot_benchmark_scorecard(
+    scorecard_df: pd.DataFrame,
+    candidate_keys: list[str],
+    save_path: Path,
+    baseline_key: str = "camira_1bin",
+    display_names: dict[str, str] | None = None,
+):
+    """Plot public benchmark cluster recovery scorecard across references."""
+    from matplotlib.colors import Normalize
+
+    names_map = display_names or {}
+    n_refs = len(scorecard_df)
+    n_cands = len(candidate_keys)
+
+    fig, ax = plt.subplots(figsize=(13.5, max(5.0, 0.75 * n_refs + 1.8)))
+
+    pct_matrix = np.zeros((n_refs, n_cands), dtype=float)
+    delta_matrix = np.zeros((n_refs, n_cands), dtype=float)
+    counts_matrix = np.zeros((n_refs, n_cands), dtype=int)
+    n_ref_list = scorecard_df["n_ref"].values
+
+    for i, (_, row) in enumerate(scorecard_df.iterrows()):
+        for j, c_key in enumerate(candidate_keys):
+            pct_matrix[i, j] = float(row[f"{c_key}_pct"])
+            delta_matrix[i, j] = float(row[f"{c_key}_delta_pct"])
+            counts_matrix[i, j] = int(row[f"{c_key}_count"])
+
+    norm = Normalize(vmin=0.0, vmax=max(80.0, float(np.max(pct_matrix))))
+    cmap = plt.colormaps["YlGnBu"]
+
+    im = ax.imshow(pct_matrix, cmap=cmap, norm=norm, aspect="auto")
+
+    cbar = fig.colorbar(im, ax=ax, shrink=0.85, pad=0.02)
+    cbar.set_label("Match Fraction (%)", fontsize=10.0)
+
+    row_labels = [
+        f"{row['ref_name']} [{row['ref_type']}]\n({row['ref_region']}, N={row['n_ref']})"
+        for _, row in scorecard_df.iterrows()
+    ]
+    col_labels = [names_map.get(k, k) for k in candidate_keys]
+
+    ax.set_xticks(np.arange(n_cands))
+    ax.set_yticks(np.arange(n_refs))
+    ax.set_xticklabels(col_labels, rotation=20, ha="right", fontsize=9.5)
+    ax.set_yticklabels(row_labels, fontsize=9.0)
+
+    for i in range(n_refs):
+        for j in range(n_cands):
+            pct_val = pct_matrix[i, j]
+            cnt_val = counts_matrix[i, j]
+            tot_val = n_ref_list[i]
+            d_val = delta_matrix[i, j]
+
+            norm_val = norm(pct_val)
+            text_color = "white" if norm_val > 0.58 else "black"
+
+            if candidate_keys[j] == baseline_key:
+                cell_txt = f"{pct_val:.1f}%\n({cnt_val}/{tot_val})\n[Baseline]"
+            else:
+                cell_txt = f"{pct_val:.1f}%\n({cnt_val}/{tot_val})\nΔ: {d_val:+.1f}%"
+
+            ax.text(
+                j,
+                i,
+                cell_txt,
+                ha="center",
+                va="center",
+                color=text_color,
+                fontsize=8.5,
+                fontweight="normal",
+                linespacing=1.2,
+            )
+
+    ax.set_title(
+        "Public Benchmark Cluster Recovery Scorecard across Overlapping HSC Footprints\n"
+        "(Matching within 0.5 Mpc/h Physical Transverse Radius)",
+        fontsize=11.0,
+        pad=12,
+        fontweight="normal",
+    )
+
+    fig.tight_layout()
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Benchmark scorecard plot saved to {save_path}")
+    plt.show()
+    plt.close(fig)
+
+
 # %% Global Configuration
 
 LABELS_TO_COMPARE = [
@@ -873,9 +1263,81 @@ MARKERS = ["s", "x", "o", "^", "D", "v", "<"]
 
 REFERENCE_KEYS = tuple(REFERENCE_CATALOGS)
 REDSHIFT_RANGE = (0.19, 0.52)
+MATCH_RADIUS_MPC_H = 0.5
+
+FIRST_CLASS_KEYS = [
+    "camira_1bin",
+    "redm_r16_1bin",
+    "amico_1bin",
+]
+
+RZ_DIFF_KEYS = [
+    "rz_diff_fixed_1bin",
+    "rz_diff_fixed_lum_1bin",
+    "rz_diff_1bin",
+    "rz_diff_lum_1bin",
+]
+
+REFERENCE_METADATA = {
+    "act_dr6": {
+        "label": "ACT DR6 SZ",
+        "type": "SZ",
+        "region": "Spring+Fall",
+    },
+    "erass1": {
+        "label": "eRASS1 + eROMaPPer",
+        "type": "X-ray",
+        "region": "Spring",
+    },
+    "efeds": {
+        "label": "eFEDS + MCMF",
+        "type": "X-ray",
+        "region": "GAMA09H",
+    },
+    "xxl_dr2": {
+        "label": "XXL DR2 C1/C2",
+        "type": "X-ray",
+        "region": "XMM",
+    },
+    "des_y3_redmapper": {
+        "label": "DES Y3 redMaPPer",
+        "type": "Optical",
+        "region": "Fall",
+    },
+    "des_y6_wazp": {
+        "label": "DES Y6 WaZP",
+        "type": "Optical",
+        "region": "Fall",
+    },
+    "kids_dr3_amico": {
+        "label": "KiDS DR3 AMICO",
+        "type": "Optical",
+        "region": "Spring",
+    },
+    "chen2024": {
+        "label": "Chen+2024 WL",
+        "type": "WL Shear",
+        "region": "Full Survey",
+    },
+}
 
 OUTPUT_SPATIAL_PNG = project_root / "output/plots_for_agents/spatial_distribution.png"
 OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
+OUTPUT_SCORECARD_PNG = (
+    project_root / "output/plots_for_agents/reference_benchmark_scorecard.png"
+)
+OUTPUT_DIFF_HEATMAPS_ALL_PNG = (
+    project_root / "output/plots_for_agents/differential_advantage_all_references.png"
+)
+OUTPUT_DIFF_HEATMAP_ACT_PNG = (
+    project_root / "output/plots_for_agents/differential_advantage_act_dr6.png"
+)
+OUTPUT_DIFF_HEATMAP_ERASS1_PNG = (
+    project_root / "output/plots_for_agents/differential_advantage_erass1.png"
+)
+OUTPUT_DIFF_HEATMAP_EFEDS_PNG = (
+    project_root / "output/plots_for_agents/differential_advantage_efeds.png"
+)
 
 
 # %% [Stage 1: Load Catalogs (Lenses, Chen+2024, References)]
@@ -1063,4 +1525,97 @@ plot_bokeh_spatial_regional(
     groups=HTML_GROUPS,
     chen_table=chen_tbl,
     display_names=DISPLAY_NAMES,
+)
+
+
+# %% [Stage 4: Reference Benchmark Matching & Global Scorecard]
+
+all_references_dict = {
+    **reference_dfs,
+    "chen2024": pd.DataFrame(
+        {col: np.asarray(chen_tbl[col]) for col in chen_tbl.colnames}
+    ),
+}
+
+all_benchmark_matches = compute_reference_matches_dict(
+    all_references_dict,
+    dfs_dict,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+)
+
+scorecard_df = compute_global_benchmark_scorecard(
+    all_references_dict,
+    all_benchmark_matches,
+    candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    baseline_key="camira_1bin",
+    ref_metadata=REFERENCE_METADATA,
+)
+
+print_scorecard_markdown_table(
+    scorecard_df,
+    candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    display_names=DISPLAY_NAMES,
+)
+
+plot_benchmark_scorecard(
+    scorecard_df,
+    candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    save_path=OUTPUT_SCORECARD_PNG,
+    baseline_key="camira_1bin",
+    display_names=DISPLAY_NAMES,
+)
+
+
+# %% [Stage 5: Differential Advantage Heatmaps (rz_diff vs Class 1)]
+
+diff_matrices = {
+    ref_k: compute_differential_advantage(
+        all_benchmark_matches[ref_k],
+        first_class_keys=FIRST_CLASS_KEYS,
+        rz_keys=RZ_DIFF_KEYS,
+        n_ref=len(all_references_dict[ref_k]),
+    )
+    for ref_k in all_references_dict
+}
+
+# 1. Multi-panel overview covering all reference catalogs
+plot_differential_advantage_heatmaps(
+    diff_matrices,
+    first_class_keys=FIRST_CLASS_KEYS,
+    rz_keys=RZ_DIFF_KEYS,
+    save_path=OUTPUT_DIFF_HEATMAPS_ALL_PNG,
+    ref_keys=list(all_references_dict.keys()),
+    display_names=DISPLAY_NAMES,
+    ref_metadata=REFERENCE_METADATA,
+)
+
+# 2. Individual high-resolution plots for major references
+plot_differential_advantage_heatmaps(
+    diff_matrices,
+    first_class_keys=FIRST_CLASS_KEYS,
+    rz_keys=RZ_DIFF_KEYS,
+    save_path=OUTPUT_DIFF_HEATMAP_ACT_PNG,
+    ref_keys=["act_dr6"],
+    display_names=DISPLAY_NAMES,
+    ref_metadata=REFERENCE_METADATA,
+)
+
+plot_differential_advantage_heatmaps(
+    diff_matrices,
+    first_class_keys=FIRST_CLASS_KEYS,
+    rz_keys=RZ_DIFF_KEYS,
+    save_path=OUTPUT_DIFF_HEATMAP_ERASS1_PNG,
+    ref_keys=["erass1"],
+    display_names=DISPLAY_NAMES,
+    ref_metadata=REFERENCE_METADATA,
+)
+
+plot_differential_advantage_heatmaps(
+    diff_matrices,
+    first_class_keys=FIRST_CLASS_KEYS,
+    rz_keys=RZ_DIFF_KEYS,
+    save_path=OUTPUT_DIFF_HEATMAP_EFEDS_PNG,
+    ref_keys=["efeds"],
+    display_names=DISPLAY_NAMES,
+    ref_metadata=REFERENCE_METADATA,
 )
