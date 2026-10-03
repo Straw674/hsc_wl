@@ -26,7 +26,8 @@ Run labels follow the convention ``{catalog_id}_{nbins}`` where:
   HectoMAP sub-region (RA 210-250 / Dec 42-44.5). Catalogs that are
   inherently confined to a single footprint (pdr3 redMapper, COSINE, AMICO,
   PLS, regression, CCA) or span the full survey without cuts (rz_diff,
-  rz_diff_lum, rz_diff_fixed, rz_diff_fixed_lum) carry no footprint suffix.
+  rz_diff_lum, rz_diff_fixed, rz_diff_fixed_lum, rz_diff_no_bkg,
+  rz_diff_no_bkg_lum) carry no footprint suffix.
 - ``nbins`` is either ``1bin`` (single top-N bin, ``top_n`` mode) or
   ``4bin`` (four richness/mass bins, ``top_counts`` mode).
 
@@ -349,11 +350,13 @@ _PATH_AMICO = get_latest_cluster_catalog(
 # PLS cluster finder (2D CoG PLS decomposition)
 _PATH_PLS = "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog.parquet"
 
-# Direct 2D r-z profile subtraction cluster catalogs (Richness, Total Luminosity, Fixed-Aperture Richness)
+# Direct 2D r-z profile subtraction cluster catalogs (Richness, Total Luminosity, Fixed-Aperture Richness, Positive-Box No-Subtraction)
 _PATH_RZ_DIFF = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/rz_diff_cluster_catalog.parquet"
 _PATH_RZ_DIFF_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/rz_diff_lum_cluster_catalog.parquet"
 _PATH_RZ_DIFF_FIXED = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/rz_diff_fixed_cluster_catalog.parquet"
 _PATH_RZ_DIFF_FIXED_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/rz_diff_fixed_lum_cluster_catalog.parquet"
+_PATH_RZ_DIFF_NO_BKG = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/no_bkg/rz_diff_no_bkg_cluster_catalog.parquet"
+_PATH_RZ_DIFF_NO_BKG_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/no_bkg/rz_diff_no_bkg_lum_cluster_catalog.parquet"
 
 # Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
 _PATH_REGRESSION = (
@@ -644,6 +647,8 @@ def _make_pair(
 #   rz_diff_lum                  – Direct 2D r-z profile subtraction total luminosity (full Y3 footprint)
 #   rz_diff_fixed                – Direct 2D r-z profile subtraction fixed-aperture richness (full Y3 footprint)
 #   rz_diff_fixed_lum            – Direct 2D r-z profile subtraction fixed-aperture total luminosity (full Y3 footprint)
+#   rz_diff_no_bkg               – Positive-box no-subtraction richness (full Y3 footprint)
+#   rz_diff_no_bkg_lum           – Positive-box no-subtraction total luminosity (full Y3 footprint)
 #   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
 #   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
 # ---------------------------------------------------------------------------
@@ -863,6 +868,20 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     **_make_pair(
         "rz_diff_fixed_lum",
         _PATH_RZ_DIFF_FIXED_LUM,
+        _RAND_Y3,
+        columns=_COLS_RZ_DIFF,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "rz_diff_no_bkg",
+        _PATH_RZ_DIFF_NO_BKG,
+        _RAND_Y3,
+        columns=_COLS_RZ_DIFF,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "rz_diff_no_bkg_lum",
+        _PATH_RZ_DIFF_NO_BKG_LUM,
         _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         lens_format="parquet",
