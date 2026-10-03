@@ -1254,6 +1254,8 @@ LABELS_TO_COMPARE = [
     "rz_diff_lum_1bin",
     "rz_diff_fixed_1bin",
     "rz_diff_fixed_lum_1bin",
+    "rz_diff_no_bkg_1bin",
+    "rz_diff_no_bkg_lum_1bin",
 ]
 
 DISPLAY_NAMES = {
@@ -1264,6 +1266,8 @@ DISPLAY_NAMES = {
     "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
     "rz_diff_fixed_1bin": "r-z Diff (Fixed)",
     "rz_diff_fixed_lum_1bin": "r-z Diff (Fixed Lum)",
+    "rz_diff_no_bkg_1bin": "r-z Diff (No Bkg)",
+    "rz_diff_no_bkg_lum_1bin": "r-z Diff (No Bkg Lum)",
 }
 
 PALETTE = [
@@ -1274,9 +1278,11 @@ PALETTE = [
     "#66CCEE",  # Cyan (r-z Luminosity)
     "#AA3377",  # Purple (r-z Fixed)
     "#CCBB44",  # Yellow (r-z Fixed Lum)
+    "#EE7733",  # Orange (r-z No Bkg)
+    "#332288",  # Navy (r-z No Bkg Lum)
 ]
 
-MARKERS = ["s", "x", "o", "^", "D", "v", "<"]
+MARKERS = ["s", "x", "o", "^", "D", "v", "<", ">", "p"]
 
 REFERENCE_KEYS = tuple(REFERENCE_CATALOGS)
 REDSHIFT_RANGE = (0.19, 0.52)
@@ -1293,6 +1299,8 @@ RZ_DIFF_KEYS = [
     "rz_diff_fixed_lum_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
+    "rz_diff_no_bkg_1bin",
+    "rz_diff_no_bkg_lum_1bin",
 ]
 
 REFERENCE_BENCHMARK_ORDER = [
@@ -1396,6 +1404,8 @@ HTML_MAIN_KEYS = (
     "rz_diff_fixed_lum_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
+    "rz_diff_no_bkg_1bin",
+    "rz_diff_no_bkg_lum_1bin",
 )
 HTML_GROUPS = {
     "CAMIRA / redMaPPer / AMICO": ("camira_1bin", "redm_r16_1bin", "amico_1bin"),
@@ -1404,6 +1414,8 @@ HTML_GROUPS = {
         "rz_diff_fixed_lum_1bin",
         "rz_diff_1bin",
         "rz_diff_lum_1bin",
+        "rz_diff_no_bkg_1bin",
+        "rz_diff_no_bkg_lum_1bin",
     ),
     "Reference catalogs": (
         "act_dr6",
@@ -1469,6 +1481,22 @@ HTML_STYLES = {
         color="#9A3412",
         shape="inverted_triangle",
         diameter=0.27,
+        line_width=1.7,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_no_bkg_1bin": dict(
+        color="#EA580C",
+        shape="inverted_triangle",
+        diameter=0.22,
+        line_width=1.7,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_no_bkg_lum_1bin": dict(
+        color="#7C2D12",
+        shape="inverted_triangle",
+        diameter=0.26,
         line_width=1.7,
         alpha=0.95,
         visible=False,
