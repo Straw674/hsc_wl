@@ -1257,9 +1257,10 @@ def plot_benchmark_release_table(
 
     Empty reference samples have undefined rates and receive no highlight.
     """
+    from itertools import groupby
     from textwrap import fill
 
-    from matplotlib.patches import FancyBboxPatch
+    from matplotlib.patches import Rectangle
 
     if scorecard_df.empty or not candidate_keys:
         return
@@ -1270,25 +1271,23 @@ def plot_benchmark_release_table(
     valid = np.isfinite(rates) & (totals[:, None] > 0)
     maxima = np.max(np.where(valid, rates, -np.inf), axis=1)
     winners = valid & (rates == maxima[:, None])
-    background, ink, muted = "#F8F7F3", "#292B28", "#777B73"
-    accent, highlight, rule = "#235C4A", "#DDEBDD", "#D9DCD4"
-    label_width, col_width = 3.6, 1.65
+    background, ink, muted = "#FAF9F6", "#272923", "#77786F"
+    accent, highlight, rule = "#985738", "#EAD7C7", "#D9D7CF"
+    label_width, col_width, row_height = 3.65, 1.65, 1.10
     width = label_width + col_width * len(candidate_keys)
-    height = 3.7 + len(scorecard_df) * 1.05
+    table_top = 3.05
+    bottom = table_top + len(scorecard_df) * row_height
+    height = bottom + 1.05
 
     with plt.rc_context(
-        {
-            "font.family": ["Arial Unicode MS", "DejaVu Sans"],
-            "font.weight": "normal",
-            "text.usetex": False,
-        }
+        {"font.family": "DejaVu Sans", "font.weight": "normal", "text.usetex": False}
     ):
         fig, ax = plt.subplots(figsize=(width, height), facecolor=background)
-        fig.subplots_adjust(left=0.025, right=0.975, bottom=0.025, top=0.975)
+        fig.subplots_adjust(left=0.035, right=0.965, bottom=0.035, top=0.965)
         ax.set(xlim=(0, width), ylim=(height, 0))
         ax.set_axis_off()
 
-        def write(x, y, text, size=11, color=ink, ha="left"):
+        def write(x, y, text, size=11, color=ink, ha="left", family="DejaVu Sans"):
             return ax.text(
                 x,
                 y,
@@ -1298,61 +1297,92 @@ def plot_benchmark_release_table(
                 ha=ha,
                 va="center",
                 fontweight="normal",
+                fontfamily=family,
                 linespacing=1.4,
             )
 
-        write(0.12, 0.4, "Catalog 匹配率", size=25)
-        write(0.12, 0.95, sample_label, size=11, color=muted)
-        write(
-            width - 0.12,
-            0.45,
-            "绿色底色：每行最高值（含并列）",
-            size=10,
-            color=accent,
-            ha="right",
+        ax.hlines(0.04, 0, width, color=ink, linewidth=1.1)
+        write(0, 0.32, "HSC  /  CATALOG COMPARISON", size=9, color=accent)
+        write(0, 0.91, "External catalog recovery", size=32, family="Source Serif 4")
+        write(0, 1.44, sample_label, size=10, color=muted)
+        write(width, 0.32, "MATCH FRACTION (%)", size=9, color=muted, ha="right")
+        ax.add_patch(
+            Rectangle(
+                (width - 3.25, 1.32), 0.20, 0.20, facecolor=highlight, edgecolor="none"
+            )
         )
-        write(0.12, 1.98, "External catalog", size=12)
+        write(width - 2.93, 1.42, "Highest in row · ties included", size=9, color=muted)
+
+        # Group contiguous catalog families without changing the scorecard order.
+        grouped = groupby(
+            enumerate(candidate_keys), key=lambda item: item[1].startswith("rz_diff")
+        )
+        for is_rz, members in grouped:
+            indices = [index for index, _ in members]
+            left = label_width + indices[0] * col_width
+            right = label_width + (indices[-1] + 1) * col_width
+            ax.add_patch(
+                Rectangle(
+                    (left, 1.91),
+                    right - left,
+                    1.14,
+                    facecolor="#F0EEE7" if is_rz else "#F5F4EF",
+                    edgecolor="none",
+                )
+            )
+            write(
+                (left + right) / 2,
+                2.10,
+                "r-z DIFF VARIANTS" if is_rz else "OPTICAL CATALOGS",
+                size=9,
+                color=accent if is_rz else muted,
+                ha="center",
+            )
+            ax.hlines(2.30, left + 0.18, right - 0.18, color=rule, linewidth=0.65)
+        write(0, 2.45, "External catalog", size=12)
+        write(0, 2.79, "Selection / footprint / sample size", size=9, color=muted)
         for j, key in enumerate(candidate_keys):
             x = label_width + (j + 0.5) * col_width
-            label = names.get(key, key).replace(" (", "\n(")
-            label = "\n".join(fill(part, width=17) for part in label.split("\n"))
-            write(x, 1.9, label, size=11, ha="center")
+            label = names.get(key, key)
+            if key.startswith("rz_diff"):
+                label = label.removeprefix("r-z Diff ").strip("()")
+            label = fill(label, width=17)
+            write(x, 2.59, label, size=11, ha="center")
             if key == baseline_key:
-                write(x, 2.43, "基准", size=9, color=muted, ha="center")
-        ax.hlines(2.7, 0, width, color=ink, linewidth=0.9)
+                write(x, 2.89, "Baseline", size=8, color=muted, ha="center")
+        ax.hlines(table_top, 0, width, color=ink, linewidth=0.85)
 
         for i in range(len(scorecard_df)):
-            top = 2.7 + i * 1.05
-            write(0.12, top + 0.38, str(scorecard_df["ref_name"].iloc[i]), size=12)
-            detail = (
-                f"{scorecard_df['ref_type'].iloc[i]} · "
-                f"{scorecard_df['ref_region'].iloc[i]} · N = {int(totals[i]):,}"
-            )
-            write(0.12, top + 0.73, detail, size=9, color=muted)
+            top = table_top + i * row_height
+            ref_type = str(scorecard_df["ref_type"].iloc[i])
+            if i and ref_type != str(scorecard_df["ref_type"].iloc[i - 1]):
+                ax.hlines(top, 0, width, color="#A8A79D", linewidth=0.9)
+            write(0, top + 0.23, ref_type.upper(), size=8, color=accent)
+            write(0, top + 0.54, str(scorecard_df["ref_name"].iloc[i]), size=12)
+            detail = f"{scorecard_df['ref_region'].iloc[i]}  ·  N = {int(totals[i]):,}"
+            write(0, top + 0.86, detail, size=9, color=muted)
             for j, key in enumerate(candidate_keys):
                 left = label_width + j * col_width
                 x = left + col_width / 2
                 if winners[i, j]:
                     ax.add_patch(
-                        FancyBboxPatch(
-                            (left + 0.09, top + 0.1),
-                            col_width - 0.18,
-                            0.85,
-                            boxstyle="round,pad=0.02,rounding_size=0.06",
+                        Rectangle(
+                            (left + 0.05, top + 0.06),
+                            col_width - 0.10,
+                            row_height - 0.12,
                             facecolor=highlight,
                             edgecolor="none",
                         )
                     )
                 if not valid[i, j]:
-                    write(x, top + 0.49, "—", size=18, color=muted, ha="center")
+                    write(x, top + 0.48, "—", size=18, color=muted, ha="center")
                     continue
-                color = accent if winners[i, j] else ink
                 write(
                     x,
-                    top + 0.35,
+                    top + 0.43,
                     f"{rates[i, j]:.1f}%",
                     size=18,
-                    color=color,
+                    color=ink,
                     ha="center",
                 )
                 count = int(scorecard_df[f"{key}_count"].iloc[i])
@@ -1360,23 +1390,30 @@ def plot_benchmark_release_table(
                 detail = f"{count}/{int(totals[i])}"
                 if key != baseline_key:
                     detail += f" · {delta:+.1f} pp"
-                write(x, top + 0.73, detail, size=9, color=muted, ha="center")
-            ax.hlines(top + 1.05, 0, width, color=rule, linewidth=0.6)
+                write(
+                    x,
+                    top + 0.79,
+                    detail,
+                    size=8.5,
+                    color="#675546" if winners[i, j] else muted,
+                    ha="center",
+                )
+            ax.hlines(top + row_height, 0, width, color=rule, linewidth=0.55)
+        ax.hlines(bottom, 0, width, color=ink, linewidth=0.85)
 
-        bottom = 2.7 + len(scorecard_df) * 1.05
         baseline = names.get(baseline_key, baseline_key)
         write(
-            0.12,
-            bottom + 0.35,
-            f"匹配半径 < {r_phys_mpc_h:g} Mpc/h（物理横向距离）"
-            f"   ·   pp：相对 {baseline} 的百分点差值",
+            0,
+            bottom + 0.36,
+            f"Physical transverse radius < {r_phys_mpc_h:g} Mpc/h. "
+            f"Cell details: matched / reference count; percentage-point difference from {baseline}.",
             size=9,
             color=muted,
         )
         write(
-            0.12,
-            bottom + 0.68,
-            "最高值按未舍入匹配率判定；N = 0 时显示 —。",
+            0,
+            bottom + 0.70,
+            "Highlights use unrounded match fractions. Empty reference samples are shown as —.",
             size=9,
             color=muted,
         )
@@ -1822,7 +1859,7 @@ plot_benchmark_release_table(
     candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
     save_path=OUTPUT_RELEASE_TABLE_PNG,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-    sample_label=f"HSC 重叠覆盖区域 · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
+    sample_label=f"Overlapping HSC footprints · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
     display_names=DISPLAY_NAMES,
 )
 
