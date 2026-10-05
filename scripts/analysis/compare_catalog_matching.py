@@ -19,6 +19,7 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from hsc_wl.prepare import load_stratified_candidates
 from initial import *  # noqa: F401,F403
 from src.data import read_catalog_frame
 
@@ -70,13 +71,18 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
     return dfs
 
 
-def compute_pairwise_matches(dfs: dict[str, Table]) -> pd.DataFrame:
-    """Compute pairwise matching statistics within 0.5 Mpc/h physical radius.
+def compute_pairwise_matches(
+    dfs: dict[str, Table],
+    r_phys_mpc_h: float = 0.5,
+) -> pd.DataFrame:
+    """Compute pairwise matching statistics within a physical radius.
 
     Parameters
     ----------
     dfs : dict of label -> Table
         Loaded lens catalogs.
+    r_phys_mpc_h : float, default 0.5
+        Physical transverse matching radius in Mpc/h.
 
     Returns
     -------
@@ -119,8 +125,8 @@ def compute_pairwise_matches(dfs: dict[str, Table]) -> pd.DataFrame:
             )
             da1 = Planck18.angular_diameter_distance(z1).value  # Mpc
 
-            # 0.5 Mpc/h in degrees: (0.5 / h) / da1 * (180 / pi)
-            match_radius_deg = (0.5 / h) / da1 * (180.0 / np.pi)
+            # Matching radius in degrees: (r_phys_mpc_h / h) / da1 * (180 / pi)
+            match_radius_deg = (r_phys_mpc_h / h) / da1 * (180.0 / np.pi)
 
             matched = d2d.deg < match_radius_deg
             matrix[i, j] = np.sum(matched)
@@ -133,6 +139,7 @@ def plot_matching_heatmap(
     df_match: pd.DataFrame,
     save_path: Path,
     display_names: dict[str, str] | None = None,
+    r_phys_mpc_h: float = 0.5,
 ):
     """Plot pairwise matching statistics as a heatmap grid using matplotlib.
 
@@ -144,6 +151,8 @@ def plot_matching_heatmap(
         Output image path.
     display_names : dict of str -> str, optional
         Human-readable labels for catalogs.
+    r_phys_mpc_h : float, default 0.5
+        Physical transverse matching radius in Mpc/h.
     """
     from matplotlib.colors import Normalize
 
@@ -220,8 +229,8 @@ def plot_matching_heatmap(
             )
 
     ax.set_title(
-        "Pairwise Lens Match Fractions (0.5 Mpc/h Physical Radius)\n"
-        "Full HSC Survey Footprint (439 deg², N=1020 per catalog)",
+        f"Pairwise Lens Match Fractions ({r_phys_mpc_h:g} Mpc/h Physical Radius)\n"
+        f"Stratified Redshift-Controlled (Matched redMaPPer N(z), N={row_totals[0]} per catalog)",
         fontsize=11.5,
         pad=14,
         fontweight="normal",
@@ -237,13 +246,16 @@ def plot_matching_heatmap(
 
 def compute_consensus_breakdown(
     dfs: dict[str, Table],
+    r_phys_mpc_h: float = 0.5,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Compute multi-catalog consensus counts and percentages.
+    """Compute multi-catalog consensus counts and percentages within physical radius.
 
     Parameters
     ----------
     dfs : dict of str -> Table
         Loaded lens catalogs.
+    r_phys_mpc_h : float, default 0.5
+        Physical transverse matching radius in Mpc/h.
 
     Returns
     -------
@@ -271,7 +283,7 @@ def compute_consensus_breakdown(
     for name in catalog_names:
         z = np.clip(np.asarray(dfs[name]["z"], float), 1e-4, None)
         da = Planck18.angular_diameter_distance(z).value
-        radii_deg[name] = (0.5 / h) / da * (180.0 / np.pi)
+        radii_deg[name] = (r_phys_mpc_h / h) / da * (180.0 / np.pi)
 
     counts_matrix = np.zeros((n_cats, n_cats), dtype=int)
 
@@ -309,6 +321,7 @@ def plot_consensus_breakdown(
     markers: list[str],
     save_path: Path,
     display_names: dict[str, str] | None = None,
+    r_phys_mpc_h: float = 0.5,
 ):
     """Plot consensus level profiles across catalogs as a multi-line plot."""
     names_map = display_names or {}
@@ -353,7 +366,7 @@ def plot_consensus_breakdown(
     )
     ax.set_ylabel("Cluster Fraction (%)", fontsize=11.0)
     ax.set_title(
-        "Consensus Profiles across Full Survey Catalogs (0.5 Mpc/h Matching)",
+        f"Consensus Profiles across Stratified Catalogs ({r_phys_mpc_h:g} Mpc/h Matching, Matched redMaPPer N(z))",
         fontsize=11.5,
         pad=10,
         fontweight="normal",
@@ -374,6 +387,7 @@ def compute_tier_consensus_breakdown(
     dfs: dict[str, Table],
     n_bins: int = 4,
     display_names: dict[str, str] | None = None,
+    r_phys_mpc_h: float = 0.5,
 ) -> pd.DataFrame:
     """Compute consensus statistics for each catalog partitioned into proxy rank tiers."""
     from astropy import units as u
@@ -397,7 +411,7 @@ def compute_tier_consensus_breakdown(
     for name in catalog_names:
         z = np.clip(np.asarray(dfs[name]["z"], float), 1e-4, None)
         da = Planck18.angular_diameter_distance(z).value
-        radii_deg[name] = (0.5 / h) / da * (180.0 / np.pi)
+        radii_deg[name] = (r_phys_mpc_h / h) / da * (180.0 / np.pi)
 
     records = []
 
@@ -462,6 +476,7 @@ def compute_tier_pairwise_matches(
     dfs: dict[str, Table],
     n_bins: int = 4,
     display_names: dict[str, str] | None = None,
+    r_phys_mpc_h: float = 0.5,
 ) -> dict[int, pd.DataFrame]:
     """Compute pairwise match matrices for each proxy tier against full catalog."""
     from astropy import units as u
@@ -485,7 +500,7 @@ def compute_tier_pairwise_matches(
     for name in catalog_names:
         z = np.clip(np.asarray(dfs[name]["z"], float), 1e-4, None)
         da = Planck18.angular_diameter_distance(z).value
-        radii_deg[name] = (0.5 / h) / da * (180.0 / np.pi)
+        radii_deg[name] = (r_phys_mpc_h / h) / da * (180.0 / np.pi)
 
     tier_matrices = {}
 
@@ -571,7 +586,7 @@ def plot_tier_consensus_profiles(
     ax_heat.set_yticks(np.arange(4))
     ax_heat.set_yticklabels(bin_row_labels, fontsize=10)
     ax_heat.set_title(
-        "(a) Mean Consensus Score by Proxy Tier",
+        "(a) Mean Consensus Score by Proxy Tier (Stratified Sample)",
         fontsize=11.5,
         pad=10,
         fontweight="normal",
@@ -689,6 +704,7 @@ def plot_tier_consensus_profiles(
 def plot_tier_pairwise_heatmaps(
     tier_pairwise_dict: dict[int, pd.DataFrame],
     save_path: Path,
+    r_phys_mpc_h: float = 0.5,
 ):
     """Plot 2x2 grid of pairwise match fractions across proxy tiers."""
     from matplotlib.colors import Normalize
@@ -753,8 +769,8 @@ def plot_tier_pairwise_heatmaps(
     )
 
     fig.suptitle(
-        "Tier-Resolved Pairwise Lens Matching Fractions (0.5 Mpc/h Matching Radius)\n"
-        "Row: Clusters in Given Proxy Tier  |  Column: Matched in Full Top 1020 of Target Catalog",
+        f"Tier-Resolved Pairwise Lens Matching Fractions ({r_phys_mpc_h:g} Mpc/h Matching Radius)\n"
+        "Row: Clusters in Given Proxy Tier  |  Column: Matched in Full Stratified Top 1020 of Target Catalog",
         fontsize=12.0,
         fontweight="normal",
         y=0.97,
@@ -763,6 +779,101 @@ def plot_tier_pairwise_heatmaps(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
     print(f"Tier-resolved pairwise heatmaps saved to {save_path}")
+    plt.show()
+    plt.close(fig)
+
+
+def plot_redshift_distributions(
+    raw_dfs: dict[str, Table],
+    strat_dfs: dict[str, Table],
+    colors: list[str],
+    save_path: Path,
+    display_names: dict[str, str] | None = None,
+    redshift_range: tuple[float, float] = (0.19, 0.52),
+    n_bins: int = 10,
+):
+    """Plot redshift distribution comparison between raw top candidates and stratified samples."""
+    names_map = display_names or {}
+    catalog_names = list(strat_dfs.keys())
+    z_edges = np.linspace(redshift_range[0], redshift_range[1], n_bins + 1)
+    bin_centers = 0.5 * (z_edges[:-1] + z_edges[1:])
+    delta_z = z_edges[1] - z_edges[0]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5), sharey=True)
+
+    # Panel 1: Raw Top 1020
+    for idx, name in enumerate(catalog_names):
+        z_vals = np.asarray(raw_dfs[name]["z"], dtype=float)
+        counts, _ = np.histogram(z_vals, bins=z_edges)
+        z_mean = float(np.mean(z_vals))
+        c = colors[idx % len(colors)]
+        disp_name = names_map.get(name, name)
+        ax1.plot(
+            bin_centers,
+            counts,
+            marker="o",
+            markersize=5,
+            linewidth=1.8,
+            color=c,
+            label=f"{disp_name} (mean z={z_mean:.3f})",
+            alpha=0.9,
+        )
+
+    ax1.set_title(
+        "(a) Raw Top 1020 Catalogs (Unstratified)",
+        fontsize=11.5,
+        pad=10,
+        fontweight="normal",
+    )
+    ax1.set_xlabel("Redshift z", fontsize=11.0)
+    ax1.set_ylabel(f"Cluster Count (per $\\Delta z = {delta_z:.3f}$)", fontsize=11.0)
+    ax1.set_xlim(redshift_range[0] - 0.01, redshift_range[1] + 0.01)
+    ax1.grid(False, which="both")
+    ax1.legend(fontsize=9.0, loc="upper right", framealpha=0.9)
+
+    # Panel 2: Stratified Top 1020 (Matched redMaPPer N(z))
+    for idx, name in enumerate(catalog_names):
+        z_vals = np.asarray(strat_dfs[name]["z"], dtype=float)
+        counts, _ = np.histogram(z_vals, bins=z_edges)
+        z_mean = float(np.mean(z_vals))
+        c = colors[idx % len(colors)]
+        disp_name = names_map.get(name, name)
+        is_ref = "redm" in name
+        ax2.plot(
+            bin_centers,
+            counts,
+            marker="s" if is_ref else "o",
+            markersize=6 if is_ref else 4,
+            linewidth=2.5 if is_ref else 1.2,
+            linestyle="--" if is_ref else "-",
+            color=c,
+            label=f"{disp_name} (mean z={z_mean:.3f})",
+            alpha=0.95 if is_ref else 0.75,
+        )
+
+    ax2.set_title(
+        "(b) Stratified Redshift-Controlled (Matched redMaPPer N(z))",
+        fontsize=11.5,
+        pad=10,
+        fontweight="normal",
+    )
+    ax2.set_xlabel("Redshift z", fontsize=11.0)
+    ax2.set_xlim(redshift_range[0] - 0.01, redshift_range[1] + 0.01)
+    ax2.grid(False, which="both")
+    ax2.legend(fontsize=9.0, loc="upper right", framealpha=0.9)
+
+    fig.suptitle(
+        f"Lens Catalog Redshift Distribution Comparison (N=1020 per catalog, {redshift_range[0]:.2f} ≤ z ≤ {redshift_range[1]:.2f})\n"
+        "Raw proxy-selected catalogs exhibit large redshift skew (AMICO low-z, r-z diff high-z); stratification equalizes N(z)",
+        fontsize=12.0,
+        fontweight="normal",
+        y=1.02,
+    )
+    fig.tight_layout()
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Redshift distributions comparison plot saved to {save_path}")
     plt.show()
     plt.close(fig)
 
@@ -787,6 +898,8 @@ DISPLAY_NAMES = {
     "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
     "rz_diff_preset_1bin": "r-z Diff (Preset)",
     "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
+    "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
+    "rz_diff_single_box_lum_1bin": "r-z Diff (Single Box Lum)",
 }
 
 PALETTE = [
@@ -797,10 +910,20 @@ PALETTE = [
     "#66CCEE",  # Cyan (r-z Luminosity)
     "#AA3377",  # Purple (r-z Fixed)
     "#CCBB44",  # Yellow (r-z Fixed Lum)
+    "#BBCC33",  # Light Green (r-z Single Box)
+    "#EE8866",  # Orange (r-z Single Box Lum)
 ]
 
-MARKERS = ["s", "x", "o", "^", "D", "v", "<"]
+MARKERS = ["s", "x", "o", "^", "D", "v", "<", "p", "h"]
 
+REDSHIFT_RANGE = (0.19, 0.52)
+N_STRATIFIED_BINS = 10
+TOTAL_STRATIFIED_TOP_N = 1020
+MATCH_RADIUS_MPC_H = 0.5
+
+OUTPUT_REDSHIFT_DISTRIBUTIONS = (
+    project_root / "output/plots_for_agents/matching_redshift_distributions.png"
+)
 OUTPUT_MATCH_HEATMAP = project_root / "output/plots_for_agents/matching_statistics.png"
 OUTPUT_CONSENSUS_BREAKDOWN = (
     project_root / "output/plots_for_agents/consensus_breakdown.png"
@@ -813,22 +936,62 @@ OUTPUT_TIER_PAIRWISE_HEATMAPS = (
 )
 
 
-# %% [Stage 1: Load Lens Catalogs & Compute Pairwise Matches]
+# %% [Stage 1: Load Raw & Stratified Lens Catalogs]
 
-dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
-match_df = compute_pairwise_matches(dfs_dict)
+raw_dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
+
+strat_dfs_dict = load_stratified_candidates(
+    candidate_keys=LABELS_TO_COMPARE,
+    root=project_root,
+    redshift_range=REDSHIFT_RANGE,
+    n_bins=N_STRATIFIED_BINS,
+    total_top_n=TOTAL_STRATIFIED_TOP_N,
+    ref_lens_table=raw_dfs_dict.get("redm_r16_1bin"),
+    include_all_candidates=False,
+)
+
+print(
+    f"\nLoaded {len(LABELS_TO_COMPARE)} catalogs (Raw and Stratified N={TOTAL_STRATIFIED_TOP_N})."
+)
+for k in LABELS_TO_COMPARE:
+    z_raw = np.asarray(raw_dfs_dict[k]["z"], float)
+    z_strat = np.asarray(strat_dfs_dict[k]["z"], float)
+    disp = DISPLAY_NAMES.get(k, k)
+    print(
+        f"  {disp:24s}: Raw mean z = {np.mean(z_raw):.4f} -> Stratified mean z = {np.mean(z_strat):.4f}"
+    )
 
 
-# %% [Stage 2: Pairwise Matching Heatmap]
+# %% [Stage 2: Redshift Distribution Validation (Raw vs Stratified)]
 
-plot_matching_heatmap(
-    match_df, save_path=OUTPUT_MATCH_HEATMAP, display_names=DISPLAY_NAMES
+plot_redshift_distributions(
+    raw_dfs=raw_dfs_dict,
+    strat_dfs=strat_dfs_dict,
+    colors=PALETTE,
+    save_path=OUTPUT_REDSHIFT_DISTRIBUTIONS,
+    display_names=DISPLAY_NAMES,
+    redshift_range=REDSHIFT_RANGE,
+    n_bins=N_STRATIFIED_BINS,
 )
 
 
-# %% [Stage 3: Overall Consensus Breakdown Analysis]
+# %% [Stage 3: Pairwise Matching Heatmap (Stratified Redshift-Controlled)]
 
-consensus_counts_df, consensus_pct_df = compute_consensus_breakdown(dfs_dict)
+match_df = compute_pairwise_matches(strat_dfs_dict, r_phys_mpc_h=MATCH_RADIUS_MPC_H)
+
+plot_matching_heatmap(
+    match_df,
+    save_path=OUTPUT_MATCH_HEATMAP,
+    display_names=DISPLAY_NAMES,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+)
+
+
+# %% [Stage 4: Overall Consensus Breakdown Analysis]
+
+consensus_counts_df, consensus_pct_df = compute_consensus_breakdown(
+    strat_dfs_dict, r_phys_mpc_h=MATCH_RADIUS_MPC_H
+)
 
 plot_consensus_breakdown(
     consensus_counts_df,
@@ -837,13 +1000,17 @@ plot_consensus_breakdown(
     markers=MARKERS,
     save_path=OUTPUT_CONSENSUS_BREAKDOWN,
     display_names=DISPLAY_NAMES,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
 )
 
 
-# %% [Stage 4: Tiered Proxy Consensus Analysis (4 Quartiles)]
+# %% [Stage 5: Tiered Proxy Consensus Analysis (4 Quartiles)]
 
 tier_consensus_df = compute_tier_consensus_breakdown(
-    dfs_dict, n_bins=4, display_names=DISPLAY_NAMES
+    strat_dfs_dict,
+    n_bins=4,
+    display_names=DISPLAY_NAMES,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
 )
 
 plot_tier_consensus_profiles(
@@ -856,12 +1023,16 @@ plot_tier_consensus_profiles(
 )
 
 
-# %% [Stage 5: Tier-Resolved Pairwise Matching Heatmaps]
+# %% [Stage 6: Tier-Resolved Pairwise Matching Heatmaps]
 
 tier_pairwise_dict = compute_tier_pairwise_matches(
-    dfs_dict, n_bins=4, display_names=DISPLAY_NAMES
+    strat_dfs_dict,
+    n_bins=4,
+    display_names=DISPLAY_NAMES,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
 )
 plot_tier_pairwise_heatmaps(
     tier_pairwise_dict,
     save_path=OUTPUT_TIER_PAIRWISE_HEATMAPS,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
 )

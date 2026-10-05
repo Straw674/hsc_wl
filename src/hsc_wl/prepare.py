@@ -770,3 +770,154 @@ def run_prepare_pipeline(cfg: WLConfig, root: Path | None = None):
     print("\n" + "=" * 30)
     print(f"Lenses saved to: {lens_file}")
     print(f"Randoms saved to: {random_file}")
+
+
+def load_stratified_candidates(
+    candidate_keys: list[str],
+    root: Path,
+    y3_mask=None,
+    redshift_range: tuple[float, float] = (0.19, 0.52),
+    n_bins: int = 10,
+    total_top_n: int = 1020,
+    ref_lens_table: Table | None = None,
+    include_all_candidates: bool = False,
+) -> dict[str, Table]:
+    """Load candidate catalogs and stratify into equal-redshift bins matching reference N(z).
+
+    Parameters
+    ----------
+    candidate_keys : list of str
+        List of candidate catalog registry keys, e.g. ['camira_1bin', 'amico_1bin', ...].
+    root : Path
+        Project root path.
+    y3_mask : optional
+        Master Y3 healsparse mask. If None, loaded via load_y3_mask(root).
+    redshift_range : tuple of (float, float), default (0.19, 0.52)
+        Redshift bounds for candidate filtering.
+    n_bins : int, default 10
+        Number of equal-width redshift bins for stratification.
+    total_top_n : int, default 1020
+        Total number of clusters to select across all redshift bins.
+    ref_lens_table : Table, optional
+        Reference lens table providing target N(z). If None, attempts to load
+        from prepared 'redm_r16_1bin' or first candidate.
+    include_all_candidates : bool, default False
+        Whether to also include unstratified full candidate table under 'rz_diff_all'.
+
+    Returns
+    -------
+    dict of str -> Table
+        Stratified tables for each candidate catalog, matching reference N(z).
+    """
+    from hsc_wl.config import RUN_REGISTRY
+    from hsc_wl.coverage import load_y3_mask
+
+    if y3_mask is None:
+        y3_mask = load_y3_mask(root)
+
+    full_dfs = {}
+    for k in candidate_keys:
+        cfg = RUN_REGISTRY[k]
+        p = Path(cfg.lens.lens_path)
+        if not p.is_absolute():
+            p = root / p
+        if p.suffix == ".dat":
+            raw = read_lens_catalog(p, "pandas_dat")
+        elif p.suffix == ".parquet":
+            raw = Table.from_pandas(pd.read_parquet(p))
+        else:
+            raw = Table.read(p)
+
+        col_ra = cfg.lens.columns.ra
+        col_dec = cfg.lens.columns.dec
+        col_z = cfg.lens.columns.z
+        col_rank = cfg.lens.columns.col_rank
+
+        raw = raw[(raw[col_z] >= redshift_range[0]) & (raw[col_z] <= redshift_range[1])]
+        ra = np.asarray(raw[col_ra], float)
+        dec = np.asarray(raw[col_dec], float)
+        inside = y3_mask.get_values_pos(ra, dec, lonlat=True)
+        raw = raw[inside]
+
+        df = (
+            pd.DataFrame(
+                {
+                    "ra": np.asarray(raw[col_ra], float),
+                    "dec": np.asarray(raw[col_dec], float),
+                    "z": np.asarray(raw[col_z], float),
+                    "rank_val": np.asarray(raw[col_rank], float),
+                }
+            )
+            .sort_values(by="rank_val", ascending=False)
+            .reset_index(drop=True)
+        )
+        full_dfs[k] = df
+
+    z_edges = np.linspace(redshift_range[0], redshift_range[1], n_bins + 1)
+    if ref_lens_table is not None:
+        target_counts, _ = np.histogram(
+            np.asarray(ref_lens_table["z"], float), bins=z_edges
+        )
+    else:
+        ref_catalog_key = (
+            "redm_r16_1bin" if "redm_r16_1bin" in RUN_REGISTRY else candidate_keys[0]
+        )
+        cfg_ref = RUN_REGISTRY.get(ref_catalog_key)
+        prep_path = (
+            cfg_ref.resolved_save_root(root) / f"prepare/{ref_catalog_key}_lenses.fits"
+            if cfg_ref
+            else None
+        )
+        if prep_path and prep_path.exists():
+            ref_tbl = Table.read(prep_path)
+            target_counts, _ = np.histogram(
+                np.asarray(ref_tbl["z"], float), bins=z_edges
+            )
+        else:
+            ref_df = full_dfs.get(ref_catalog_key, full_dfs[candidate_keys[0]])
+            r_counts, _ = np.histogram(ref_df["z"], bins=z_edges)
+            target_counts = np.round(
+                r_counts * float(total_top_n) / np.sum(r_counts)
+            ).astype(int)
+            diff = total_top_n - int(np.sum(target_counts))
+            target_counts[np.argmax(target_counts)] += diff
+
+    if np.sum(target_counts) != total_top_n:
+        target_counts = np.round(
+            target_counts * float(total_top_n) / np.sum(target_counts)
+        ).astype(int)
+        diff = total_top_n - int(np.sum(target_counts))
+        target_counts[np.argmax(target_counts)] += diff
+
+    strat_tables = {}
+    for k in candidate_keys:
+        df = full_dfs[k]
+        sub_dfs = []
+        for i in range(n_bins):
+            if i == n_bins - 1:
+                bin_mask = (df["z"] >= z_edges[i]) & (df["z"] <= z_edges[i + 1])
+            else:
+                bin_mask = (df["z"] >= z_edges[i]) & (df["z"] < z_edges[i + 1])
+            bin_df = df[bin_mask].sort_values(by="rank_val", ascending=False)
+            sub_dfs.append(bin_df.iloc[: target_counts[i]])
+        combined_df = (
+            pd.concat(sub_dfs, ignore_index=True)
+            .sort_values(by="rank_val", ascending=False)
+            .reset_index(drop=True)
+        )
+        tbl = Table.from_pandas(combined_df)
+        tbl["rank"] = np.arange(1, len(tbl) + 1)
+        strat_tables[k] = tbl
+
+    if include_all_candidates:
+        all_key = (
+            "rz_diff_preset_1bin"
+            if "rz_diff_preset_1bin" in full_dfs
+            else ("rz_diff_1bin" if "rz_diff_1bin" in full_dfs else candidate_keys[0])
+        )
+        if all_key in full_dfs:
+            tbl_all = Table.from_pandas(full_dfs[all_key])
+            tbl_all["rank"] = np.arange(1, len(tbl_all) + 1)
+            strat_tables["rz_diff_all"] = tbl_all
+
+    return strat_tables
