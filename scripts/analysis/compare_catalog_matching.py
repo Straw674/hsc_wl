@@ -157,11 +157,13 @@ def plot_matching_heatmap(
     from matplotlib.colors import Normalize
 
     names_map = display_names or {}
-    fig, ax = plt.subplots(figsize=(8.5, 7.2))
+    n = len(df_match.index)
+    fig_w = max(8.5, 0.75 * n + 2.0)
+    fig_h = max(7.2, 0.65 * n + 2.0)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     data = df_match.values
     labels = [names_map.get(k, k) for k in df_match.index]
-    n = len(labels)
 
     # Row i is the source catalog, cell (i, j) is the fraction of row i matched to column j
     row_totals = np.diag(data)
@@ -217,6 +219,7 @@ def plot_matching_heatmap(
                 norm_val = norm(pct)
                 text_color = "white" if norm_val > 0.60 else "black"
 
+            cell_fs = 9.5 if n <= 8 else (8.0 if n <= 12 else 7.0)
             ax.text(
                 j,
                 i,
@@ -225,7 +228,7 @@ def plot_matching_heatmap(
                 va="center",
                 color=text_color,
                 fontweight="normal",
-                fontsize=9.5,
+                fontsize=cell_fs,
             )
 
     ax.set_title(
@@ -716,14 +719,19 @@ def plot_tier_pairwise_heatmaps(
         "Tier 4: Ranks 766–1020 (Lowest Proxy in Top 1020)",
     ]
 
-    fig, axes = plt.subplots(2, 2, figsize=(13, 11), sharex=True, sharey=True)
+    labels = list(tier_pairwise_dict[0].index)
+    n = len(labels)
+    fig_w = max(13.0, 0.85 * n + 2.5)
+    fig_h = max(11.0, 0.75 * n + 2.0)
+    label_fs = 9.0 if n <= 8 else (8.0 if n <= 12 else 7.0)
+    cell_fs = 9.0 if n <= 8 else (7.5 if n <= 12 else 6.5)
+
+    fig, axes = plt.subplots(2, 2, figsize=(fig_w, fig_h), sharex=True, sharey=True)
     norm = Normalize(vmin=20.0, vmax=100.0)
 
     for b_idx, ax in enumerate(axes.flat):
         df_mat = tier_pairwise_dict[b_idx]
         data = df_mat.values
-        labels = list(df_mat.index)
-        n = len(labels)
 
         im = ax.imshow(data, cmap="YlGnBu", norm=norm, aspect="equal")
         ax.set_title(
@@ -734,8 +742,8 @@ def plot_tier_pairwise_heatmaps(
         )
         ax.set_xticks(np.arange(n))
         ax.set_yticks(np.arange(n))
-        ax.set_xticklabels(labels, rotation=20, ha="right", fontsize=9.0)
-        ax.set_yticklabels(labels, fontsize=9.0)
+        ax.set_xticklabels(labels, rotation=25, ha="right", fontsize=label_fs)
+        ax.set_yticklabels(labels, fontsize=label_fs)
 
         ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
         ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
@@ -755,7 +763,7 @@ def plot_tier_pairwise_heatmaps(
                     ha="center",
                     va="center",
                     color=text_col,
-                    fontsize=9.0,
+                    fontsize=cell_fs,
                     fontweight="normal",
                 )
 
@@ -897,23 +905,39 @@ def plot_redshift_distributions(
 # %% Global Configuration
 
 LABELS_TO_COMPARE = [
+    # External benchmarks (SDSS & DESI Legacy Surveys)
     "camira_1bin",
     "redm_r16_1bin",
+    "wh24_1bin",
+    "wh24_mass_1bin",
+    "zou21_1bin",
+    "yang21_mass_1bin",
+    "yang21_richness_1bin",
+    "clumpr_mass_1bin",
+    "clumpr_richness_1bin",
+    # HSC reproduced / pipeline candidates
     "amico_1bin",
-    "rz_diff_1bin",
-    "rz_diff_lum_1bin",
     "rz_diff_preset_1bin",
     "rz_diff_preset_lum_1bin",
+    "rz_diff_1bin",
+    "rz_diff_lum_1bin",
 ]
 
 DISPLAY_NAMES = {
     "camira_1bin": "CAMIRA",
     "redm_r16_1bin": "redMaPPer R16",
+    "wh24_1bin": "WH24 (Richness)",
+    "wh24_mass_1bin": "WH24 (Mass)",
+    "zou21_1bin": "Zou21",
+    "yang21_mass_1bin": "Yang21 (Halo Mass)",
+    "yang21_richness_1bin": "Yang21 (Richness)",
+    "clumpr_mass_1bin": "CluMPR (Mass)",
+    "clumpr_richness_1bin": "CluMPR (Richness)",
     "amico_1bin": "AMICO",
-    "rz_diff_1bin": "r-z Diff (Richness)",
-    "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
     "rz_diff_preset_1bin": "r-z Diff (Preset)",
     "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
+    "rz_diff_1bin": "r-z Diff (Richness)",
+    "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
     "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
     "rz_diff_single_box_lum_1bin": "r-z Diff (Single Box Lum)",
 }
@@ -921,16 +945,21 @@ DISPLAY_NAMES = {
 PALETTE = [
     "#EE6677",  # Red (CAMIRA)
     "#4477AA",  # Blue (redMaPPer R16)
-    "#10B981",  # Green (AMICO)
-    "#228833",  # Dark Green (r-z Richness)
-    "#66CCEE",  # Cyan (r-z Luminosity)
-    "#AA3377",  # Purple (r-z Fixed)
-    "#CCBB44",  # Yellow (r-z Fixed Lum)
-    "#BBCC33",  # Light Green (r-z Single Box)
-    "#EE8866",  # Orange (r-z Single Box Lum)
+    "#228833",  # Dark Green (WH24 Richness)
+    "#66BB55",  # Light Green (WH24 Mass)
+    "#CCBB44",  # Yellow-Olive (Zou21)
+    "#66CCEE",  # Cyan (Yang21 Halo Mass)
+    "#332288",  # Indigo (Yang21 Richness)
+    "#AA3377",  # Purple (CluMPR Mass)
+    "#EE8866",  # Coral (CluMPR Richness)
+    "#10B981",  # Emerald (AMICO)
+    "#E69F00",  # Orange (r-z Preset)
+    "#D55E00",  # Rust (r-z Preset Lum)
+    "#009E73",  # Teal (r-z Richness)
+    "#56B4E9",  # Sky Blue (r-z Lum)
 ]
 
-MARKERS = ["s", "x", "o", "^", "D", "v", "<", "p", "h"]
+MARKERS = ["s", "x", "o", "v", "^", "D", "p", "h", "*", "8", "<", ">", "P", "X"]
 
 REDSHIFT_RANGE = (0.19, 0.52)
 N_STRATIFIED_BINS = 10

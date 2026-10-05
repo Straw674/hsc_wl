@@ -926,12 +926,15 @@ def plot_differential_advantage_heatmaps(
     norm = Normalize(vmin=-vlim, vmax=vlim)
     cmap = plt.colormaps["coolwarm"]
 
-    ncols = 4 if n_plots >= 4 else n_plots
+    n_fc = len(first_class_keys)
+    ncols = 2 if n_fc >= 6 else (4 if n_plots >= 4 else n_plots)
     nrows = (n_plots + ncols - 1) // ncols
+    sub_w = max(5.0, 0.72 * n_fc + 1.2)
+    sub_h = max(4.5, 0.65 * len(rz_keys) + 0.5)
     fig, axes = plt.subplots(
         nrows,
         ncols,
-        figsize=(4.8 * ncols + 0.6, max(4.4, 0.7 * len(rz_keys) + 0.3) * nrows),
+        figsize=(sub_w * ncols + 0.6, sub_h * nrows),
     )
     axes = np.atleast_1d(axes).flatten()
 
@@ -965,9 +968,10 @@ def plot_differential_advantage_heatmaps(
         im = ax.imshow(delta_pct_mat, cmap=cmap, norm=norm, aspect="auto")
         im_ref = im
 
+        lbl_fs = 8.5 if n_fc <= 5 else 7.5
         ax.set_xticks(np.arange(len(first_class_keys)))
         ax.set_yticks(np.arange(len(rz_keys)))
-        ax.set_xticklabels(x_labels, rotation=20, ha="right", fontsize=9.0)
+        ax.set_xticklabels(x_labels, rotation=25, ha="right", fontsize=lbl_fs)
         ax.set_yticklabels(y_labels if (p_idx % ncols == 0) else [], fontsize=9.0)
 
         region_str = ref_info.get("region", "")
@@ -979,6 +983,7 @@ def plot_differential_advantage_heatmaps(
             fontweight="normal",
         )
 
+        cell_fs = 8.0 if n_fc <= 5 else 6.8
         for r_i in range(len(rz_keys)):
             for c_j in range(len(first_class_keys)):
                 d_pct = delta_pct_mat[r_i, c_j]
@@ -1004,9 +1009,9 @@ def plot_differential_advantage_heatmaps(
                     ha="center",
                     va="center",
                     color=text_color,
-                    fontsize=8.0,
+                    fontsize=cell_fs,
                     fontweight="normal",
-                    linespacing=1.2,
+                    linespacing=1.15,
                 )
 
     for empty_idx in range(n_plots, len(axes)):
@@ -1387,31 +1392,6 @@ def run_benchmark_comparison_suite(
 
 # %% Global Configuration
 
-LABELS_TO_COMPARE = [
-    "camira_1bin",
-    "redm_r16_1bin",
-    "amico_1bin",
-    "rz_diff_1bin",
-    "rz_diff_lum_1bin",
-    "rz_diff_preset_1bin",
-    "rz_diff_preset_lum_1bin",
-    "rz_diff_single_box_1bin",
-    "rz_diff_single_box_lum_1bin",
-]
-
-DISPLAY_NAMES = {
-    "rz_diff_all": "r-z Diff (All)",
-    "camira_1bin": "CAMIRA",
-    "redm_r16_1bin": "redMaPPer R16",
-    "amico_1bin": "AMICO",
-    "rz_diff_1bin": "r-z Diff (Richness)",
-    "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
-    "rz_diff_preset_1bin": "r-z Diff (Preset)",
-    "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
-    "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
-    "rz_diff_single_box_lum_1bin": "r-z Diff (Single Box Lum)",
-}
-
 REFERENCE_KEYS = tuple(REFERENCE_CATALOGS)
 REDSHIFT_RANGE = (0.19, 0.52)
 MATCH_RADIUS_MPC_H = 0.5
@@ -1419,6 +1399,12 @@ MATCH_RADIUS_MPC_H = 0.5
 FIRST_CLASS_KEYS = [
     "camira_1bin",
     "redm_r16_1bin",
+    "wh24_1bin",
+    "zou21_1bin",
+    "yang21_mass_1bin",
+    "yang21_richness_1bin",
+    "clumpr_mass_1bin",
+    "clumpr_richness_1bin",
     "amico_1bin",
 ]
 
@@ -1430,6 +1416,28 @@ RZ_DIFF_KEYS = [
     "rz_diff_single_box_1bin",
     "rz_diff_single_box_lum_1bin",
 ]
+
+LABELS_TO_COMPARE = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
+
+DISPLAY_NAMES = {
+    "rz_diff_all": "r-z Diff (All)",
+    "camira_1bin": "CAMIRA",
+    "redm_r16_1bin": "redMaPPer R16",
+    "wh24_1bin": "WH24 (Richness)",
+    "wh24_mass_1bin": "WH24 (Mass)",
+    "zou21_1bin": "Zou21",
+    "yang21_mass_1bin": "Yang21 (Halo Mass)",
+    "yang21_richness_1bin": "Yang21 (Richness)",
+    "clumpr_mass_1bin": "CluMPR (Mass)",
+    "clumpr_richness_1bin": "CluMPR (Richness)",
+    "amico_1bin": "AMICO",
+    "rz_diff_1bin": "r-z Diff (Richness)",
+    "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
+    "rz_diff_preset_1bin": "r-z Diff (Preset)",
+    "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
+    "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
+    "rz_diff_single_box_lum_1bin": "r-z Diff (Single Box Lum)",
+}
 
 REFERENCE_BENCHMARK_ORDER = [
     # X-ray
@@ -1540,6 +1548,12 @@ print(
 HTML_MAIN_KEYS = (
     "camira_1bin",
     "redm_r16_1bin",
+    "wh24_1bin",
+    "zou21_1bin",
+    "yang21_mass_1bin",
+    "yang21_richness_1bin",
+    "clumpr_mass_1bin",
+    "clumpr_richness_1bin",
     "amico_1bin",
     "rz_diff_preset_1bin",
     "rz_diff_preset_lum_1bin",
@@ -1549,8 +1563,18 @@ HTML_MAIN_KEYS = (
     "rz_diff_single_box_lum_1bin",
 )
 HTML_GROUPS = {
-    "CAMIRA / redMaPPer / AMICO": ("camira_1bin", "redm_r16_1bin", "amico_1bin"),
-    "RZ diff": (
+    "External benchmarks": (
+        "camira_1bin",
+        "redm_r16_1bin",
+        "wh24_1bin",
+        "zou21_1bin",
+        "yang21_mass_1bin",
+        "yang21_richness_1bin",
+        "clumpr_mass_1bin",
+        "clumpr_richness_1bin",
+    ),
+    "AMICO / RZ diff": (
+        "amico_1bin",
         "rz_diff_preset_1bin",
         "rz_diff_preset_lum_1bin",
         "rz_diff_1bin",
@@ -1585,6 +1609,54 @@ HTML_STYLES = {
         line_width=1.9,
         alpha=0.95,
         visible=True,
+    ),
+    "wh24_1bin": dict(
+        color="#2E7D32",
+        shape="triangle",
+        diameter=0.19,
+        line_width=1.8,
+        alpha=0.9,
+        visible=False,
+    ),
+    "zou21_1bin": dict(
+        color="#CCBB44",
+        shape="hexagon",
+        diameter=0.20,
+        line_width=1.8,
+        alpha=0.9,
+        visible=False,
+    ),
+    "yang21_mass_1bin": dict(
+        color="#0288D1",
+        shape="diamond",
+        diameter=0.20,
+        line_width=1.8,
+        alpha=0.9,
+        visible=False,
+    ),
+    "yang21_richness_1bin": dict(
+        color="#303F9F",
+        shape="diamond",
+        diameter=0.20,
+        line_width=1.8,
+        alpha=0.9,
+        visible=False,
+    ),
+    "clumpr_mass_1bin": dict(
+        color="#8E24AA",
+        shape="circle",
+        diameter=0.20,
+        line_width=1.8,
+        alpha=0.9,
+        visible=False,
+    ),
+    "clumpr_richness_1bin": dict(
+        color="#E65100",
+        shape="circle",
+        diameter=0.20,
+        line_width=1.8,
+        alpha=0.9,
+        visible=False,
     ),
     "amico_1bin": dict(
         color="#10B981",

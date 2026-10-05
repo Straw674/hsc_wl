@@ -370,6 +370,12 @@ _PATH_CCA2 = "/Users/xinq/cluster_finder/output/cca/cca2_cluster_catalog.parquet
 # redMapper SDSS R16 cluster catalog
 _PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
 
+# External DESI Legacy Surveys cluster catalogs (full Y3 footprint)
+_PATH_WH24 = "data/external_clusters/wh24.parquet"
+_PATH_ZOU21 = "data/external_clusters/zou21.parquet"
+_PATH_CLUMPR = "data/external_clusters/clumpr.parquet"
+_PATH_YANG21 = "data/external_clusters/yang21.parquet"
+
 # Ideal theoretical upper limit catalog paths (MDPL2 simulation and Colossus halo model)
 _PATH_IDEAL_MDPL2_1BIN = "output/ideal_mdpl2/1bin/prepare/ideal_mdpl2_1bin_lenses.fits"
 _PATH_IDEAL_MDPL2_4BIN = "output/ideal_mdpl2/4bin/prepare/ideal_mdpl2_4bin_lenses.fits"
@@ -475,6 +481,50 @@ _COLS_CCA2 = {
     "dec": "dec",
     "z": "z_cl",
     "z_spec": "specz",
+}
+
+# External DESI Legacy Surveys cluster column mappings
+_COLS_WH24_RICH = {
+    "col_rank": "lam500",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z",
+}
+_COLS_WH24_MASS = {
+    "col_rank": "m500",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z",
+}
+_COLS_ZOU21 = {
+    "col_rank": "richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z",
+}
+_COLS_CLUMPR_MASS = {
+    "col_rank": "mass",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z",
+}
+_COLS_CLUMPR_RICH = {
+    "col_rank": "richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z",
+}
+_COLS_YANG21_MASS = {
+    "col_rank": "log_m_h",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z",
+}
+_COLS_YANG21_RICH = {
+    "col_rank": "richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z",
 }
 
 # ---------------------------------------------------------------------------
@@ -917,4 +967,14 @@ RUN_REGISTRY: dict[str, WLConfig] = {
         columns=_COLS_COSINE,
         binning=_DEFAULT_BINNING_4BIN,
     ),
+    # -----------------------------------------------------------------------
+    # External DESI Legacy Surveys cluster catalogs (full Y3 footprint)
+    # -----------------------------------------------------------------------
+    **_make_pair("wh24", _PATH_WH24, _RAND_Y3, columns=_COLS_WH24_RICH),
+    **_make_pair("wh24_mass", _PATH_WH24, _RAND_Y3, columns=_COLS_WH24_MASS),
+    **_make_pair("zou21", _PATH_ZOU21, _RAND_Y3, columns=_COLS_ZOU21),
+    **_make_pair("clumpr_mass", _PATH_CLUMPR, _RAND_Y3, columns=_COLS_CLUMPR_MASS),
+    **_make_pair("clumpr_richness", _PATH_CLUMPR, _RAND_Y3, columns=_COLS_CLUMPR_RICH),
+    **_make_pair("yang21_mass", _PATH_YANG21, _RAND_Y3, columns=_COLS_YANG21_MASS),
+    **_make_pair("yang21_richness", _PATH_YANG21, _RAND_Y3, columns=_COLS_YANG21_RICH),
 }
