@@ -119,142 +119,6 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
     return dfs
 
 
-def plot_spatial_distribution_regions(
-    dfs: dict[str, Table],
-    colors: list[str],
-    markers: list[str],
-    save_path: Path,
-    chen_table: Table | None = None,
-    display_names: dict[str, str] | None = None,
-):
-    """Plot static 3-panel sky distribution partitioned into canonical HSC fields.
-
-    Partitions coordinates into SPRING, FALL, and HECTOMAP to avoid massive blank spaces.
-    Accounts for sky projection aspect ratio and inverts RA per astronomical convention.
-    """
-    from hsc_wl.coverage import in_field
-
-    names_map = display_names or {}
-    fig, axes = plt.subplots(
-        3, 1, figsize=(14, 10.5), gridspec_kw={"height_ratios": [1.2, 1.2, 1.0]}
-    )
-
-    regions_info = [
-        {
-            "name": "SPRING",
-            "title": "SPRING (GAMA09H + WIDE12H + GAMA15H)",
-            "ax": axes[0],
-            "xlim": (230.0, 125.0),
-            "ylim": (-3.0, 6.0),
-            "dec_ref": 1.5,
-            "shift_fall": False,
-        },
-        {
-            "name": "FALL",
-            "title": "FALL (XMM + VVDS)",
-            "ax": axes[1],
-            "xlim": (48.0, -43.0),
-            "ylim": (-8.0, 8.0),
-            "dec_ref": 0.0,
-            "shift_fall": True,
-        },
-        {
-            "name": "HECTOMAP",
-            "title": "HECTOMAP (North)",
-            "ax": axes[2],
-            "xlim": (252.0, 210.0),
-            "ylim": (41.5, 45.0),
-            "dec_ref": 43.3,
-            "shift_fall": False,
-        },
-    ]
-
-    for reg in regions_info:
-        ax = reg["ax"]
-        f_name = reg["name"]
-        shift = reg["shift_fall"]
-
-        for idx, (k, tbl) in enumerate(dfs.items()):
-            ra = np.asarray(tbl["ra"], dtype=float)
-            dec = np.asarray(tbl["dec"], dtype=float)
-            m = in_field(ra, dec, f_name)
-            if not np.any(m):
-                continue
-
-            ra_sel = ra[m]
-            dec_sel = dec[m]
-            if shift:
-                ra_sel = np.where(ra_sel > 180.0, ra_sel - 360.0, ra_sel)
-
-            disp_name = names_map.get(k, k)
-            ax.scatter(
-                ra_sel,
-                dec_sel,
-                s=16,
-                color=colors[idx % len(colors)],
-                marker=markers[idx % len(markers)],
-                alpha=0.75,
-                label=f"{disp_name} (N={np.sum(m)})" if reg["name"] == "SPRING" else "",
-            )
-
-        # Plot Chen+2024 WL shear-selected clusters if available
-        if chen_table is not None and len(chen_table) > 0:
-            c_ra = np.asarray(chen_table["ra"], dtype=float)
-            c_dec = np.asarray(chen_table["dec"], dtype=float)
-            c_m = in_field(c_ra, c_dec, f_name)
-            if np.any(c_m):
-                c_ra_sel = c_ra[c_m]
-                c_dec_sel = c_dec[c_m]
-                if shift:
-                    c_ra_sel = np.where(c_ra_sel > 180.0, c_ra_sel - 360.0, c_ra_sel)
-                ax.scatter(
-                    c_ra_sel,
-                    c_dec_sel,
-                    s=64,
-                    facecolors="none",
-                    edgecolors="#000000",
-                    linewidths=1.6,
-                    marker="o",
-                    label=f"Chen+2024 WL Selected (N={np.sum(c_m)})"
-                    if reg["name"] == "SPRING"
-                    else "",
-                )
-
-        ax.set_xlim(reg["xlim"])
-        ax.set_ylim(reg["ylim"])
-        ax.set_aspect(1.0 / np.cos(np.radians(reg["dec_ref"])))
-        ax.set_title(reg["title"], fontsize=11, fontweight="normal", pad=4)
-        ax.set_ylabel("Dec [deg]", fontsize=10)
-        ax.grid(False, which="both")
-
-        if shift:
-            ticks = np.arange(-40, 50, 15)
-            ax.set_xticks(ticks)
-            ax.set_xticklabels([f"{int(t % 360)}°" for t in ticks])
-
-    axes[2].set_xlabel(
-        "RA [deg] (Astronomical Convention: Increasing to Left)", fontsize=10.5
-    )
-    handles, labels = axes[0].get_legend_handles_labels()
-    if handles:
-        fig.legend(
-            handles,
-            labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, 0.998),
-            ncol=len(handles),
-            fontsize=9.5,
-            frameon=False,
-        )
-
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    save_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(save_path, dpi=300, bbox_inches="tight")
-    print(f"Regional spatial distribution plot saved to {save_path}")
-    plt.show()
-    plt.close(fig)
-
-
 def build_interactive_regions(
     dfs: dict[str, Table],
     chen_table: Table | None,
@@ -1444,8 +1308,9 @@ def load_stratified_candidates(
     redshift_range: tuple[float, float] = (0.19, 0.52),
     n_bins: int = 10,
     total_top_n: int = 1020,
+    ref_lens_table: Table | None = None,
 ) -> dict[str, Table]:
-    """Load full candidate tables, stratify into equal-redshift bins, and attach rz_diff_all."""
+    """Load candidate catalogs and stratify into equal-redshift bins matching reference N(z)."""
     from hsc_wl.config import RUN_REGISTRY
     from hsc_wl.coverage import load_y3_mask
     from hsc_wl.prepare import read_lens_catalog
@@ -1492,31 +1357,120 @@ def load_stratified_candidates(
         full_dfs[k] = df
 
     z_edges = np.linspace(redshift_range[0], redshift_range[1], n_bins + 1)
-    ref_catalog_key = (
-        "redm_r16_1bin" if "redm_r16_1bin" in full_dfs else candidate_keys[0]
-    )
-    r_counts, _ = np.histogram(full_dfs[ref_catalog_key]["z"], bins=z_edges)
-    target_counts = np.round(r_counts * float(total_top_n) / np.sum(r_counts)).astype(
-        int
-    )
-    diff = total_top_n - int(np.sum(target_counts))
-    target_counts[np.argmax(target_counts)] += diff
+    if ref_lens_table is not None:
+        target_counts, _ = np.histogram(
+            np.asarray(ref_lens_table["z"], float), bins=z_edges
+        )
+    else:
+        ref_catalog_key = (
+            "redm_r16_1bin" if "redm_r16_1bin" in full_dfs else candidate_keys[0]
+        )
+        r_counts, _ = np.histogram(full_dfs[ref_catalog_key]["z"], bins=z_edges)
+        target_counts = np.round(
+            r_counts * float(total_top_n) / np.sum(r_counts)
+        ).astype(int)
+        diff = total_top_n - int(np.sum(target_counts))
+        target_counts[np.argmax(target_counts)] += diff
 
     strat_tables = {}
     for k in candidate_keys:
         df = full_dfs[k]
         sub_dfs = []
         for i in range(n_bins):
-            bin_df = df[
-                (df["z"] >= z_edges[i]) & (df["z"] < z_edges[i + 1])
-            ].sort_values(by="rank_val", ascending=False)
+            if i == n_bins - 1:
+                bin_mask = (df["z"] >= z_edges[i]) & (df["z"] <= z_edges[i + 1])
+            else:
+                bin_mask = (df["z"] >= z_edges[i]) & (df["z"] < z_edges[i + 1])
+            bin_df = df[bin_mask].sort_values(by="rank_val", ascending=False)
             sub_dfs.append(bin_df.iloc[: target_counts[i]])
-        strat_tables[k] = Table.from_pandas(pd.concat(sub_dfs, ignore_index=True))
-
-    if "rz_diff_1bin" in full_dfs:
-        strat_tables["rz_diff_all"] = Table.from_pandas(full_dfs["rz_diff_1bin"])
+        combined_df = pd.concat(sub_dfs, ignore_index=True)
+        tbl = Table.from_pandas(combined_df)
+        tbl["rank"] = np.arange(1, len(tbl) + 1)
+        strat_tables[k] = tbl
 
     return strat_tables
+
+
+def run_benchmark_comparison_suite(
+    reference_dict: dict[str, pd.DataFrame | Table],
+    lens_dict: dict[str, Table],
+    candidate_order: list[str],
+    first_class_keys: list[str],
+    rz_keys: list[str],
+    output_scorecard_png: Path,
+    output_release_table_png: Path,
+    output_diff_heatmaps_png: Path,
+    baseline_key: str = "camira_1bin",
+    r_phys_mpc_h: float = 0.5,
+    ref_metadata: dict[str, dict[str, str]] | None = None,
+    display_names: dict[str, str] | None = None,
+    scorecard_title: str | None = None,
+    sample_label: str | None = None,
+    diff_suptitle: str | None = None,
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    """Execute complete benchmark suite: matching, scorecard, release table, and diff heatmaps."""
+    all_matches = compute_reference_matches_dict(
+        reference_dict,
+        lens_dict,
+        r_phys_mpc_h=r_phys_mpc_h,
+    )
+
+    scorecard_df = compute_global_benchmark_scorecard(
+        reference_dict,
+        all_matches,
+        candidate_order=candidate_order,
+        baseline_key=baseline_key,
+        ref_metadata=ref_metadata,
+    )
+
+    print_scorecard_markdown_table(
+        scorecard_df,
+        candidate_order=candidate_order,
+        display_names=display_names or {},
+    )
+
+    plot_benchmark_scorecard(
+        scorecard_df,
+        candidate_keys=candidate_order,
+        save_path=output_scorecard_png,
+        baseline_key=baseline_key,
+        display_names=display_names,
+        title=scorecard_title,
+    )
+
+    plot_benchmark_release_table(
+        scorecard_df,
+        candidate_keys=candidate_order,
+        save_path=output_release_table_png,
+        r_phys_mpc_h=r_phys_mpc_h,
+        sample_label=sample_label
+        or f"Overlapping HSC footprints · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
+        baseline_key=baseline_key,
+        display_names=display_names,
+    )
+
+    diff_matrices = {
+        ref_k: compute_differential_advantage(
+            all_matches[ref_k],
+            first_class_keys=first_class_keys,
+            rz_keys=rz_keys,
+            n_ref=len(reference_dict[ref_k]),
+        )
+        for ref_k in reference_dict
+    }
+
+    plot_differential_advantage_heatmaps(
+        diff_matrices,
+        first_class_keys=first_class_keys,
+        rz_keys=rz_keys,
+        save_path=output_diff_heatmaps_png,
+        ref_keys=list(reference_dict.keys()),
+        display_names=display_names,
+        ref_metadata=ref_metadata,
+        suptitle=diff_suptitle,
+    )
+
+    return scorecard_df, diff_matrices
 
 
 # %% Global Configuration
@@ -1543,22 +1497,7 @@ DISPLAY_NAMES = {
     "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
     "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
     "rz_diff_single_box_lum_1bin": "r-z Diff (Single Box Lum)",
-    "rz_diff_all": "r-z Diff (All)",
 }
-
-PALETTE = [
-    "#EE6677",  # Red (CAMIRA)
-    "#4477AA",  # Blue (redMaPPer R16)
-    "#10B981",  # Green (AMICO)
-    "#228833",  # Dark Green (r-z Richness)
-    "#66CCEE",  # Cyan (r-z Luminosity)
-    "#AA3377",  # Purple (r-z Fixed)
-    "#CCBB44",  # Yellow (r-z Fixed Lum)
-    "#EE7733",  # Orange (r-z No Bkg)
-    "#332288",  # Navy (r-z No Bkg Lum)
-]
-
-MARKERS = ["s", "x", "o", "^", "D", "v", "<", ">", "p"]
 
 REFERENCE_KEYS = tuple(REFERENCE_CATALOGS)
 REDSHIFT_RANGE = (0.19, 0.52)
@@ -1637,13 +1576,26 @@ REFERENCE_METADATA = {
     },
 }
 
-OUTPUT_SPATIAL_PNG = project_root / "output/plots_for_agents/spatial_distribution.png"
 OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
 OUTPUT_SCORECARD_PNG = (
     project_root / "output/plots_for_agents/reference_benchmark_scorecard.png"
 )
+OUTPUT_RELEASE_TABLE_PNG = (
+    project_root / "output/plots_for_agents/reference_benchmark_release_table.png"
+)
 OUTPUT_DIFF_HEATMAPS_ALL_PNG = (
     project_root / "output/plots_for_agents/differential_advantage_all_references.png"
+)
+OUTPUT_STRATIFIED_SCORECARD_PNG = (
+    project_root
+    / "output/plots_for_agents/reference_benchmark_scorecard_stratified.png"
+)
+OUTPUT_STRATIFIED_RELEASE_TABLE_PNG = (
+    project_root
+    / "output/plots_for_agents/reference_benchmark_release_table_stratified.png"
+)
+OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG = (
+    project_root / "output/plots_for_agents/differential_advantage_stratified.png"
 )
 
 
@@ -1653,24 +1605,24 @@ dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
 chen_tbl = load_chen2024_clusters(project_root, redshift_range=REDSHIFT_RANGE)
 reference_dfs = load_reference_catalogs(project_root, REFERENCE_KEYS, REDSHIFT_RANGE)
 
+raw_references_dict = {
+    **reference_dfs,
+    "chen2024": pd.DataFrame(
+        {col: np.asarray(chen_tbl[col]) for col in chen_tbl.colnames}
+    ),
+}
+all_references_dict = {
+    k: raw_references_dict[k]
+    for k in REFERENCE_BENCHMARK_ORDER
+    if k in raw_references_dict
+}
+
 print(
     f"\nLoaded Chen+2024 WL shear-selected clusters in full survey: N={len(chen_tbl)} (z in [0.19, 0.52], Y3 mask)"
 )
 
 
-# %% [Stage 2: Static Regional Spatial Distribution (3-panel PNG)]
-
-plot_spatial_distribution_regions(
-    dfs_dict,
-    colors=PALETTE,
-    markers=MARKERS,
-    save_path=OUTPUT_SPATIAL_PNG,
-    chen_table=chen_tbl,
-    display_names=DISPLAY_NAMES,
-)
-
-
-# %% [Stage 3: Interactive Regional Spatial Web Visualizer (Bokeh HTML)]
+# %% [Stage 2: Interactive Regional Spatial Web Visualizer (Bokeh HTML)]
 
 HTML_MAIN_KEYS = (
     "camira_1bin",
@@ -1855,161 +1807,64 @@ plot_bokeh_spatial_regional(
 )
 
 
-# %% [Stage 4: Reference Benchmark Matching & Global Scorecard]
+# %% [Stage 3: Reference Benchmark Suite (Raw Top 1020 Candidates)]
 
-OUTPUT_RELEASE_TABLE_PNG = (
-    project_root / "output/plots_for_agents/reference_benchmark_release_table.png"
-)
-
-raw_references_dict = {
-    **reference_dfs,
-    "chen2024": pd.DataFrame(
-        {col: np.asarray(chen_tbl[col]) for col in chen_tbl.colnames}
-    ),
-}
-all_references_dict = {
-    k: raw_references_dict[k]
-    for k in REFERENCE_BENCHMARK_ORDER
-    if k in raw_references_dict
-}
-
-all_benchmark_matches = compute_reference_matches_dict(
-    all_references_dict,
-    dfs_dict,
-    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-)
-
-scorecard_df = compute_global_benchmark_scorecard(
-    all_references_dict,
-    all_benchmark_matches,
+raw_scorecard_df, raw_diff_matrices = run_benchmark_comparison_suite(
+    reference_dict=all_references_dict,
+    lens_dict=dfs_dict,
     candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
-    baseline_key="camira_1bin",
-    ref_metadata=REFERENCE_METADATA,
-)
-
-print_scorecard_markdown_table(
-    scorecard_df,
-    candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
-    display_names=DISPLAY_NAMES,
-)
-
-plot_benchmark_scorecard(
-    scorecard_df,
-    candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
-    save_path=OUTPUT_SCORECARD_PNG,
-    baseline_key="camira_1bin",
-    display_names=DISPLAY_NAMES,
-)
-
-
-plot_benchmark_release_table(
-    scorecard_df,
-    candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
-    save_path=OUTPUT_RELEASE_TABLE_PNG,
-    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-    sample_label=f"Overlapping HSC footprints · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
-    display_names=DISPLAY_NAMES,
-)
-
-
-# %% [Stage 5: Differential Advantage Heatmaps (rz_diff vs Class 1)]
-
-diff_matrices = {
-    ref_k: compute_differential_advantage(
-        all_benchmark_matches[ref_k],
-        first_class_keys=FIRST_CLASS_KEYS,
-        rz_keys=RZ_DIFF_KEYS,
-        n_ref=len(all_references_dict[ref_k]),
-    )
-    for ref_k in all_references_dict
-}
-
-plot_differential_advantage_heatmaps(
-    diff_matrices,
     first_class_keys=FIRST_CLASS_KEYS,
     rz_keys=RZ_DIFF_KEYS,
-    save_path=OUTPUT_DIFF_HEATMAPS_ALL_PNG,
-    ref_keys=list(all_references_dict.keys()),
-    display_names=DISPLAY_NAMES,
+    output_scorecard_png=OUTPUT_SCORECARD_PNG,
+    output_release_table_png=OUTPUT_RELEASE_TABLE_PNG,
+    output_diff_heatmaps_png=OUTPUT_DIFF_HEATMAPS_ALL_PNG,
+    baseline_key="camira_1bin",
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
     ref_metadata=REFERENCE_METADATA,
+    display_names=DISPLAY_NAMES,
+    sample_label=f"Overlapping HSC footprints · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
 )
 
 
-# %% [Stage 6: Stratified Redshift-Controlled Benchmark Comparison]
+# %% [Stage 4: Stratified Redshift-Controlled Benchmark Suite (Equal P(z))]
 
 N_STRATIFIED_BINS = 10
 TOTAL_STRATIFIED_TOP_N = 1020
-OUTPUT_STRATIFIED_SCORECARD_PNG = (
-    project_root
-    / "output/plots_for_agents/reference_benchmark_scorecard_stratified.png"
-)
-OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG = (
-    project_root / "output/plots_for_agents/differential_advantage_stratified.png"
-)
-
-stratified_candidate_order = FIRST_CLASS_KEYS + RZ_DIFF_KEYS + ["rz_diff_all"]
-stratified_rz_keys = RZ_DIFF_KEYS + ["rz_diff_all"]
+stratified_candidate_order = RZ_DIFF_KEYS + FIRST_CLASS_KEYS
 
 stratified_lens_dict = load_stratified_candidates(
-    FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
-    project_root,
+    candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    root=project_root,
     redshift_range=REDSHIFT_RANGE,
     n_bins=N_STRATIFIED_BINS,
     total_top_n=TOTAL_STRATIFIED_TOP_N,
-)
-
-stratified_benchmark_matches = compute_reference_matches_dict(
-    all_references_dict,
-    stratified_lens_dict,
-    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-)
-
-stratified_scorecard_df = compute_global_benchmark_scorecard(
-    all_references_dict,
-    stratified_benchmark_matches,
-    candidate_order=stratified_candidate_order,
-    baseline_key="camira_1bin",
-    ref_metadata=REFERENCE_METADATA,
+    ref_lens_table=dfs_dict.get("redm_r16_1bin"),
 )
 
 print(
-    f"\n=== Stratified Redshift-Controlled Scorecard (N_bins={N_STRATIFIED_BINS}, Top {TOTAL_STRATIFIED_TOP_N} + All Candidates) ==="
-)
-print_scorecard_markdown_table(
-    stratified_scorecard_df,
-    candidate_order=stratified_candidate_order,
-    display_names=DISPLAY_NAMES,
+    f"\n=== Stratified Redshift-Controlled Benchmark Suite (N_bins={N_STRATIFIED_BINS}, Matched to redMaPPer N(z), Top {TOTAL_STRATIFIED_TOP_N}) ==="
 )
 
-plot_benchmark_scorecard(
-    stratified_scorecard_df,
-    candidate_keys=stratified_candidate_order,
-    save_path=OUTPUT_STRATIFIED_SCORECARD_PNG,
+stratified_scorecard_df, stratified_diff_matrices = run_benchmark_comparison_suite(
+    reference_dict=all_references_dict,
+    lens_dict=stratified_lens_dict,
+    candidate_order=stratified_candidate_order,
+    first_class_keys=FIRST_CLASS_KEYS,
+    rz_keys=RZ_DIFF_KEYS,
+    output_scorecard_png=OUTPUT_STRATIFIED_SCORECARD_PNG,
+    output_release_table_png=OUTPUT_STRATIFIED_RELEASE_TABLE_PNG,
+    output_diff_heatmaps_png=OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG,
     baseline_key="camira_1bin",
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    ref_metadata=REFERENCE_METADATA,
     display_names=DISPLAY_NAMES,
-    title=(
-        f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N} + All Candidates)\n"
+    scorecard_title=(
+        f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N})\n"
         f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Transverse Radius)"
     ),
-)
-
-stratified_diff_matrices = {
-    ref_k: compute_differential_advantage(
-        stratified_benchmark_matches[ref_k],
-        first_class_keys=FIRST_CLASS_KEYS,
-        rz_keys=stratified_rz_keys,
-        n_ref=len(all_references_dict[ref_k]),
-    )
-    for ref_k in all_references_dict
-}
-
-plot_differential_advantage_heatmaps(
-    stratified_diff_matrices,
-    first_class_keys=FIRST_CLASS_KEYS,
-    rz_keys=stratified_rz_keys,
-    save_path=OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG,
-    ref_keys=list(all_references_dict.keys()),
-    display_names=DISPLAY_NAMES,
-    ref_metadata=REFERENCE_METADATA,
-    suptitle="Stratified Redshift-Controlled Differential Advantage (rz_diff variants vs Class 1)",
+    sample_label=(
+        f"Stratified Redshift-Controlled (Matched redMaPPer N(z)) · "
+        f"{REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}"
+    ),
+    diff_suptitle="Stratified Redshift-Controlled Differential Advantage (rz_diff variants vs Class 1)",
 )
