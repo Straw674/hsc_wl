@@ -1244,6 +1244,49 @@ def plot_benchmark_scorecard(
     plt.close(fig)
 
 
+def compute_windowed_benchmark_scorecard(
+    reference_dict: dict[str, pd.DataFrame | Table],
+    lens_dict: dict[str, Table],
+    candidate_order: list[str],
+    z_range: tuple[float, float] = (0.30, 0.45),
+    top_n_window: int = 450,
+    r_phys_mpc_h: float = 0.5,
+    baseline_key: str = "camira_1bin",
+    ref_metadata: dict[str, dict[str, str]] | None = None,
+) -> tuple[pd.DataFrame, dict[str, Table], dict[str, pd.DataFrame]]:
+    """Compute benchmark scorecard within a narrow redshift window with matched sampling."""
+    win_lens_dict = {}
+    for k in candidate_order:
+        tbl = lens_dict[k]
+        z = np.asarray(tbl["z"], float)
+        m = (z >= z_range[0]) & (z <= z_range[1])
+        sub_tbl = tbl[m][:top_n_window]
+        win_lens_dict[k] = sub_tbl
+
+    win_references_dict = {}
+    for ref_k, ref_df in reference_dict.items():
+        ref_z = np.asarray(ref_df["z"], float)
+        m_ref = (ref_z >= z_range[0]) & (ref_z <= z_range[1])
+        win_references_dict[ref_k] = ref_df[m_ref].reset_index(drop=True)
+
+    win_matches = {}
+    for ref_k, ref_df in win_references_dict.items():
+        win_matches[ref_k] = {}
+        for cand_k, cand_tbl in win_lens_dict.items():
+            win_matches[ref_k][cand_k] = match_reference_to_candidate(
+                ref_df, cand_tbl, r_phys_mpc_h=r_phys_mpc_h
+            )
+
+    sc_win = compute_global_benchmark_scorecard(
+        win_references_dict,
+        win_matches,
+        candidate_order=candidate_order,
+        baseline_key=baseline_key,
+        ref_metadata=ref_metadata,
+    )
+    return sc_win, win_lens_dict, win_references_dict
+
+
 # %% Global Configuration
 
 LABELS_TO_COMPARE = [
@@ -1368,6 +1411,11 @@ OUTPUT_SCORECARD_PNG = (
 )
 OUTPUT_DIFF_HEATMAPS_ALL_PNG = (
     project_root / "output/plots_for_agents/differential_advantage_all_references.png"
+)
+WINDOW_Z_RANGE = (0.30, 0.45)
+WINDOW_TOP_N = 450
+OUTPUT_WINDOW_SCORECARD_PNG = (
+    project_root / "output/plots_for_agents/reference_benchmark_scorecard_z30_45.png"
 )
 
 
@@ -1642,4 +1690,36 @@ plot_differential_advantage_heatmaps(
     ref_keys=list(all_references_dict.keys()),
     display_names=DISPLAY_NAMES,
     ref_metadata=REFERENCE_METADATA,
+)
+
+
+# %% [Stage 6: Redshift-Controlled Benchmark Comparison (Windowed Analysis)]
+
+window_scorecard_df, window_lens_dict, window_refs_dict = (
+    compute_windowed_benchmark_scorecard(
+        all_references_dict,
+        dfs_dict,
+        candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+        z_range=WINDOW_Z_RANGE,
+        top_n_window=WINDOW_TOP_N,
+        baseline_key="camira_1bin",
+        ref_metadata=REFERENCE_METADATA,
+    )
+)
+
+print(
+    f"\n=== Redshift-Controlled Scorecard (z in {WINDOW_Z_RANGE}, Top {WINDOW_TOP_N}) ==="
+)
+print_scorecard_markdown_table(
+    window_scorecard_df,
+    candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    display_names=DISPLAY_NAMES,
+)
+
+plot_benchmark_scorecard(
+    window_scorecard_df,
+    candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    save_path=OUTPUT_WINDOW_SCORECARD_PNG,
+    baseline_key="camira_1bin",
+    display_names=DISPLAY_NAMES,
 )
