@@ -1244,6 +1244,149 @@ def plot_benchmark_scorecard(
     plt.close(fig)
 
 
+def plot_benchmark_release_table(
+    scorecard_df: pd.DataFrame,
+    candidate_keys: list[str],
+    save_path: Path,
+    r_phys_mpc_h: float,
+    sample_label: str,
+    baseline_key: str = "camira_1bin",
+    display_names: dict[str, str] | None = None,
+):
+    """Render a release-style table, highlighting exact maxima including ties.
+
+    Empty reference samples have undefined rates and receive no highlight.
+    """
+    from textwrap import fill
+
+    from matplotlib.patches import FancyBboxPatch
+
+    if scorecard_df.empty or not candidate_keys:
+        return
+
+    names = display_names or {}
+    rates = scorecard_df[[f"{key}_pct" for key in candidate_keys]].to_numpy(float)
+    totals = scorecard_df["n_ref"].to_numpy()
+    valid = np.isfinite(rates) & (totals[:, None] > 0)
+    maxima = np.max(np.where(valid, rates, -np.inf), axis=1)
+    winners = valid & (rates == maxima[:, None])
+    background, ink, muted = "#F8F7F3", "#292B28", "#777B73"
+    accent, highlight, rule = "#235C4A", "#DDEBDD", "#D9DCD4"
+    label_width, col_width = 3.6, 1.65
+    width = label_width + col_width * len(candidate_keys)
+    height = 3.7 + len(scorecard_df) * 1.05
+
+    with plt.rc_context(
+        {
+            "font.family": ["Arial Unicode MS", "DejaVu Sans"],
+            "font.weight": "normal",
+            "text.usetex": False,
+        }
+    ):
+        fig, ax = plt.subplots(figsize=(width, height), facecolor=background)
+        fig.subplots_adjust(left=0.025, right=0.975, bottom=0.025, top=0.975)
+        ax.set(xlim=(0, width), ylim=(height, 0))
+        ax.set_axis_off()
+
+        def write(x, y, text, size=11, color=ink, ha="left"):
+            return ax.text(
+                x,
+                y,
+                text,
+                fontsize=size,
+                color=color,
+                ha=ha,
+                va="center",
+                fontweight="normal",
+                linespacing=1.4,
+            )
+
+        write(0.12, 0.4, "Catalog 匹配率", size=25)
+        write(0.12, 0.95, sample_label, size=11, color=muted)
+        write(
+            width - 0.12,
+            0.45,
+            "绿色底色：每行最高值（含并列）",
+            size=10,
+            color=accent,
+            ha="right",
+        )
+        write(0.12, 1.98, "External catalog", size=12)
+        for j, key in enumerate(candidate_keys):
+            x = label_width + (j + 0.5) * col_width
+            label = names.get(key, key).replace(" (", "\n(")
+            label = "\n".join(fill(part, width=17) for part in label.split("\n"))
+            write(x, 1.9, label, size=11, ha="center")
+            if key == baseline_key:
+                write(x, 2.43, "基准", size=9, color=muted, ha="center")
+        ax.hlines(2.7, 0, width, color=ink, linewidth=0.9)
+
+        for i in range(len(scorecard_df)):
+            top = 2.7 + i * 1.05
+            write(0.12, top + 0.38, str(scorecard_df["ref_name"].iloc[i]), size=12)
+            detail = (
+                f"{scorecard_df['ref_type'].iloc[i]} · "
+                f"{scorecard_df['ref_region'].iloc[i]} · N = {int(totals[i]):,}"
+            )
+            write(0.12, top + 0.73, detail, size=9, color=muted)
+            for j, key in enumerate(candidate_keys):
+                left = label_width + j * col_width
+                x = left + col_width / 2
+                if winners[i, j]:
+                    ax.add_patch(
+                        FancyBboxPatch(
+                            (left + 0.09, top + 0.1),
+                            col_width - 0.18,
+                            0.85,
+                            boxstyle="round,pad=0.02,rounding_size=0.06",
+                            facecolor=highlight,
+                            edgecolor="none",
+                        )
+                    )
+                if not valid[i, j]:
+                    write(x, top + 0.49, "—", size=18, color=muted, ha="center")
+                    continue
+                color = accent if winners[i, j] else ink
+                write(
+                    x,
+                    top + 0.35,
+                    f"{rates[i, j]:.1f}%",
+                    size=18,
+                    color=color,
+                    ha="center",
+                )
+                count = int(scorecard_df[f"{key}_count"].iloc[i])
+                delta = float(scorecard_df[f"{key}_delta_pct"].iloc[i])
+                detail = f"{count}/{int(totals[i])}"
+                if key != baseline_key:
+                    detail += f" · {delta:+.1f} pp"
+                write(x, top + 0.73, detail, size=9, color=muted, ha="center")
+            ax.hlines(top + 1.05, 0, width, color=rule, linewidth=0.6)
+
+        bottom = 2.7 + len(scorecard_df) * 1.05
+        baseline = names.get(baseline_key, baseline_key)
+        write(
+            0.12,
+            bottom + 0.35,
+            f"匹配半径 < {r_phys_mpc_h:g} Mpc/h（物理横向距离）"
+            f"   ·   pp：相对 {baseline} 的百分点差值",
+            size=9,
+            color=muted,
+        )
+        write(
+            0.12,
+            bottom + 0.68,
+            "最高值按未舍入匹配率判定；N = 0 时显示 —。",
+            size=9,
+            color=muted,
+        )
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=220, bbox_inches="tight", facecolor=background)
+        print(f"Release-style benchmark table saved to {save_path}")
+        plt.show()
+        plt.close(fig)
+
+
 def compute_windowed_benchmark_scorecard(
     reference_dict: dict[str, pd.DataFrame | Table],
     lens_dict: dict[str, Table],
@@ -1629,6 +1772,10 @@ plot_bokeh_spatial_regional(
 
 # %% [Stage 4: Reference Benchmark Matching & Global Scorecard]
 
+OUTPUT_RELEASE_TABLE_PNG = (
+    project_root / "output/plots_for_agents/reference_benchmark_release_table.png"
+)
+
 raw_references_dict = {
     **reference_dfs,
     "chen2024": pd.DataFrame(
@@ -1666,6 +1813,16 @@ plot_benchmark_scorecard(
     candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
     save_path=OUTPUT_SCORECARD_PNG,
     baseline_key="camira_1bin",
+    display_names=DISPLAY_NAMES,
+)
+
+
+plot_benchmark_release_table(
+    scorecard_df,
+    candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    save_path=OUTPUT_RELEASE_TABLE_PNG,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    sample_label=f"HSC 重叠覆盖区域 · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
     display_names=DISPLAY_NAMES,
 )
 
