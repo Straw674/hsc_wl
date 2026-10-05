@@ -1309,6 +1309,7 @@ def load_stratified_candidates(
     n_bins: int = 10,
     total_top_n: int = 1020,
     ref_lens_table: Table | None = None,
+    include_all_candidates: bool = True,
 ) -> dict[str, Table]:
     """Load candidate catalogs and stratify into equal-redshift bins matching reference N(z)."""
     from hsc_wl.config import RUN_REGISTRY
@@ -1388,6 +1389,17 @@ def load_stratified_candidates(
         tbl["rank"] = np.arange(1, len(tbl) + 1)
         strat_tables[k] = tbl
 
+    if include_all_candidates:
+        all_key = (
+            "rz_diff_preset_1bin"
+            if "rz_diff_preset_1bin" in full_dfs
+            else ("rz_diff_1bin" if "rz_diff_1bin" in full_dfs else candidate_keys[0])
+        )
+        if all_key in full_dfs:
+            tbl_all = Table.from_pandas(full_dfs[all_key])
+            tbl_all["rank"] = np.arange(1, len(tbl_all) + 1)
+            strat_tables["rz_diff_all"] = tbl_all
+
     return strat_tables
 
 
@@ -1407,6 +1419,7 @@ def run_benchmark_comparison_suite(
     scorecard_title: str | None = None,
     sample_label: str | None = None,
     diff_suptitle: str | None = None,
+    release_table_candidate_order: list[str] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     """Execute complete benchmark suite: matching, scorecard, release table, and diff heatmaps."""
     all_matches = compute_reference_matches_dict(
@@ -1440,7 +1453,7 @@ def run_benchmark_comparison_suite(
 
     plot_benchmark_release_table(
         scorecard_df,
-        candidate_keys=candidate_order,
+        candidate_keys=release_table_candidate_order or candidate_order,
         save_path=output_release_table_png,
         r_phys_mpc_h=r_phys_mpc_h,
         sample_label=sample_label
@@ -1488,6 +1501,7 @@ LABELS_TO_COMPARE = [
 ]
 
 DISPLAY_NAMES = {
+    "rz_diff_all": "r-z Diff (All)",
     "camira_1bin": "CAMIRA",
     "redm_r16_1bin": "redMaPPer R16",
     "amico_1bin": "AMICO",
@@ -1830,7 +1844,10 @@ raw_scorecard_df, raw_diff_matrices = run_benchmark_comparison_suite(
 
 N_STRATIFIED_BINS = 10
 TOTAL_STRATIFIED_TOP_N = 1020
-stratified_candidate_order = RZ_DIFF_KEYS + FIRST_CLASS_KEYS
+
+# Heatmap order: rz_diff_all first as reference ceiling, followed by first-class catalogs, then rz_diff variants
+scorecard_candidate_order = ["rz_diff_all"] + FIRST_CLASS_KEYS + RZ_DIFF_KEYS
+release_candidate_order = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
 
 stratified_lens_dict = load_stratified_candidates(
     candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
@@ -1839,6 +1856,7 @@ stratified_lens_dict = load_stratified_candidates(
     n_bins=N_STRATIFIED_BINS,
     total_top_n=TOTAL_STRATIFIED_TOP_N,
     ref_lens_table=dfs_dict.get("redm_r16_1bin"),
+    include_all_candidates=True,
 )
 
 print(
@@ -1848,7 +1866,8 @@ print(
 stratified_scorecard_df, stratified_diff_matrices = run_benchmark_comparison_suite(
     reference_dict=all_references_dict,
     lens_dict=stratified_lens_dict,
-    candidate_order=stratified_candidate_order,
+    candidate_order=scorecard_candidate_order,
+    release_table_candidate_order=release_candidate_order,
     first_class_keys=FIRST_CLASS_KEYS,
     rz_keys=RZ_DIFF_KEYS,
     output_scorecard_png=OUTPUT_STRATIFIED_SCORECARD_PNG,
@@ -1859,7 +1878,7 @@ stratified_scorecard_df, stratified_diff_matrices = run_benchmark_comparison_sui
     ref_metadata=REFERENCE_METADATA,
     display_names=DISPLAY_NAMES,
     scorecard_title=(
-        f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N})\n"
+        f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N} + All Candidates)\n"
         f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Transverse Radius)"
     ),
     sample_label=(
