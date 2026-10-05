@@ -19,7 +19,7 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from hsc_wl.prepare import load_stratified_candidates
+from hsc_wl.prepare import gaussian_kde_1d, load_stratified_candidates
 from initial import *  # noqa: F401,F403
 from src.data import read_catalog_frame
 
@@ -792,35 +792,45 @@ def plot_redshift_distributions(
     redshift_range: tuple[float, float] = (0.19, 0.52),
     n_bins: int = 10,
 ):
-    """Plot redshift distribution comparison between raw top candidates and stratified samples."""
+    """Plot redshift distribution comparison between raw top candidates and stratified samples.
+
+    Uses Gaussian KDE for smooth density curves, with underlying histogram shown as
+    semi-transparent stepped bars for reference.
+    """
     names_map = display_names or {}
     catalog_names = list(strat_dfs.keys())
     z_edges = np.linspace(redshift_range[0], redshift_range[1], n_bins + 1)
-    bin_centers = 0.5 * (z_edges[:-1] + z_edges[1:])
     delta_z = z_edges[1] - z_edges[0]
+    z_grid = np.linspace(redshift_range[0] - 0.02, redshift_range[1] + 0.02, 256)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5), sharey=True)
 
     # Panel 1: Raw Top 1020
     for idx, name in enumerate(catalog_names):
         z_vals = np.asarray(raw_dfs[name]["z"], dtype=float)
-        counts, _ = np.histogram(z_vals, bins=z_edges)
+        n_total = len(z_vals)
         z_mean = float(np.mean(z_vals))
         c = colors[idx % len(colors)]
         disp_name = names_map.get(name, name)
+
+        # Histogram as faint stepped background
+        counts, _ = np.histogram(z_vals, bins=z_edges)
+        ax1.stairs(counts, z_edges, color=c, alpha=0.15, fill=True, linewidth=0)
+
+        # KDE curve scaled to cluster counts
+        _, density = gaussian_kde_1d(np, z_vals, grid=z_grid)
+        kde_counts = density * n_total * delta_z
         ax1.plot(
-            bin_centers,
-            counts,
-            marker="o",
-            markersize=5,
-            linewidth=1.8,
+            z_grid,
+            kde_counts,
+            linewidth=2.0,
             color=c,
             label=f"{disp_name} (mean z={z_mean:.3f})",
             alpha=0.9,
         )
 
     ax1.set_title(
-        "(a) Raw Top 1020 Catalogs (Unstratified)",
+        "(a) Raw Top 1020 (Unstratified)",
         fontsize=11.5,
         pad=10,
         fontweight="normal",
@@ -834,25 +844,31 @@ def plot_redshift_distributions(
     # Panel 2: Stratified Top 1020 (Matched redMaPPer N(z))
     for idx, name in enumerate(catalog_names):
         z_vals = np.asarray(strat_dfs[name]["z"], dtype=float)
-        counts, _ = np.histogram(z_vals, bins=z_edges)
+        n_total = len(z_vals)
         z_mean = float(np.mean(z_vals))
         c = colors[idx % len(colors)]
         disp_name = names_map.get(name, name)
         is_ref = "redm" in name
+
+        # Histogram as faint stepped background
+        counts, _ = np.histogram(z_vals, bins=z_edges)
+        ax2.stairs(counts, z_edges, color=c, alpha=0.15, fill=True, linewidth=0)
+
+        # KDE curve scaled to cluster counts
+        _, density = gaussian_kde_1d(np, z_vals, grid=z_grid)
+        kde_counts = density * n_total * delta_z
         ax2.plot(
-            bin_centers,
-            counts,
-            marker="s" if is_ref else "o",
-            markersize=6 if is_ref else 4,
-            linewidth=2.5 if is_ref else 1.2,
+            z_grid,
+            kde_counts,
+            linewidth=2.5 if is_ref else 1.5,
             linestyle="--" if is_ref else "-",
             color=c,
             label=f"{disp_name} (mean z={z_mean:.3f})",
-            alpha=0.95 if is_ref else 0.75,
+            alpha=0.95 if is_ref else 0.8,
         )
 
     ax2.set_title(
-        "(b) Stratified Redshift-Controlled (Matched redMaPPer N(z))",
+        "(b) Stratified (Matched redMaPPer N(z))",
         fontsize=11.5,
         pad=10,
         fontweight="normal",
