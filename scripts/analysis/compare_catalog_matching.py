@@ -775,8 +775,8 @@ LABELS_TO_COMPARE = [
     "amico_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
-    "rz_diff_fixed_1bin",
-    "rz_diff_fixed_lum_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_preset_lum_1bin",
 ]
 
 DISPLAY_NAMES = {
@@ -785,8 +785,8 @@ DISPLAY_NAMES = {
     "amico_1bin": "AMICO",
     "rz_diff_1bin": "r-z Diff (Richness)",
     "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
-    "rz_diff_fixed_1bin": "r-z Diff (Fixed)",
-    "rz_diff_fixed_lum_1bin": "r-z Diff (Fixed Lum)",
+    "rz_diff_preset_1bin": "r-z Diff (Preset)",
+    "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
 }
 
 PALETTE = [

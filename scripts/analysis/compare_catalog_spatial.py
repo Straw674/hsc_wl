@@ -19,7 +19,12 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from hsc_wl.reference_catalogs import REFERENCE_CATALOGS, load_reference_catalogs
+from hsc_wl.catalog_matching import match_reference_to_candidate
+from hsc_wl.reference_catalogs import (
+    REFERENCE_CATALOGS,
+    load_reference_catalogs,
+    select_reference_redshifts,
+)
 from initial import *  # noqa: F401,F403
 from src.data import read_catalog_frame
 
@@ -57,9 +62,11 @@ def load_chen2024_clusters(
 
     df = read_catalog_frame(parquet_path)
 
-    # Filter by redshift range
-    mask = (df["z_cl"] >= redshift_range[0]) & (df["z_cl"] <= redshift_range[1])
-    filtered_df = df[mask].sort_values(by="snr", ascending=False).reset_index(drop=True)
+    # Retain peaks without optical counterparts as a separate benchmark stratum.
+    filtered_df = select_reference_redshifts(df, redshift_range, "z_cl")
+    filtered_df = filtered_df.sort_values(by="snr", ascending=False).reset_index(
+        drop=True
+    )
     tbl = Table.from_pandas(filtered_df)
 
     # Filter by master Y3 shape mask
@@ -440,6 +447,8 @@ def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame, style
             ]
         )
     quality_labels = {
+        "planck_psz2": "COSMO",
+        "efeds": "EXT_LIKE",
         "des_y6_wazp": "COVER_FRAC_1MPC",
         "act_dr6": "flags",
         "erass1": "EXT_LIKE",
@@ -500,7 +509,7 @@ def build_catalog_controls_html(
         )
     return (
         "<header><h1>Catalog comparison</h1>"
-        f"<p>{redshift_range[0]} ≤ z ≤ {redshift_range[1]}</p>"
+        f"<p>Measured z: {redshift_range[0]}–{redshift_range[1]}; unknown-z references retained</p>"
         + "".join(rows)
         + "</header>"
     )
@@ -837,76 +846,12 @@ syncCatalogControls();
     print(f"Interactive Bokeh HTML saved at {save_path}")
 
 
-def match_reference_to_candidate(
-    ref_table_or_df: pd.DataFrame | Table,
-    cand_table_or_df: pd.DataFrame | Table,
-    r_phys_mpc_h: float = 0.5,
-) -> np.ndarray:
-    """Cross-match reference clusters to candidate lenses within physical radius.
-
-    When reference has valid redshift, evaluates physical transverse radius at
-    reference redshift. When reference lacks redshift, falls back to matched
-    candidate lens redshift.
-
-    Parameters
-    ----------
-    ref_table_or_df : pd.DataFrame or Table
-        Reference clusters containing coordinates and optional redshifts.
-    cand_table_or_df : pd.DataFrame or Table
-        Candidate lens catalog containing coordinates and redshifts.
-    r_phys_mpc_h : float, default 0.5
-        Physical transverse matching radius in Mpc/h.
-
-    Returns
-    -------
-    np.ndarray of bool
-        Boolean array indicating whether each reference cluster was matched.
-    """
-    n_ref = len(ref_table_or_df)
-    if n_ref == 0:
-        return np.zeros(0, dtype=bool)
-
-    c_ref = SkyCoord(
-        ra=np.asarray(ref_table_or_df["ra"], dtype=float) * u.deg,
-        dec=np.asarray(ref_table_or_df["dec"], dtype=float) * u.deg,
-    )
-    c_cand = SkyCoord(
-        ra=np.asarray(cand_table_or_df["ra"], dtype=float) * u.deg,
-        dec=np.asarray(cand_table_or_df["dec"], dtype=float) * u.deg,
-    )
-
-    idx_match, d2d, _ = c_ref.match_to_catalog_sky(c_cand)
-
-    has_ref_z = (
-        "z" in ref_table_or_df.colnames
-        if isinstance(ref_table_or_df, Table)
-        else "z" in ref_table_or_df
-    )
-    ref_z = (
-        np.asarray(ref_table_or_df["z"], dtype=float)
-        if has_ref_z
-        else np.full(n_ref, np.nan)
-    )
-    ref_z_valid = np.isfinite(ref_z) & (ref_z > 0)
-
-    cand_z = np.asarray(cand_table_or_df["z"], dtype=float)
-    matched_cand_z = cand_z[idx_match]
-
-    z_eval = np.where(ref_z_valid, ref_z, matched_cand_z)
-    z_eval = np.clip(z_eval, 1e-4, None)
-
-    da = Planck18.angular_diameter_distance(z_eval).value  # Mpc
-    h = Planck18.h
-    r_deg = (r_phys_mpc_h / h) / da * (180.0 / np.pi)
-
-    matched = d2d.deg < r_deg
-    return matched
-
-
 def compute_reference_matches_dict(
     reference_dict: dict[str, pd.DataFrame | Table],
     lens_dict: dict[str, Table],
-    r_phys_mpc_h: float = 0.5,
+    r_phys_mpc_h: float,
+    max_delta_z: float,
+    angular_radius_arcmin: float,
 ) -> dict[str, dict[str, np.ndarray]]:
     """Compute boolean match arrays for each reference catalog against candidate lenses."""
     matches = {}
@@ -914,9 +859,35 @@ def compute_reference_matches_dict(
         matches[ref_key] = {}
         for cand_key, cand_df in lens_dict.items():
             matches[ref_key][cand_key] = match_reference_to_candidate(
-                ref_df, cand_df, r_phys_mpc_h=r_phys_mpc_h
+                ref_df,
+                cand_df,
+                r_phys_mpc_h=r_phys_mpc_h,
+                max_delta_z=max_delta_z,
+                angular_radius_arcmin=angular_radius_arcmin,
             )
     return matches
+
+
+def split_reference_redshift_strata(reference_dict, metadata):
+    """Keep measured-z recovery separate from unlocalized angular associations."""
+    references, labels = {}, {}
+    for key, frame in reference_dict.items():
+        z = np.asarray(frame["z"], dtype=float)
+        known = np.isfinite(z) & (z > 0)
+        references[key] = frame.loc[known].reset_index(drop=True)
+        labels[key] = dict(metadata[key])
+        if np.any(~known):
+            unknown_key = f"{key}_unknown_z"
+            references[unknown_key] = frame.loc[~known].reset_index(drop=True)
+            labels[unknown_key] = {
+                **metadata[key],
+                "label": metadata[key]["label"] + " (unknown z)",
+                "type": "Angular only",
+            }
+        print(
+            f"{key}: {known.sum()} measured-z references; {(~known).sum()} unknown-z detections"
+        )
+    return references, labels
 
 
 def compute_differential_advantage(
@@ -1240,7 +1211,7 @@ def plot_benchmark_scorecard(
 
     scorecard_title = title or (
         "Public Benchmark Cluster Recovery Scorecard across Overlapping HSC Footprints\n"
-        "(Matching within 0.5 Mpc/h Physical Transverse Radius)"
+        "Measured-z recovery and unknown-z angular associations"
     )
     ax.set_title(
         scorecard_title,
@@ -1261,8 +1232,8 @@ def plot_benchmark_release_table(
     scorecard_df: pd.DataFrame,
     candidate_keys: list[str],
     save_path: Path,
-    r_phys_mpc_h: float,
     sample_label: str,
+    matching_description: str,
     baseline_key: str = "camira_1bin",
     display_names: dict[str, str] | None = None,
 ):
@@ -1414,19 +1385,17 @@ def plot_benchmark_release_table(
             ax.hlines(top + row_height, 0, width, color=rule, linewidth=0.55)
         ax.hlines(bottom, 0, width, color=ink, linewidth=0.85)
 
-        baseline = names.get(baseline_key, baseline_key)
         write(
             0,
             bottom + 0.36,
-            f"Physical transverse radius < {r_phys_mpc_h:g} Mpc/h. "
-            f"Cell details: matched / reference count; percentage-point difference from {baseline}.",
+            matching_description,
             size=9,
             color=muted,
         )
         write(
             0,
             bottom + 0.70,
-            "Highlights use unrounded match fractions. Empty reference samples are shown as —.",
+            "Cell details: matched / reference count; difference from CAMIRA. Unknown-z rows are angular associations, not redshift-limited completeness.",
             size=9,
             color=muted,
         )
@@ -1527,10 +1496,10 @@ LABELS_TO_COMPARE = [
     "amico_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
-    "rz_diff_fixed_1bin",
-    "rz_diff_fixed_lum_1bin",
-    "rz_diff_no_bkg_1bin",
-    "rz_diff_no_bkg_lum_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_preset_lum_1bin",
+    "rz_diff_single_box_1bin",
+    "rz_diff_single_box_lum_1bin",
 ]
 
 DISPLAY_NAMES = {
@@ -1539,10 +1508,10 @@ DISPLAY_NAMES = {
     "amico_1bin": "AMICO",
     "rz_diff_1bin": "r-z Diff (Richness)",
     "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
-    "rz_diff_fixed_1bin": "r-z Diff (Fixed)",
-    "rz_diff_fixed_lum_1bin": "r-z Diff (Fixed Lum)",
-    "rz_diff_no_bkg_1bin": "r-z Diff (No Bkg)",
-    "rz_diff_no_bkg_lum_1bin": "r-z Diff (No Bkg Lum)",
+    "rz_diff_preset_1bin": "r-z Diff (Preset)",
+    "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
+    "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
+    "rz_diff_single_box_lum_1bin": "r-z Diff (Single Box Lum)",
     "rz_diff_all": "r-z Diff (All)",
 }
 
@@ -1563,6 +1532,12 @@ MARKERS = ["s", "x", "o", "^", "D", "v", "<", ">", "p"]
 REFERENCE_KEYS = tuple(REFERENCE_CATALOGS)
 REDSHIFT_RANGE = (0.19, 0.52)
 MATCH_RADIUS_MPC_H = 0.5
+MATCH_MAX_DELTA_Z = 0.05
+MATCH_ANGULAR_RADIUS_ARCMIN = 3.0
+MATCH_DESCRIPTION = (
+    f"Known-z pairs: R < {MATCH_RADIUS_MPC_H:g} Mpc/h and |delta z| < {MATCH_MAX_DELTA_Z:g}; "
+    f"missing-z pairs: separation < {MATCH_ANGULAR_RADIUS_ARCMIN:g} arcmin"
+)
 
 FIRST_CLASS_KEYS = [
     "camira_1bin",
@@ -1571,42 +1546,50 @@ FIRST_CLASS_KEYS = [
 ]
 
 RZ_DIFF_KEYS = [
-    "rz_diff_fixed_1bin",
-    "rz_diff_fixed_lum_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_preset_lum_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
-    "rz_diff_no_bkg_1bin",
-    "rz_diff_no_bkg_lum_1bin",
+    "rz_diff_single_box_1bin",
+    "rz_diff_single_box_lum_1bin",
 ]
 
 REFERENCE_BENCHMARK_ORDER = [
-    # X-ray
-    "erass1",
+    # Primary references selected without requiring a named optical counterpart.
     "efeds",
     "xxl_dr2",
     # SZ
-    "act_dr6",
+    "planck_psz2",
     # WL
     "chen2024",
-    # Optical
+]
+
+AUXILIARY_REFERENCE_KEYS = (
+    "act_dr6",
+    "erass1",
     "des_y3_redmapper",
     "des_y6_wazp",
     "kids_dr3_amico",
-]
+)
 
 REFERENCE_METADATA = {
+    "planck_psz2": {
+        "label": "Planck PSZ2 cosmology union",
+        "type": "SZ",
+        "region": "Full Survey",
+    },
     "erass1": {
         "label": "eRASS1 + eROMaPPer",
         "type": "X-ray",
         "region": "Spring",
     },
     "efeds": {
-        "label": "eFEDS + MCMF",
+        "label": "eFEDS X-ray EXT_LIKE >= 15",
         "type": "X-ray",
         "region": "GAMA09H",
     },
     "xxl_dr2": {
-        "label": "XXL DR2 C1/C2",
+        "label": "XXL DR2 C1",
         "type": "X-ray",
         "region": "XMM",
     },
@@ -1654,7 +1637,7 @@ chen_tbl = load_chen2024_clusters(project_root, redshift_range=REDSHIFT_RANGE)
 reference_dfs = load_reference_catalogs(project_root, REFERENCE_KEYS, REDSHIFT_RANGE)
 
 print(
-    f"\nLoaded Chen+2024 WL shear-selected clusters in full survey: N={len(chen_tbl)} (z in [0.19, 0.52], Y3 mask)"
+    f"\nLoaded Chen+2024 WL shear-selected clusters in full survey: N={len(chen_tbl)} (measured z in [0.19, 0.52] plus unknown z, Y3 mask)"
 )
 
 
@@ -1676,24 +1659,25 @@ HTML_MAIN_KEYS = (
     "camira_1bin",
     "redm_r16_1bin",
     "amico_1bin",
-    "rz_diff_fixed_1bin",
-    "rz_diff_fixed_lum_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_preset_lum_1bin",
     "rz_diff_1bin",
     "rz_diff_lum_1bin",
-    "rz_diff_no_bkg_1bin",
-    "rz_diff_no_bkg_lum_1bin",
+    "rz_diff_single_box_1bin",
+    "rz_diff_single_box_lum_1bin",
 )
 HTML_GROUPS = {
     "CAMIRA / redMaPPer / AMICO": ("camira_1bin", "redm_r16_1bin", "amico_1bin"),
     "RZ diff": (
-        "rz_diff_fixed_1bin",
-        "rz_diff_fixed_lum_1bin",
+        "rz_diff_preset_1bin",
+        "rz_diff_preset_lum_1bin",
         "rz_diff_1bin",
         "rz_diff_lum_1bin",
-        "rz_diff_no_bkg_1bin",
-        "rz_diff_no_bkg_lum_1bin",
+        "rz_diff_single_box_1bin",
+        "rz_diff_single_box_lum_1bin",
     ),
     "Reference catalogs": (
+        "planck_psz2",
         "act_dr6",
         "erass1",
         "efeds",
@@ -1705,6 +1689,14 @@ HTML_GROUPS = {
     ),
 }
 HTML_STYLES = {
+    "planck_psz2": dict(
+        color="#327D80",
+        shape="square",
+        diameter=0.24,
+        line_width=1.6,
+        alpha=0.8,
+        visible=True,
+    ),
     "camira_1bin": dict(
         color="#286FA5",
         shape="circle",
@@ -1729,7 +1721,7 @@ HTML_STYLES = {
         alpha=0.95,
         visible=True,
     ),
-    "rz_diff_fixed_1bin": dict(
+    "rz_diff_preset_1bin": dict(
         color="#C7682E",
         shape="inverted_triangle",
         diameter=0.24,
@@ -1737,7 +1729,7 @@ HTML_STYLES = {
         alpha=0.95,
         visible=True,
     ),
-    "rz_diff_fixed_lum_1bin": dict(
+    "rz_diff_preset_lum_1bin": dict(
         color="#8B1E0F",
         shape="inverted_triangle",
         diameter=0.26,
@@ -1761,7 +1753,7 @@ HTML_STYLES = {
         alpha=0.95,
         visible=False,
     ),
-    "rz_diff_no_bkg_1bin": dict(
+    "rz_diff_single_box_1bin": dict(
         color="#EA580C",
         shape="inverted_triangle",
         diameter=0.22,
@@ -1769,7 +1761,7 @@ HTML_STYLES = {
         alpha=0.95,
         visible=False,
     ),
-    "rz_diff_no_bkg_lum_1bin": dict(
+    "rz_diff_single_box_lum_1bin": dict(
         color="#7C2D12",
         shape="inverted_triangle",
         diameter=0.26,
@@ -1873,10 +1865,16 @@ all_references_dict = {
     if k in raw_references_dict
 }
 
+all_references_dict, benchmark_metadata = split_reference_redshift_strata(
+    all_references_dict, REFERENCE_METADATA
+)
+
 all_benchmark_matches = compute_reference_matches_dict(
     all_references_dict,
     dfs_dict,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
+    angular_radius_arcmin=MATCH_ANGULAR_RADIUS_ARCMIN,
 )
 
 scorecard_df = compute_global_benchmark_scorecard(
@@ -1884,7 +1882,11 @@ scorecard_df = compute_global_benchmark_scorecard(
     all_benchmark_matches,
     candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
     baseline_key="camira_1bin",
-    ref_metadata=REFERENCE_METADATA,
+    ref_metadata=benchmark_metadata,
+)
+scorecard_df.to_parquet(
+    project_root / "output/plots_for_agents/reference_benchmark_scorecard.parquet",
+    index=False,
 )
 
 print_scorecard_markdown_table(
@@ -1897,6 +1899,7 @@ plot_benchmark_scorecard(
     scorecard_df,
     candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
     save_path=OUTPUT_SCORECARD_PNG,
+    title="Reference recovery\n" + MATCH_DESCRIPTION,
     baseline_key="camira_1bin",
     display_names=DISPLAY_NAMES,
 )
@@ -1906,8 +1909,8 @@ plot_benchmark_release_table(
     scorecard_df,
     candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
     save_path=OUTPUT_RELEASE_TABLE_PNG,
-    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-    sample_label=f"Overlapping HSC footprints · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
+    sample_label=f"HSC footprint · measured z: {REDSHIFT_RANGE[0]:.2f}–{REDSHIFT_RANGE[1]:.2f}; unknown z shown separately",
+    matching_description=MATCH_DESCRIPTION,
     display_names=DISPLAY_NAMES,
 )
 
@@ -1931,7 +1934,7 @@ plot_differential_advantage_heatmaps(
     save_path=OUTPUT_DIFF_HEATMAPS_ALL_PNG,
     ref_keys=list(all_references_dict.keys()),
     display_names=DISPLAY_NAMES,
-    ref_metadata=REFERENCE_METADATA,
+    ref_metadata=benchmark_metadata,
 )
 
 
@@ -1962,6 +1965,8 @@ stratified_benchmark_matches = compute_reference_matches_dict(
     all_references_dict,
     stratified_lens_dict,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
+    angular_radius_arcmin=MATCH_ANGULAR_RADIUS_ARCMIN,
 )
 
 stratified_scorecard_df = compute_global_benchmark_scorecard(
@@ -1969,7 +1974,12 @@ stratified_scorecard_df = compute_global_benchmark_scorecard(
     stratified_benchmark_matches,
     candidate_order=stratified_candidate_order,
     baseline_key="camira_1bin",
-    ref_metadata=REFERENCE_METADATA,
+    ref_metadata=benchmark_metadata,
+)
+stratified_scorecard_df.to_parquet(
+    project_root
+    / "output/plots_for_agents/reference_benchmark_scorecard_stratified.parquet",
+    index=False,
 )
 
 print(
@@ -1989,7 +1999,7 @@ plot_benchmark_scorecard(
     display_names=DISPLAY_NAMES,
     title=(
         f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N} + All Candidates)\n"
-        f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Transverse Radius)"
+        + MATCH_DESCRIPTION
     ),
 )
 
@@ -2010,6 +2020,40 @@ plot_differential_advantage_heatmaps(
     save_path=OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG,
     ref_keys=list(all_references_dict.keys()),
     display_names=DISPLAY_NAMES,
-    ref_metadata=REFERENCE_METADATA,
+    ref_metadata=benchmark_metadata,
     suptitle="Stratified Redshift-Controlled Differential Advantage (rz_diff variants vs Class 1)",
+)
+
+# %% [Stage 7: Auxiliary Optical-Confirmed Reference Comparison]
+
+OUTPUT_AUXILIARY_SCORECARD_PNG = (
+    project_root / "output/plots_for_agents/reference_benchmark_auxiliary.png"
+)
+auxiliary_references, auxiliary_metadata = split_reference_redshift_strata(
+    {key: raw_references_dict[key] for key in AUXILIARY_REFERENCE_KEYS},
+    REFERENCE_METADATA,
+)
+auxiliary_matches = compute_reference_matches_dict(
+    auxiliary_references,
+    dfs_dict,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
+    angular_radius_arcmin=MATCH_ANGULAR_RADIUS_ARCMIN,
+)
+auxiliary_scorecard = compute_global_benchmark_scorecard(
+    auxiliary_references,
+    auxiliary_matches,
+    candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    ref_metadata=auxiliary_metadata,
+)
+auxiliary_scorecard.to_parquet(
+    project_root / "output/plots_for_agents/reference_benchmark_auxiliary.parquet",
+    index=False,
+)
+plot_benchmark_scorecard(
+    auxiliary_scorecard,
+    candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    save_path=OUTPUT_AUXILIARY_SCORECARD_PNG,
+    display_names=DISPLAY_NAMES,
+    title="Auxiliary optical / optically confirmed references\n" + MATCH_DESCRIPTION,
 )
