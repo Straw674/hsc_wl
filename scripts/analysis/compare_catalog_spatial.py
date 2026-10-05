@@ -1038,6 +1038,7 @@ def plot_differential_advantage_heatmaps(
     ref_keys: list[str] | None = None,
     display_names: dict[str, str] | None = None,
     ref_metadata: dict[str, dict[str, str]] | None = None,
+    suptitle: str | None = None,
 ):
     """Plot differential advantage heatmaps (rz_diff vs Class 1) across reference catalogs."""
     from matplotlib.colors import Normalize
@@ -1062,7 +1063,11 @@ def plot_differential_advantage_heatmaps(
 
     ncols = 4 if n_plots >= 4 else n_plots
     nrows = (n_plots + ncols - 1) // ncols
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4.8 * ncols + 0.6, 4.4 * nrows))
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(4.8 * ncols + 0.6, max(4.4, 0.7 * len(rz_keys) + 0.3) * nrows),
+    )
     axes = np.atleast_1d(axes).flatten()
 
     y_labels = [names_map.get(k, k) for k in rz_keys]
@@ -1142,7 +1147,9 @@ def plot_differential_advantage_heatmaps(
     for empty_idx in range(n_plots, len(axes)):
         axes[empty_idx].set_visible(False)
 
-    fig.tight_layout(rect=[0, 0, 0.93, 0.98])
+    fig.tight_layout(rect=[0, 0, 0.93, 0.96 if suptitle else 0.98])
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=12.0, y=0.99, fontweight="normal")
     if im_ref is not None:
         cbar_ax = fig.add_axes([0.942, 0.18, 0.012, 0.64])
         cbar = fig.colorbar(im_ref, cax=cbar_ax)
@@ -1161,6 +1168,7 @@ def plot_benchmark_scorecard(
     save_path: Path,
     baseline_key: str = "camira_1bin",
     display_names: dict[str, str] | None = None,
+    title: str | None = None,
 ):
     """Plot public benchmark cluster recovery scorecard across references."""
     from matplotlib.colors import Normalize
@@ -1169,7 +1177,9 @@ def plot_benchmark_scorecard(
     n_refs = len(scorecard_df)
     n_cands = len(candidate_keys)
 
-    fig, ax = plt.subplots(figsize=(13.5, max(5.0, 0.75 * n_refs + 1.8)))
+    fig, ax = plt.subplots(
+        figsize=(max(13.5, 1.4 * n_cands), max(5.0, 0.75 * n_refs + 1.8))
+    )
 
     pct_matrix = np.zeros((n_refs, n_cands), dtype=float)
     delta_matrix = np.zeros((n_refs, n_cands), dtype=float)
@@ -1228,9 +1238,12 @@ def plot_benchmark_scorecard(
                 linespacing=1.2,
             )
 
-    ax.set_title(
+    scorecard_title = title or (
         "Public Benchmark Cluster Recovery Scorecard across Overlapping HSC Footprints\n"
-        "(Matching within 0.5 Mpc/h Physical Transverse Radius)",
+        "(Matching within 0.5 Mpc/h Physical Transverse Radius)"
+    )
+    ax.set_title(
+        scorecard_title,
         fontsize=11.0,
         pad=12,
         fontweight="normal",
@@ -1424,47 +1437,86 @@ def plot_benchmark_release_table(
         plt.close(fig)
 
 
-def compute_windowed_benchmark_scorecard(
-    reference_dict: dict[str, pd.DataFrame | Table],
-    lens_dict: dict[str, Table],
-    candidate_order: list[str],
-    z_range: tuple[float, float] = (0.30, 0.45),
-    top_n_window: int = 450,
-    r_phys_mpc_h: float = 0.5,
-    baseline_key: str = "camira_1bin",
-    ref_metadata: dict[str, dict[str, str]] | None = None,
-) -> tuple[pd.DataFrame, dict[str, Table], dict[str, pd.DataFrame]]:
-    """Compute benchmark scorecard within a narrow redshift window with matched sampling."""
-    win_lens_dict = {}
-    for k in candidate_order:
-        tbl = lens_dict[k]
-        z = np.asarray(tbl["z"], float)
-        m = (z >= z_range[0]) & (z <= z_range[1])
-        sub_tbl = tbl[m][:top_n_window]
-        win_lens_dict[k] = sub_tbl
+def load_stratified_candidates(
+    candidate_keys: list[str],
+    root: Path,
+    y3_mask=None,
+    redshift_range: tuple[float, float] = (0.19, 0.52),
+    n_bins: int = 10,
+    total_top_n: int = 1020,
+) -> dict[str, Table]:
+    """Load full candidate tables, stratify into equal-redshift bins, and attach rz_diff_all."""
+    from hsc_wl.config import RUN_REGISTRY
+    from hsc_wl.coverage import load_y3_mask
+    from hsc_wl.prepare import read_lens_catalog
 
-    win_references_dict = {}
-    for ref_k, ref_df in reference_dict.items():
-        ref_z = np.asarray(ref_df["z"], float)
-        m_ref = (ref_z >= z_range[0]) & (ref_z <= z_range[1])
-        win_references_dict[ref_k] = ref_df[m_ref].reset_index(drop=True)
+    if y3_mask is None:
+        y3_mask = load_y3_mask(root)
 
-    win_matches = {}
-    for ref_k, ref_df in win_references_dict.items():
-        win_matches[ref_k] = {}
-        for cand_k, cand_tbl in win_lens_dict.items():
-            win_matches[ref_k][cand_k] = match_reference_to_candidate(
-                ref_df, cand_tbl, r_phys_mpc_h=r_phys_mpc_h
+    full_dfs = {}
+    for k in candidate_keys:
+        cfg = RUN_REGISTRY[k]
+        p = Path(cfg.lens.lens_path)
+        if not p.is_absolute():
+            p = root / p
+        if p.suffix == ".dat":
+            raw = read_lens_catalog(p, "pandas_dat")
+        elif p.suffix == ".parquet":
+            raw = Table.from_pandas(pd.read_parquet(p))
+        else:
+            raw = Table.read(p)
+
+        col_ra = cfg.lens.columns.ra
+        col_dec = cfg.lens.columns.dec
+        col_z = cfg.lens.columns.z
+        col_rank = cfg.lens.columns.col_rank
+
+        raw = raw[(raw[col_z] >= redshift_range[0]) & (raw[col_z] <= redshift_range[1])]
+        ra = np.asarray(raw[col_ra], float)
+        dec = np.asarray(raw[col_dec], float)
+        inside = y3_mask.get_values_pos(ra, dec, lonlat=True)
+        raw = raw[inside]
+
+        df = (
+            pd.DataFrame(
+                {
+                    "ra": np.asarray(raw[col_ra], float),
+                    "dec": np.asarray(raw[col_dec], float),
+                    "z": np.asarray(raw[col_z], float),
+                    "rank_val": np.asarray(raw[col_rank], float),
+                }
             )
+            .sort_values(by="rank_val", ascending=False)
+            .reset_index(drop=True)
+        )
+        full_dfs[k] = df
 
-    sc_win = compute_global_benchmark_scorecard(
-        win_references_dict,
-        win_matches,
-        candidate_order=candidate_order,
-        baseline_key=baseline_key,
-        ref_metadata=ref_metadata,
+    z_edges = np.linspace(redshift_range[0], redshift_range[1], n_bins + 1)
+    ref_catalog_key = (
+        "redm_r16_1bin" if "redm_r16_1bin" in full_dfs else candidate_keys[0]
     )
-    return sc_win, win_lens_dict, win_references_dict
+    r_counts, _ = np.histogram(full_dfs[ref_catalog_key]["z"], bins=z_edges)
+    target_counts = np.round(r_counts * float(total_top_n) / np.sum(r_counts)).astype(
+        int
+    )
+    diff = total_top_n - int(np.sum(target_counts))
+    target_counts[np.argmax(target_counts)] += diff
+
+    strat_tables = {}
+    for k in candidate_keys:
+        df = full_dfs[k]
+        sub_dfs = []
+        for i in range(n_bins):
+            bin_df = df[
+                (df["z"] >= z_edges[i]) & (df["z"] < z_edges[i + 1])
+            ].sort_values(by="rank_val", ascending=False)
+            sub_dfs.append(bin_df.iloc[: target_counts[i]])
+        strat_tables[k] = Table.from_pandas(pd.concat(sub_dfs, ignore_index=True))
+
+    if "rz_diff_1bin" in full_dfs:
+        strat_tables["rz_diff_all"] = Table.from_pandas(full_dfs["rz_diff_1bin"])
+
+    return strat_tables
 
 
 # %% Global Configuration
@@ -1491,6 +1543,7 @@ DISPLAY_NAMES = {
     "rz_diff_fixed_lum_1bin": "r-z Diff (Fixed Lum)",
     "rz_diff_no_bkg_1bin": "r-z Diff (No Bkg)",
     "rz_diff_no_bkg_lum_1bin": "r-z Diff (No Bkg Lum)",
+    "rz_diff_all": "r-z Diff (All)",
 }
 
 PALETTE = [
@@ -1591,11 +1644,6 @@ OUTPUT_SCORECARD_PNG = (
 )
 OUTPUT_DIFF_HEATMAPS_ALL_PNG = (
     project_root / "output/plots_for_agents/differential_advantage_all_references.png"
-)
-WINDOW_Z_RANGE = (0.30, 0.45)
-WINDOW_TOP_N = 450
-OUTPUT_WINDOW_SCORECARD_PNG = (
-    project_root / "output/plots_for_agents/reference_benchmark_scorecard_z30_45.png"
 )
 
 
@@ -1887,33 +1935,81 @@ plot_differential_advantage_heatmaps(
 )
 
 
-# %% [Stage 6: Redshift-Controlled Benchmark Comparison (Windowed Analysis)]
+# %% [Stage 6: Stratified Redshift-Controlled Benchmark Comparison]
 
-window_scorecard_df, window_lens_dict, window_refs_dict = (
-    compute_windowed_benchmark_scorecard(
-        all_references_dict,
-        dfs_dict,
-        candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
-        z_range=WINDOW_Z_RANGE,
-        top_n_window=WINDOW_TOP_N,
-        baseline_key="camira_1bin",
-        ref_metadata=REFERENCE_METADATA,
-    )
+N_STRATIFIED_BINS = 10
+TOTAL_STRATIFIED_TOP_N = 1020
+OUTPUT_STRATIFIED_SCORECARD_PNG = (
+    project_root
+    / "output/plots_for_agents/reference_benchmark_scorecard_stratified.png"
+)
+OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG = (
+    project_root / "output/plots_for_agents/differential_advantage_stratified.png"
+)
+
+stratified_candidate_order = FIRST_CLASS_KEYS + RZ_DIFF_KEYS + ["rz_diff_all"]
+stratified_rz_keys = RZ_DIFF_KEYS + ["rz_diff_all"]
+
+stratified_lens_dict = load_stratified_candidates(
+    FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    project_root,
+    redshift_range=REDSHIFT_RANGE,
+    n_bins=N_STRATIFIED_BINS,
+    total_top_n=TOTAL_STRATIFIED_TOP_N,
+)
+
+stratified_benchmark_matches = compute_reference_matches_dict(
+    all_references_dict,
+    stratified_lens_dict,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+)
+
+stratified_scorecard_df = compute_global_benchmark_scorecard(
+    all_references_dict,
+    stratified_benchmark_matches,
+    candidate_order=stratified_candidate_order,
+    baseline_key="camira_1bin",
+    ref_metadata=REFERENCE_METADATA,
 )
 
 print(
-    f"\n=== Redshift-Controlled Scorecard (z in {WINDOW_Z_RANGE}, Top {WINDOW_TOP_N}) ==="
+    f"\n=== Stratified Redshift-Controlled Scorecard (N_bins={N_STRATIFIED_BINS}, Top {TOTAL_STRATIFIED_TOP_N} + All Candidates) ==="
 )
 print_scorecard_markdown_table(
-    window_scorecard_df,
-    candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
+    stratified_scorecard_df,
+    candidate_order=stratified_candidate_order,
     display_names=DISPLAY_NAMES,
 )
 
 plot_benchmark_scorecard(
-    window_scorecard_df,
-    candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
-    save_path=OUTPUT_WINDOW_SCORECARD_PNG,
+    stratified_scorecard_df,
+    candidate_keys=stratified_candidate_order,
+    save_path=OUTPUT_STRATIFIED_SCORECARD_PNG,
     baseline_key="camira_1bin",
     display_names=DISPLAY_NAMES,
+    title=(
+        f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N} + All Candidates)\n"
+        f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Transverse Radius)"
+    ),
+)
+
+stratified_diff_matrices = {
+    ref_k: compute_differential_advantage(
+        stratified_benchmark_matches[ref_k],
+        first_class_keys=FIRST_CLASS_KEYS,
+        rz_keys=stratified_rz_keys,
+        n_ref=len(all_references_dict[ref_k]),
+    )
+    for ref_k in all_references_dict
+}
+
+plot_differential_advantage_heatmaps(
+    stratified_diff_matrices,
+    first_class_keys=FIRST_CLASS_KEYS,
+    rz_keys=stratified_rz_keys,
+    save_path=OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG,
+    ref_keys=list(all_references_dict.keys()),
+    display_names=DISPLAY_NAMES,
+    ref_metadata=REFERENCE_METADATA,
+    suptitle="Stratified Redshift-Controlled Differential Advantage (rz_diff variants vs Class 1)",
 )
