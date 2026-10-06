@@ -1625,18 +1625,15 @@ FIRST_CLASS_KEYS = [
 ]
 
 RZ_DIFF_KEYS = [
-    "rz_diff_preset_1bin",
-    "rz_diff_preset_lum_1bin",
     "rz_diff_1bin",
-    "rz_diff_lum_1bin",
+    "rz_diff_preset_1bin",
     "rz_diff_single_box_1bin",
-    "rz_diff_single_box_lum_1bin",
+    "rz_diff_two_box_red_1bin",
 ]
 
 LABELS_TO_COMPARE = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
 
 DISPLAY_NAMES = {
-    "rz_diff_all": "r-z Diff (All)",
     "camira_1bin": "CAMIRA",
     "redm_r16_1bin": "redMaPPer R16",
     "wh24_1bin": "WH24",
@@ -1646,12 +1643,10 @@ DISPLAY_NAMES = {
     "clumpr_mass_1bin": "CluMPR (Mass)",
     "clumpr_richness_1bin": "CluMPR (Richness)",
     "amico_1bin": "AMICO",
-    "rz_diff_1bin": "r-z Diff (Richness)",
-    "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
+    "rz_diff_1bin": "r-z Diff",
     "rz_diff_preset_1bin": "r-z Diff (Preset)",
-    "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
     "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
-    "rz_diff_single_box_lum_1bin": "r-z Diff (Single Box Lum)",
+    "rz_diff_two_box_red_1bin": "r-z Diff (Two Box Red)",
 }
 
 REFERENCE_BENCHMARK_ORDER = [
@@ -1774,12 +1769,10 @@ HTML_MAIN_KEYS = (
     "clumpr_mass_1bin",
     "clumpr_richness_1bin",
     "amico_1bin",
-    "rz_diff_preset_1bin",
-    "rz_diff_preset_lum_1bin",
     "rz_diff_1bin",
-    "rz_diff_lum_1bin",
+    "rz_diff_preset_1bin",
     "rz_diff_single_box_1bin",
-    "rz_diff_single_box_lum_1bin",
+    "rz_diff_two_box_red_1bin",
 )
 HTML_GROUPS = {
     "External benchmarks": (
@@ -1794,12 +1787,10 @@ HTML_GROUPS = {
     ),
     "AMICO / RZ diff": (
         "amico_1bin",
-        "rz_diff_preset_1bin",
-        "rz_diff_preset_lum_1bin",
         "rz_diff_1bin",
-        "rz_diff_lum_1bin",
+        "rz_diff_preset_1bin",
         "rz_diff_single_box_1bin",
-        "rz_diff_single_box_lum_1bin",
+        "rz_diff_two_box_red_1bin",
     ),
     "Reference catalogs": (
         "act_dr6",
@@ -1885,22 +1876,6 @@ HTML_STYLES = {
         alpha=0.95,
         visible=True,
     ),
-    "rz_diff_preset_1bin": dict(
-        color="#C7682E",
-        shape="inverted_triangle",
-        diameter=0.24,
-        line_width=1.9,
-        alpha=0.95,
-        visible=True,
-    ),
-    "rz_diff_preset_lum_1bin": dict(
-        color="#8B1E0F",
-        shape="inverted_triangle",
-        diameter=0.26,
-        line_width=1.8,
-        alpha=0.95,
-        visible=False,
-    ),
     "rz_diff_1bin": dict(
         color="#D97706",
         shape="inverted_triangle",
@@ -1909,13 +1884,13 @@ HTML_STYLES = {
         alpha=0.95,
         visible=False,
     ),
-    "rz_diff_lum_1bin": dict(
-        color="#9A3412",
+    "rz_diff_preset_1bin": dict(
+        color="#C7682E",
         shape="inverted_triangle",
-        diameter=0.27,
-        line_width=1.7,
+        diameter=0.24,
+        line_width=1.9,
         alpha=0.95,
-        visible=False,
+        visible=True,
     ),
     "rz_diff_single_box_1bin": dict(
         color="#EA580C",
@@ -1925,10 +1900,10 @@ HTML_STYLES = {
         alpha=0.95,
         visible=False,
     ),
-    "rz_diff_single_box_lum_1bin": dict(
-        color="#7C2D12",
+    "rz_diff_two_box_red_1bin": dict(
+        color="#B91C1C",
         shape="inverted_triangle",
-        diameter=0.26,
+        diameter=0.23,
         line_width=1.7,
         alpha=0.95,
         visible=False,
@@ -2037,9 +2012,7 @@ raw_scorecard_df, raw_diff_matrices = run_benchmark_comparison_suite(
 N_STRATIFIED_BINS = 10
 TOTAL_STRATIFIED_TOP_N = 1020
 
-# Heatmap order: rz_diff_all first as reference ceiling, followed by first-class catalogs, then rz_diff variants
-scorecard_candidate_order = ["rz_diff_all"] + FIRST_CLASS_KEYS + RZ_DIFF_KEYS
-release_candidate_order = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
+candidate_order = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
 
 stratified_lens_dict = load_stratified_candidates(
     candidate_keys=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
@@ -2048,7 +2021,7 @@ stratified_lens_dict = load_stratified_candidates(
     n_bins=N_STRATIFIED_BINS,
     total_top_n=TOTAL_STRATIFIED_TOP_N,
     ref_lens_table=dfs_dict.get("redm_r16_1bin"),
-    include_all_candidates=True,
+    include_all_candidates=False,
 )
 
 print(
@@ -2058,8 +2031,8 @@ print(
 stratified_scorecard_df, stratified_diff_matrices = run_benchmark_comparison_suite(
     reference_dict=all_references_dict,
     lens_dict=stratified_lens_dict,
-    candidate_order=scorecard_candidate_order,
-    release_table_candidate_order=release_candidate_order,
+    candidate_order=candidate_order,
+    release_table_candidate_order=candidate_order,
     first_class_keys=FIRST_CLASS_KEYS,
     rz_keys=RZ_DIFF_KEYS,
     output_scorecard_png=OUTPUT_STRATIFIED_SCORECARD_PNG,
@@ -2070,7 +2043,7 @@ stratified_scorecard_df, stratified_diff_matrices = run_benchmark_comparison_sui
     ref_metadata=REFERENCE_METADATA,
     display_names=DISPLAY_NAMES,
     scorecard_title=(
-        f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N} + All Candidates)\n"
+        f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N})\n"
         f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Transverse Radius)"
     ),
     sample_label=(

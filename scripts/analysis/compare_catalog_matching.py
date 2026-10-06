@@ -916,10 +916,10 @@ LABELS_TO_COMPARE = [
     "clumpr_richness_1bin",
     # HSC reproduced / pipeline candidates
     "amico_1bin",
-    "rz_diff_preset_1bin",
-    "rz_diff_preset_lum_1bin",
     "rz_diff_1bin",
-    "rz_diff_lum_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_single_box_1bin",
+    "rz_diff_two_box_red_1bin",
 ]
 
 DISPLAY_NAMES = {
@@ -932,12 +932,10 @@ DISPLAY_NAMES = {
     "clumpr_mass_1bin": "CluMPR (Mass)",
     "clumpr_richness_1bin": "CluMPR (Richness)",
     "amico_1bin": "AMICO",
+    "rz_diff_1bin": "r-z Diff",
     "rz_diff_preset_1bin": "r-z Diff (Preset)",
-    "rz_diff_preset_lum_1bin": "r-z Diff (Preset Lum)",
-    "rz_diff_1bin": "r-z Diff (Richness)",
-    "rz_diff_lum_1bin": "r-z Diff (Luminosity)",
     "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
-    "rz_diff_single_box_lum_1bin": "r-z Diff (Single Box Lum)",
+    "rz_diff_two_box_red_1bin": "r-z Diff (Two Box Red)",
 }
 
 PALETTE = [
@@ -950,10 +948,10 @@ PALETTE = [
     "#AA3377",  # Purple (CluMPR Mass)
     "#EE8866",  # Coral (CluMPR Richness)
     "#10B981",  # Emerald (AMICO)
-    "#E69F00",  # Orange (r-z Preset)
-    "#D55E00",  # Rust (r-z Preset Lum)
-    "#009E73",  # Teal (r-z Richness)
-    "#56B4E9",  # Sky Blue (r-z Lum)
+    "#E69F00",  # Orange (r-z Diff)
+    "#D55E00",  # Rust (r-z Diff Preset)
+    "#009E73",  # Teal (r-z Diff Single Box)
+    "#B91C1C",  # Dark Red (r-z Diff Two Box Red)
 ]
 
 MARKERS = ["s", "x", "o", "v", "^", "D", "p", "h", "*", "8", "<", ">", "P"]
