@@ -27,7 +27,8 @@ Run labels follow the convention ``{catalog_id}_{nbins}`` where:
   inherently confined to a single footprint (pdr3 redMapper, COSINE, AMICO,
   PLS, regression, CCA) or span the full survey without cuts (rz_diff,
   rz_diff_lum, rz_diff_preset, rz_diff_preset_lum, rz_diff_single_box,
-  rz_diff_single_box_lum) carry no footprint suffix.
+  rz_diff_single_box_lum, rz_diff_two_box_red,
+  rz_diff_two_box_red_lum) carry no footprint suffix.
 - ``nbins`` is either ``1bin`` (single top-N bin, ``top_n`` mode) or
   ``4bin`` (four richness/mass bins, ``top_counts`` mode).
 
@@ -357,6 +358,8 @@ _PATH_RZ_DIFF_PRESET = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/r
 _PATH_RZ_DIFF_PRESET_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/preset/rz_diff_lum_cluster_catalog.parquet"
 _PATH_RZ_DIFF_SINGLE_BOX = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/single_box_wl/rz_diff_cluster_catalog.parquet"
 _PATH_RZ_DIFF_SINGLE_BOX_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/single_box_wl/rz_diff_lum_cluster_catalog.parquet"
+_PATH_RZ_DIFF_TWO_BOX_RED = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_wl/rz_diff_cluster_catalog.parquet"
+_PATH_RZ_DIFF_TWO_BOX_RED_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_wl/rz_diff_lum_cluster_catalog.parquet"
 
 # Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
 _PATH_REGRESSION = (
@@ -693,6 +696,8 @@ def _make_pair(
 #   rz_diff_preset_lum           – Direct 2D r-z profile subtraction preset-aperture total luminosity (full Y3 footprint)
 #   rz_diff_single_box           – Positive-box single-aperture richness (full Y3 footprint)
 #   rz_diff_single_box_lum       – Positive-box single-aperture total luminosity (full Y3 footprint)
+#   rz_diff_two_box_red          – Direct 2D r-z profile subtraction two-box red-galaxy richness (full Y3 footprint)
+#   rz_diff_two_box_red_lum      – Direct 2D r-z profile subtraction two-box red-galaxy total luminosity (full Y3 footprint)
 #   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
 #   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
 # ---------------------------------------------------------------------------
@@ -926,6 +931,20 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     **_make_pair(
         "rz_diff_single_box_lum",
         _PATH_RZ_DIFF_SINGLE_BOX_LUM,
+        _RAND_Y3,
+        columns=_COLS_RZ_DIFF,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "rz_diff_two_box_red",
+        _PATH_RZ_DIFF_TWO_BOX_RED,
+        _RAND_Y3,
+        columns=_COLS_RZ_DIFF,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "rz_diff_two_box_red_lum",
+        _PATH_RZ_DIFF_TWO_BOX_RED_LUM,
         _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         lens_format="parquet",
