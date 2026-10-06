@@ -833,10 +833,14 @@ def compute_global_benchmark_scorecard(
     candidate_order: list[str],
     baseline_key: str = "camira_1bin",
     ref_metadata: dict[str, dict[str, str]] | None = None,
+    include_summary_rows: bool = True,
+    summary_groups: tuple[str, ...] = ("non_optical", "optical", "overall"),
 ) -> pd.DataFrame:
     """Compute benchmark completeness and delta vs baseline across all reference catalogs."""
     records = []
     meta = ref_metadata or {}
+    ref_records_by_key = {}
+
     for ref_key, ref_df in reference_dict.items():
         n_ref = len(ref_df)
         m_dict = all_matches[ref_key]
@@ -852,7 +856,7 @@ def compute_global_benchmark_scorecard(
             "n_ref": n_ref,
         }
         for cand_key in candidate_order:
-            m = m_dict[cand_key]
+            m = m_dict.get(cand_key, np.zeros(n_ref, dtype=bool))
             n_match = int(np.sum(m))
             pct = (n_match / n_ref * 100.0) if n_ref > 0 else 0.0
             delta_pct = pct - baseline_pct
@@ -861,6 +865,64 @@ def compute_global_benchmark_scorecard(
             rec[f"{cand_key}_delta_pct"] = delta_pct
 
         records.append(rec)
+        ref_records_by_key[ref_key] = rec
+
+    if include_summary_rows:
+        group_specs = {
+            "non_optical": {
+                "name": "Mean (Non-optical · 5 refs)",
+                "region": "5 Physical Probes",
+                "keys": ("erass1", "efeds", "xxl_dr2", "act_dr6", "chen2024"),
+            },
+            "optical": {
+                "name": "Mean (Optical · 3 refs)",
+                "region": "3 Optical Surveys",
+                "keys": ("des_y3_redmapper", "des_y6_wazp", "kids_dr3_amico"),
+            },
+            "overall": {
+                "name": "Mean (Overall · 8 refs)",
+                "region": f"{len(reference_dict)} References",
+                "keys": tuple(reference_dict.keys()),
+            },
+        }
+
+        for grp_id in summary_groups:
+            if grp_id not in group_specs:
+                continue
+            spec = group_specs[grp_id]
+            target_keys = [k for k in spec["keys"] if k in ref_records_by_key]
+            if not target_keys:
+                continue
+
+            baseline_mean = float(
+                np.mean(
+                    [ref_records_by_key[k][f"{baseline_key}_pct"] for k in target_keys]
+                )
+            )
+            total_n_ref = sum(ref_records_by_key[k]["n_ref"] for k in target_keys)
+
+            sum_rec = {
+                "ref_key": f"summary_{grp_id}",
+                "ref_name": spec["name"],
+                "ref_type": "Summary",
+                "ref_region": spec["region"],
+                "n_ref": total_n_ref,
+            }
+            for cand_key in candidate_order:
+                cand_mean_pct = float(
+                    np.mean(
+                        [ref_records_by_key[k][f"{cand_key}_pct"] for k in target_keys]
+                    )
+                )
+                cand_total_count = sum(
+                    ref_records_by_key[k][f"{cand_key}_count"] for k in target_keys
+                )
+                sum_rec[f"{cand_key}_count"] = cand_total_count
+                sum_rec[f"{cand_key}_pct"] = cand_mean_pct
+                sum_rec[f"{cand_key}_delta_pct"] = cand_mean_pct - baseline_mean
+
+            records.append(sum_rec)
+
     return pd.DataFrame(records)
 
 
@@ -868,6 +930,7 @@ def print_scorecard_markdown_table(
     scorecard_df: pd.DataFrame,
     candidate_order: list[str],
     display_names: dict[str, str],
+    baseline_key: str = "camira_1bin",
 ):
     """Print formatted markdown summary table to console."""
     headers = ["Reference", "Type", "Region", "N_ref"] + [
@@ -877,20 +940,27 @@ def print_scorecard_markdown_table(
     print("\n| " + " | ".join(headers) + " |")
     print("| " + " | ".join(sep) + " |")
     for _, row in scorecard_df.iterrows():
+        is_summary = str(row["ref_type"]) == "Summary"
         line = [
             str(row["ref_name"]),
             str(row["ref_type"]),
             str(row["ref_region"]),
-            str(row["n_ref"]),
+            "—" if is_summary else str(row["n_ref"]),
         ]
         for k in candidate_order:
             cnt = int(row[f"{k}_count"])
             pct = float(row[f"{k}_pct"])
             d_pct = float(row[f"{k}_delta_pct"])
-            if k == "camira_1bin":
-                line.append(f"{pct:.1f}% ({cnt})")
+            if is_summary:
+                if k == baseline_key:
+                    line.append(f"{pct:.1f}%")
+                else:
+                    line.append(f"{pct:.1f}% ({d_pct:+.1f}%)")
             else:
-                line.append(f"{pct:.1f}% ({d_pct:+.1f}%)")
+                if k == baseline_key:
+                    line.append(f"{pct:.1f}% ({cnt})")
+                else:
+                    line.append(f"{pct:.1f}% ({d_pct:+.1f}%)")
         print("| " + " | ".join(line) + " |")
     print()
 
@@ -1070,10 +1140,19 @@ def plot_benchmark_scorecard(
     cbar = fig.colorbar(im, ax=ax, shrink=0.85, pad=0.02)
     cbar.set_label("Match Fraction (%)", fontsize=10.0)
 
-    row_labels = [
-        f"{row['ref_name']} [{row['ref_type']}]\n({row['ref_region']}, N={row['n_ref']})"
-        for _, row in scorecard_df.iterrows()
-    ]
+    is_summary_arr = (scorecard_df["ref_type"] == "Summary").to_numpy(bool)
+    first_sum = np.where(is_summary_arr)[0]
+    if len(first_sum) > 0:
+        ax.axhline(first_sum[0] - 0.5, color="#374151", linewidth=1.5)
+
+    row_labels = []
+    for _, row in scorecard_df.iterrows():
+        if row["ref_type"] == "Summary":
+            row_labels.append(f"{row['ref_name']}\n({row['ref_region']})")
+        else:
+            row_labels.append(
+                f"{row['ref_name']} [{row['ref_type']}]\n({row['ref_region']}, N={row['n_ref']})"
+            )
     col_labels = [names_map.get(k, k) for k in candidate_keys]
 
     ax.set_xticks(np.arange(n_cands))
@@ -1082,6 +1161,7 @@ def plot_benchmark_scorecard(
     ax.set_yticklabels(row_labels, fontsize=9.0)
 
     for i in range(n_refs):
+        is_row_sum = is_summary_arr[i]
         for j in range(n_cands):
             pct_val = pct_matrix[i, j]
             cnt_val = counts_matrix[i, j]
@@ -1091,10 +1171,18 @@ def plot_benchmark_scorecard(
             norm_val = norm(pct_val)
             text_color = "white" if norm_val > 0.58 else "black"
 
-            if candidate_keys[j] == baseline_key:
-                cell_txt = f"{pct_val:.1f}%\n({cnt_val}/{tot_val})\n[Baseline]"
+            if is_row_sum:
+                if candidate_keys[j] == baseline_key:
+                    cell_txt = f"{pct_val:.1f}%\n[Baseline]"
+                else:
+                    cell_txt = f"{pct_val:.1f}%\nΔ: {d_val:+.1f}%"
             else:
-                cell_txt = f"{pct_val:.1f}%\n({cnt_val}/{tot_val})\nΔ: {d_val:+.1f}%"
+                if candidate_keys[j] == baseline_key:
+                    cell_txt = f"{pct_val:.1f}%\n({cnt_val}/{tot_val})\n[Baseline]"
+                else:
+                    cell_txt = (
+                        f"{pct_val:.1f}%\n({cnt_val}/{tot_val})\nΔ: {d_val:+.1f}%"
+                    )
 
             ax.text(
                 j,
@@ -1238,11 +1326,22 @@ def plot_benchmark_release_table(
         for i in range(len(scorecard_df)):
             top = table_top + i * row_height
             ref_type = str(scorecard_df["ref_type"].iloc[i])
-            if i and ref_type != str(scorecard_df["ref_type"].iloc[i - 1]):
+            is_summary = ref_type == "Summary"
+            prev_type = str(scorecard_df["ref_type"].iloc[i - 1]) if i > 0 else ""
+
+            if i and is_summary and prev_type != "Summary":
+                ax.hlines(top, 0, width, color=ink, linewidth=1.2)
+            elif i and ref_type != prev_type:
                 ax.hlines(top, 0, width, color="#A8A79D", linewidth=0.9)
+
             write(0, top + 0.23, ref_type.upper(), size=8, color=accent)
             write(0, top + 0.54, str(scorecard_df["ref_name"].iloc[i]), size=12)
-            detail = f"{scorecard_df['ref_region'].iloc[i]}  ·  N = {int(totals[i]):,}"
+            if is_summary:
+                detail = f"{scorecard_df['ref_region'].iloc[i]} · unweighted mean"
+            else:
+                detail = (
+                    f"{scorecard_df['ref_region'].iloc[i]}  ·  N = {int(totals[i]):,}"
+                )
             write(0, top + 0.86, detail, size=9, color=muted)
             for j, key in enumerate(candidate_keys):
                 left = label_width + j * col_width
@@ -1268,11 +1367,17 @@ def plot_benchmark_release_table(
                     color=ink,
                     ha="center",
                 )
-                count = int(scorecard_df[f"{key}_count"].iloc[i])
                 delta = float(scorecard_df[f"{key}_delta_pct"].iloc[i])
-                detail = f"{count}/{int(totals[i])}"
-                if key != baseline_key:
-                    detail += f" · {delta:+.1f} pp"
+                if is_summary:
+                    if key == baseline_key:
+                        detail = "Baseline"
+                    else:
+                        detail = f"{delta:+.1f} pp"
+                else:
+                    count = int(scorecard_df[f"{key}_count"].iloc[i])
+                    detail = f"{count}/{int(totals[i])}"
+                    if key != baseline_key:
+                        detail += f" · {delta:+.1f} pp"
                 write(
                     x,
                     top + 0.79,
@@ -1307,6 +1412,112 @@ def plot_benchmark_release_table(
         plt.close(fig)
 
 
+def plot_benchmark_variant_delta(
+    scorecard_df_a: pd.DataFrame,
+    scorecard_df_b: pd.DataFrame,
+    candidate_keys: list[str],
+    save_path: Path,
+    label_a: str = "Stratified",
+    label_b: str = "Raw",
+    display_names: dict[str, str] | None = None,
+    title: str | None = None,
+):
+    """Plot heatmap of percentage-point shift between two benchmark variants (A - B)."""
+    from matplotlib.colors import TwoSlopeNorm
+
+    names_map = display_names or {}
+
+    keys_b = set(scorecard_df_b["ref_key"].values)
+    matched_keys = [k for k in scorecard_df_a["ref_key"].values if k in keys_b]
+    if not matched_keys:
+        return
+
+    sub_a = scorecard_df_a.set_index("ref_key").loc[matched_keys]
+    sub_b = scorecard_df_b.set_index("ref_key").loc[matched_keys]
+
+    n_refs = len(matched_keys)
+    n_cands = len(candidate_keys)
+
+    delta_matrix = np.zeros((n_refs, n_cands), dtype=float)
+    pct_a_mat = np.zeros((n_refs, n_cands), dtype=float)
+    pct_b_mat = np.zeros((n_refs, n_cands), dtype=float)
+
+    for i, r_k in enumerate(matched_keys):
+        for j, c_k in enumerate(candidate_keys):
+            p_a = float(sub_a.loc[r_k, f"{c_k}_pct"])
+            p_b = float(sub_b.loc[r_k, f"{c_k}_pct"])
+            delta_matrix[i, j] = p_a - p_b
+            pct_a_mat[i, j] = p_a
+            pct_b_mat[i, j] = p_b
+
+    fig, ax = plt.subplots(
+        figsize=(max(13.5, 1.4 * n_cands), max(5.0, 0.75 * n_refs + 1.8))
+    )
+
+    abs_max = max(5.0, float(np.nanmax(np.abs(delta_matrix))))
+    norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0.0, vmax=abs_max)
+    cmap = plt.colormaps["coolwarm"]
+
+    im = ax.imshow(delta_matrix, cmap=cmap, norm=norm, aspect="auto")
+
+    cbar = fig.colorbar(im, ax=ax, shrink=0.85, pad=0.02)
+    cbar.set_label(f"Recovery Shift ({label_a} − {label_b}, pp)", fontsize=10.0)
+
+    is_summary_arr = (sub_a["ref_type"] == "Summary").values
+    first_sum = np.where(is_summary_arr)[0]
+    if len(first_sum) > 0:
+        ax.axhline(first_sum[0] - 0.5, color="#374151", linewidth=1.4)
+
+    row_labels = []
+    for _, row in sub_a.iterrows():
+        if row["ref_type"] == "Summary":
+            row_labels.append(f"{row['ref_name']}\n({row['ref_region']})")
+        else:
+            row_labels.append(
+                f"{row['ref_name']} [{row['ref_type']}]\n({row['ref_region']}, N={row['n_ref']})"
+            )
+
+    col_labels = [names_map.get(k, k) for k in candidate_keys]
+    ax.set_xticks(np.arange(n_cands))
+    ax.set_yticks(np.arange(n_refs))
+    ax.set_xticklabels(col_labels, rotation=20, ha="right", fontsize=9.5)
+    ax.set_yticklabels(row_labels, fontsize=9.0)
+
+    for i in range(n_refs):
+        for j in range(n_cands):
+            d_val = delta_matrix[i, j]
+            p_a = pct_a_mat[i, j]
+            p_b = pct_b_mat[i, j]
+
+            norm_val = norm(d_val)
+            text_color = "white" if (norm_val < 0.20 or norm_val > 0.80) else "black"
+
+            cell_txt = f"{d_val:+.1f} pp\n({p_a:.1f}% vs {p_b:.1f}%)"
+            ax.text(
+                j,
+                i,
+                cell_txt,
+                ha="center",
+                va="center",
+                color=text_color,
+                fontsize=8.5,
+                fontweight="normal",
+                linespacing=1.2,
+            )
+
+    plt_title = title or (
+        f"Benchmark Recovery Rate Shift: {label_a} vs. {label_b}\n"
+        "(Positive values indicate net recovery gain after equalizing redshift distributions)"
+    )
+    ax.set_title(plt_title, fontsize=11.0, pad=12, fontweight="normal")
+    fig.tight_layout()
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Variant delta plot saved to {save_path}")
+    plt.show()
+    plt.close(fig)
+
+
 def run_benchmark_comparison_suite(
     reference_dict: dict[str, pd.DataFrame | Table],
     lens_dict: dict[str, Table],
@@ -1324,6 +1535,8 @@ def run_benchmark_comparison_suite(
     sample_label: str | None = None,
     diff_suptitle: str | None = None,
     release_table_candidate_order: list[str] | None = None,
+    include_summary_rows: bool = True,
+    summary_groups: tuple[str, ...] = ("non_optical", "optical", "overall"),
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     """Execute complete benchmark suite: matching, scorecard, release table, and diff heatmaps."""
     all_matches = compute_reference_matches_dict(
@@ -1338,12 +1551,15 @@ def run_benchmark_comparison_suite(
         candidate_order=candidate_order,
         baseline_key=baseline_key,
         ref_metadata=ref_metadata,
+        include_summary_rows=include_summary_rows,
+        summary_groups=summary_groups,
     )
 
     print_scorecard_markdown_table(
         scorecard_df,
         candidate_order=candidate_order,
         display_names=display_names or {},
+        baseline_key=baseline_key,
     )
 
     plot_benchmark_scorecard(
@@ -1516,6 +1732,10 @@ OUTPUT_STRATIFIED_RELEASE_TABLE_PNG = (
 )
 OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG = (
     project_root / "output/plots_for_agents/differential_advantage_stratified.png"
+)
+OUTPUT_STRATIFIED_DELTA_PNG = (
+    project_root
+    / "output/plots_for_agents/reference_benchmark_stratified_vs_raw_delta.png"
 )
 
 
@@ -1807,6 +2027,8 @@ raw_scorecard_df, raw_diff_matrices = run_benchmark_comparison_suite(
     ref_metadata=REFERENCE_METADATA,
     display_names=DISPLAY_NAMES,
     sample_label=f"Overlapping HSC footprints · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
+    include_summary_rows=True,
+    summary_groups=("non_optical", "optical", "overall"),
 )
 
 
@@ -1856,4 +2078,26 @@ stratified_scorecard_df, stratified_diff_matrices = run_benchmark_comparison_sui
         f"{REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}"
     ),
     diff_suptitle="Stratified Redshift-Controlled Differential Advantage (rz_diff variants vs Class 1)",
+    include_summary_rows=True,
+    summary_groups=("non_optical", "optical", "overall"),
+)
+
+
+# %% [Stage 5: Cross-Variant Delta Analysis (Stratified vs. Raw)]
+
+common_candidate_order = [
+    k
+    for k in FIRST_CLASS_KEYS + RZ_DIFF_KEYS
+    if f"{k}_pct" in raw_scorecard_df.columns
+    and f"{k}_pct" in stratified_scorecard_df.columns
+]
+
+plot_benchmark_variant_delta(
+    scorecard_df_a=stratified_scorecard_df,
+    scorecard_df_b=raw_scorecard_df,
+    candidate_keys=common_candidate_order,
+    save_path=OUTPUT_STRATIFIED_DELTA_PNG,
+    label_a="Stratified",
+    label_b="Raw",
+    display_names=DISPLAY_NAMES,
 )
