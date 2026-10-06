@@ -22,62 +22,12 @@ if str(project_root) not in sys.path:
 from hsc_wl.prepare import load_stratified_candidates
 from hsc_wl.reference_catalogs import (
     EXTERNAL_REFERENCE_METADATA,
-    REFERENCE_CATALOGS,
     load_external_reference_catalogs,
-    load_reference_catalogs,
 )
 from initial import *  # noqa: F401,F403
 from src.data import read_catalog_frame
 
 # %% Local Functions
-
-
-def load_chen2024_clusters(
-    root: Path,
-    redshift_range: tuple[float, float] = (0.19, 0.52),
-) -> Table:
-    """Load and filter the Chen et al. (2024) WL shear-selected cluster catalog.
-
-    Applies survey redshift range and the full HSC Y3 shape catalog mask.
-
-    Parameters
-    ----------
-    root : Path
-        Project root path.
-    redshift_range : tuple of (float, float), default (0.19, 0.52)
-        Redshift bounds.
-
-    Returns
-    -------
-    astropy.table.Table
-        Filtered Chen+2024 cluster table with columns [peak_id, ra, dec, z, snr, ...].
-    """
-    from hsc_wl.coverage import load_y3_mask
-
-    parquet_path = root / "data/chen2024_shear_selected_clusters.parquet"
-    if not parquet_path.exists():
-        raise FileNotFoundError(
-            f"Chen 2024 catalog not found at {parquet_path}. "
-            "Ensure data/chen2024_shear_selected_clusters.parquet exists."
-        )
-
-    df = read_catalog_frame(parquet_path)
-
-    # Filter by redshift range
-    mask = (df["z_cl"] >= redshift_range[0]) & (df["z_cl"] <= redshift_range[1])
-    filtered_df = df[mask].sort_values(by="snr", ascending=False).reset_index(drop=True)
-    tbl = Table.from_pandas(filtered_df)
-
-    # Filter by master Y3 shape mask
-    y3_mask = load_y3_mask(root)
-    ra = np.asarray(tbl["ra"], dtype=float)
-    dec = np.asarray(tbl["dec"], dtype=float)
-    inside = y3_mask.get_values_pos(ra, dec, lonlat=True)
-    tbl = tbl[inside]
-
-    tbl["z"] = tbl["z_cl"]
-    tbl["rank"] = np.arange(1, len(tbl) + 1)
-    return tbl
 
 
 def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
@@ -127,17 +77,12 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
 
 def build_interactive_regions(
     dfs: dict[str, Table],
-    chen_table: Table | None,
     reference_catalogs: dict[str, pd.DataFrame],
 ) -> list[dict]:
     """Use canonical field membership and padded catalog bounds for six panels."""
     from hsc_wl.coverage import in_field
 
-    tables = (
-        list(dfs.values())
-        + ([] if chen_table is None else [chen_table])
-        + list(reference_catalogs.values())
-    )
+    tables = list(dfs.values()) + list(reference_catalogs.values())
     ra = np.concatenate([np.asarray(tbl["ra"], float) for tbl in tables])
     dec = np.concatenate([np.asarray(tbl["dec"], float) for tbl in tables])
     regions = []
@@ -272,7 +217,7 @@ def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame, style
     ].copy()
     if selected.empty:
         return
-    spec = REFERENCE_CATALOGS[key]
+    spec = EXTERNAL_REFERENCE_METADATA[key]
     selected["ra_orig"] = selected["ra"]
     if region["shift_fall"]:
         selected["ra"] = np.where(
@@ -311,10 +256,10 @@ def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame, style
         )
     quality_labels = {
         "des_y6_wazp": "COVER_FRAC_1MPC",
-        "act_dr6": "flags",
-        "erass1": "EXT_LIKE",
+        "erass3": "EXT_LIKE",
+        "efeds": "EXT_LIKE",
         "des_y3_redmapper": "maskfrac",
-        "xxl_dr2": "Class",
+        "xxl_dr2": "Bextlike",
     }
     if key in quality_labels:
         tooltips.append((quality_labels[key], "@quality"))
@@ -370,7 +315,7 @@ def build_catalog_controls_html(
         )
     return (
         "<header><h1>Catalog comparison</h1>"
-        f"<p>{redshift_range[0]} ≤ z ≤ {redshift_range[1]}</p>"
+        f"<p>Optical catalogs: {redshift_range[0]} ≤ z ≤ {redshift_range[1]}; X-ray / SZ / WL references: no redshift cuts</p>"
         + "".join(rows)
         + "</header>"
     )
@@ -406,7 +351,6 @@ def plot_bokeh_spatial_regional(
     redshift_range: tuple[float, float],
     styles: dict[str, dict],
     groups: dict[str, tuple[str, ...]],
-    chen_table: Table | None = None,
     display_names: dict[str, str] | None = None,
 ):
     """Save six responsive sky panels grouped by survey season as offline HTML."""
@@ -424,7 +368,7 @@ def plot_bokeh_spatial_regional(
     from hsc_wl.coverage import in_field
 
     names_map = display_names or {}
-    region_defs = build_interactive_regions(dfs, chen_table, reference_catalogs)
+    region_defs = build_interactive_regions(dfs, reference_catalogs)
     layers = {
         key: dict(**styles[key], label=names_map.get(key, key), count=len(tbl))
         for key, tbl in dfs.items()
@@ -432,15 +376,13 @@ def plot_bokeh_spatial_regional(
     layers.update(
         {
             key: dict(
-                **styles[key], label=REFERENCE_CATALOGS[key]["label"], count=len(frame)
+                **styles[key],
+                label=EXTERNAL_REFERENCE_METADATA[key]["label"],
+                count=len(frame),
             )
             for key, frame in reference_catalogs.items()
         }
     )
-    if chen_table is not None:
-        layers["chen2024"] = dict(
-            **styles["chen2024"], label="Chen+2024 WL", count=len(chen_table)
-        )
     layer_order = [key for keys in groups.values() for key in keys]
 
     p_list = []
@@ -536,62 +478,6 @@ def plot_bokeh_spatial_regional(
                 ],
             )
             p.add_tools(hover)
-
-        # Overlay Chen+2024 WL clusters
-        if chen_table is not None and len(chen_table) > 0:
-            c_ra = np.asarray(chen_table["ra"], dtype=float)
-            c_dec = np.asarray(chen_table["dec"], dtype=float)
-            c_m = in_field(c_ra, c_dec, f_name)
-            if np.any(c_m):
-                c_ra_sel = c_ra[c_m]
-                c_dec_sel = c_dec[c_m]
-                c_z_sel = np.asarray(chen_table["z"], dtype=float)[c_m]
-                c_snr_sel = np.asarray(chen_table["snr"], dtype=float)[c_m]
-                c_pk_sel = np.asarray(chen_table["peak_id"], dtype=int)[c_m]
-                c_rich_sel = np.asarray(chen_table["richness"], dtype=float)[c_m]
-                c_opt_sel = [str(x) for x in chen_table["opt_name"][c_m]]
-                c_sep_sel = np.asarray(chen_table["sep_mpc_h"], dtype=float)[c_m]
-
-                if shift:
-                    c_ra_sel = np.where(c_ra_sel > 180.0, c_ra_sel - 360.0, c_ra_sel)
-
-                chen_source = ColumnDataSource(
-                    data={
-                        "ra": c_ra_sel,
-                        "ra_orig": c_ra[c_m],
-                        "dec": c_dec_sel,
-                        "z": c_z_sel,
-                        "snr": c_snr_sel,
-                        "peak_id": c_pk_sel,
-                        "richness": c_rich_sel,
-                        "opt_name": c_opt_sel,
-                        "sep_mpc_h": c_sep_sel,
-                        "catalog": ["Chen+2024 WL Selected"] * len(c_ra_sel),
-                    }
-                )
-
-                chen_renderer = draw_sky_marker(
-                    p,
-                    reg,
-                    chen_source,
-                    styles["chen2024"],
-                    "chen2024",
-                )
-
-                chen_hover = HoverTool(
-                    renderers=[chen_renderer],
-                    tooltips=[
-                        ("Catalog", "@catalog"),
-                        ("Peak ID", "#@peak_id"),
-                        ("WL Peak S/N", "@snr{0.00}"),
-                        ("RA", "@ra_orig{0.0000} deg"),
-                        ("Dec", "@dec{0.0000} deg"),
-                        ("Redshift z", "@z{0.0000}"),
-                        ("Optical Match", "@opt_name (Richness: @richness{0.0})"),
-                        ("Separation", "@sep_mpc_h{0.00} Mpc/h"),
-                    ],
-                )
-                p.add_tools(chen_hover)
 
         p_list.append(p)
 
@@ -875,9 +761,9 @@ def compute_global_benchmark_scorecard(
     if include_summary_rows:
         group_specs = {
             "non_optical": {
-                "name": "Mean (Non-optical · 5 refs)",
+                "name": "Mean (X-ray / SZ / WL · 5 refs)",
                 "region": "5 Physical Probes",
-                "keys": ("erass1", "efeds", "xxl_dr2", "act_dr6", "chen2024"),
+                "keys": ("erass3", "efeds", "xxl_dr2", "act_dr6", "chen2024"),
             },
             "optical": {
                 "name": "Mean (Optical · 3 refs)",
@@ -886,23 +772,8 @@ def compute_global_benchmark_scorecard(
             },
             "overall": {
                 "name": "Mean (Overall · 8 refs)",
-                "region": f"{len(reference_dict)} References",
-                "keys": tuple(reference_dict.keys()),
-            },
-            "external_xray": {
-                "name": "Mean (X-ray · 3 refs)",
-                "region": "eRASS:3/eFEDS/XXL",
-                "keys": ("erass3", "efeds", "xxl_dr2"),
-            },
-            "external_sz": {
-                "name": "SZ · ACT DR6",
-                "region": "ACT DR6",
-                "keys": ("act_dr6",),
-            },
-            "external_overall": {
-                "name": "Mean (External · 5 refs)",
-                "region": "X-ray / SZ / WL",
-                "keys": tuple(reference_dict.keys()),
+                "region": "8 References",
+                "keys": tuple(EXTERNAL_REFERENCE_METADATA),
             },
         }
 
@@ -1629,9 +1500,9 @@ def run_benchmark_comparison_suite(
 
 # %% Global Configuration
 
-REFERENCE_KEYS = tuple(REFERENCE_CATALOGS)
 REDSHIFT_RANGE = (0.19, 0.52)
 MATCH_RADIUS_MPC_H = 0.5
+REFERENCE_SAMPLE_LABEL = f"Y3 · X-ray / SZ / WL: no z cuts · Optical: {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}"
 
 FIRST_CLASS_KEYS = [
     "camira_1bin",
@@ -1670,64 +1541,6 @@ DISPLAY_NAMES = {
     "rz_diff_two_box_red_1bin": "r-z Diff (Two Box Red)",
 }
 
-REFERENCE_BENCHMARK_ORDER = [
-    # X-ray
-    "erass1",
-    "efeds",
-    "xxl_dr2",
-    # SZ
-    "act_dr6",
-    # WL
-    "chen2024",
-    # Optical
-    "des_y3_redmapper",
-    "des_y6_wazp",
-    "kids_dr3_amico",
-]
-
-REFERENCE_METADATA = {
-    "erass1": {
-        "label": "eRASS1 + eROMaPPer",
-        "type": "X-ray",
-        "region": "Spring",
-    },
-    "efeds": {
-        "label": "eFEDS + MCMF",
-        "type": "X-ray",
-        "region": "GAMA09H",
-    },
-    "xxl_dr2": {
-        "label": "XXL DR2 C1/C2",
-        "type": "X-ray",
-        "region": "XMM",
-    },
-    "act_dr6": {
-        "label": "ACT DR6 SZ",
-        "type": "SZ",
-        "region": "Spring+Fall",
-    },
-    "chen2024": {
-        "label": "Chen+2024 WL",
-        "type": "WL Shear",
-        "region": "Full Survey",
-    },
-    "des_y3_redmapper": {
-        "label": "DES Y3 redMaPPer",
-        "type": "Optical",
-        "region": "Fall",
-    },
-    "des_y6_wazp": {
-        "label": "DES Y6 WaZP",
-        "type": "Optical",
-        "region": "Fall",
-    },
-    "kids_dr3_amico": {
-        "label": "KiDS DR3 AMICO",
-        "type": "Optical",
-        "region": "Spring",
-    },
-}
-
 OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
 OUTPUT_SCORECARD_PNG = (
     project_root / "output/plots_for_agents/reference_benchmark_scorecard.png"
@@ -1753,54 +1566,12 @@ OUTPUT_STRATIFIED_DELTA_PNG = (
     project_root
     / "output/plots_for_agents/reference_benchmark_stratified_vs_raw_delta.png"
 )
-OUTPUT_EXTERNAL_SCORECARD_PNG = (
-    project_root / "output/plots_for_agents/reference_benchmark_scorecard_external.png"
-)
-OUTPUT_EXTERNAL_RELEASE_TABLE_PNG = (
-    project_root
-    / "output/plots_for_agents/reference_benchmark_release_table_external.png"
-)
-OUTPUT_EXTERNAL_STRATIFIED_SCORECARD_PNG = (
-    project_root
-    / "output/plots_for_agents/reference_benchmark_scorecard_external_stratified.png"
-)
-OUTPUT_EXTERNAL_STRATIFIED_RELEASE_TABLE_PNG = (
-    project_root
-    / "output/plots_for_agents/reference_benchmark_release_table_external_stratified.png"
-)
-OUTPUT_DIFF_HEATMAPS_EXTERNAL_PNG = (
-    project_root / "output/plots_for_agents/differential_advantage_external.png"
-)
-OUTPUT_DIFF_HEATMAPS_EXTERNAL_STRATIFIED_PNG = (
-    project_root
-    / "output/plots_for_agents/differential_advantage_external_stratified.png"
-)
-OUTPUT_EXTERNAL_STRATIFIED_DELTA_PNG = (
-    project_root
-    / "output/plots_for_agents/reference_benchmark_external_stratified_vs_raw_delta.png"
-)
-
-
-# %% [Stage 1: Load Catalogs (Lenses, Chen+2024, References)]
+# %% [Stage 1: Load Lens and External Catalogs]
 
 dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
-chen_tbl = load_chen2024_clusters(project_root, redshift_range=REDSHIFT_RANGE)
-reference_dfs = load_reference_catalogs(project_root, REFERENCE_KEYS, REDSHIFT_RANGE)
-
-raw_references_dict = {
-    **reference_dfs,
-    "chen2024": pd.DataFrame(
-        {col: np.asarray(chen_tbl[col]) for col in chen_tbl.colnames}
-    ),
-}
-all_references_dict = {
-    k: raw_references_dict[k]
-    for k in REFERENCE_BENCHMARK_ORDER
-    if k in raw_references_dict
-}
-
+reference_dfs = load_external_reference_catalogs(project_root, REDSHIFT_RANGE)
 print(
-    f"\nLoaded Chen+2024 WL shear-selected clusters in full survey: N={len(chen_tbl)} (z in [0.19, 0.52], Y3 mask)"
+    f"Loaded {len(reference_dfs)} external catalogs: 5 physical probes and 3 optical catalogs"
 )
 
 
@@ -1822,7 +1593,7 @@ HTML_MAIN_KEYS = (
     "rz_diff_two_box_red_1bin",
 )
 HTML_GROUPS = {
-    "External benchmarks": (
+    "Optical candidate catalogs": (
         "camira_1bin",
         "redm_r16_1bin",
         "wh24_1bin",
@@ -1839,9 +1610,9 @@ HTML_GROUPS = {
         "rz_diff_single_box_1bin",
         "rz_diff_two_box_red_1bin",
     ),
-    "Reference catalogs": (
+    "External reference catalogs": (
         "act_dr6",
-        "erass1",
+        "erass3",
         "efeds",
         "xxl_dr2",
         "des_y6_wazp",
@@ -1963,7 +1734,7 @@ HTML_STYLES = {
         alpha=0.8,
         visible=True,
     ),
-    "erass1": dict(
+    "erass3": dict(
         color="#527568",
         shape="circle",
         diameter=0.30,
@@ -2028,7 +1799,6 @@ plot_bokeh_spatial_regional(
     redshift_range=REDSHIFT_RANGE,
     styles=HTML_STYLES,
     groups=HTML_GROUPS,
-    chen_table=chen_tbl,
     display_names=DISPLAY_NAMES,
 )
 
@@ -2036,7 +1806,7 @@ plot_bokeh_spatial_regional(
 # %% [Stage 3: Reference Benchmark Suite (Raw Top 1020 Candidates)]
 
 raw_scorecard_df, raw_diff_matrices = run_benchmark_comparison_suite(
-    reference_dict=all_references_dict,
+    reference_dict=reference_dfs,
     lens_dict=dfs_dict,
     candidate_order=FIRST_CLASS_KEYS + RZ_DIFF_KEYS,
     first_class_keys=FIRST_CLASS_KEYS,
@@ -2046,9 +1816,10 @@ raw_scorecard_df, raw_diff_matrices = run_benchmark_comparison_suite(
     output_diff_heatmaps_png=OUTPUT_DIFF_HEATMAPS_ALL_PNG,
     baseline_key="camira_1bin",
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-    ref_metadata=REFERENCE_METADATA,
+    ref_metadata=EXTERNAL_REFERENCE_METADATA,
     display_names=DISPLAY_NAMES,
-    sample_label=f"Overlapping HSC footprints · {REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}",
+    sample_label=REFERENCE_SAMPLE_LABEL,
+    scorecard_title="External Catalog Recovery (Raw Top 1020)",
     include_summary_rows=True,
     summary_groups=("non_optical", "optical", "overall"),
 )
@@ -2076,7 +1847,7 @@ print(
 )
 
 stratified_scorecard_df, stratified_diff_matrices = run_benchmark_comparison_suite(
-    reference_dict=all_references_dict,
+    reference_dict=reference_dfs,
     lens_dict=stratified_lens_dict,
     candidate_order=candidate_order,
     release_table_candidate_order=candidate_order,
@@ -2087,16 +1858,13 @@ stratified_scorecard_df, stratified_diff_matrices = run_benchmark_comparison_sui
     output_diff_heatmaps_png=OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG,
     baseline_key="camira_1bin",
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-    ref_metadata=REFERENCE_METADATA,
+    ref_metadata=EXTERNAL_REFERENCE_METADATA,
     display_names=DISPLAY_NAMES,
     scorecard_title=(
         f"Stratified Redshift-Controlled Benchmark Recovery Scorecard (Equal P(z), Top {TOTAL_STRATIFIED_TOP_N})\n"
         f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Transverse Radius)"
     ),
-    sample_label=(
-        f"Stratified Redshift-Controlled (Matched redMaPPer N(z)) · "
-        f"{REDSHIFT_RANGE[0]:.2f} ≤ z ≤ {REDSHIFT_RANGE[1]:.2f}"
-    ),
+    sample_label=f"Stratified lens N(z) · {REFERENCE_SAMPLE_LABEL}",
     diff_suptitle="Stratified Redshift-Controlled Differential Advantage (rz_diff variants vs Class 1)",
     include_summary_rows=True,
     summary_groups=("non_optical", "optical", "overall"),
@@ -2120,83 +1888,4 @@ plot_benchmark_variant_delta(
     label_a="Stratified",
     label_b="Raw",
     display_names=DISPLAY_NAMES,
-)
-
-
-# %% [Stage 6: External Reference Benchmark Suite (No Additional Optical or Redshift Selection)]
-
-external_references_dict = load_external_reference_catalogs(project_root)
-
-print(
-    f"\n=== External Reference Benchmark Suite (No Additional Optical or Redshift Selection, N={len(external_references_dict)}) ==="
-)
-
-external_candidate_order = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
-
-external_scorecard_df, external_diff_matrices = run_benchmark_comparison_suite(
-    reference_dict=external_references_dict,
-    lens_dict=dfs_dict,
-    candidate_order=external_candidate_order,
-    release_table_candidate_order=external_candidate_order,
-    first_class_keys=FIRST_CLASS_KEYS,
-    rz_keys=RZ_DIFF_KEYS,
-    output_scorecard_png=OUTPUT_EXTERNAL_SCORECARD_PNG,
-    output_release_table_png=OUTPUT_EXTERNAL_RELEASE_TABLE_PNG,
-    output_diff_heatmaps_png=OUTPUT_DIFF_HEATMAPS_EXTERNAL_PNG,
-    baseline_key="camira_1bin",
-    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-    ref_metadata=EXTERNAL_REFERENCE_METADATA,
-    display_names=DISPLAY_NAMES,
-    scorecard_title=(
-        f"External Reference Benchmark Recovery Scorecard (Raw Top 1020, No Reference Redshift Cuts)\n"
-        f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Radius using Candidate Redshift)"
-    ),
-    sample_label="External References · No Reference Redshift Cuts",
-    diff_suptitle="External Reference Differential Advantage (rz_diff variants vs Class 1)",
-    include_summary_rows=True,
-    summary_groups=("external_xray", "external_sz", "external_overall"),
-)
-
-print(
-    f"\n=== External Reference Stratified Redshift-Controlled Suite (Matched redMaPPer N(z), Top {TOTAL_STRATIFIED_TOP_N}) ==="
-)
-
-external_strat_scorecard_df, external_strat_diff_matrices = (
-    run_benchmark_comparison_suite(
-        reference_dict=external_references_dict,
-        lens_dict=stratified_lens_dict,
-        candidate_order=external_candidate_order,
-        release_table_candidate_order=external_candidate_order,
-        first_class_keys=FIRST_CLASS_KEYS,
-        rz_keys=RZ_DIFF_KEYS,
-        output_scorecard_png=OUTPUT_EXTERNAL_STRATIFIED_SCORECARD_PNG,
-        output_release_table_png=OUTPUT_EXTERNAL_STRATIFIED_RELEASE_TABLE_PNG,
-        output_diff_heatmaps_png=OUTPUT_DIFF_HEATMAPS_EXTERNAL_STRATIFIED_PNG,
-        baseline_key="camira_1bin",
-        r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-        ref_metadata=EXTERNAL_REFERENCE_METADATA,
-        display_names=DISPLAY_NAMES,
-        scorecard_title=(
-            f"External Reference Stratified Benchmark Recovery Scorecard (Equal P(z), No Reference Redshift Cuts)\n"
-            f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Radius using Candidate Redshift)"
-        ),
-        sample_label="External References (Stratified Lens N(z)) · No Reference Redshift Cuts",
-        diff_suptitle="External Reference Stratified Differential Advantage (rz_diff vs Class 1)",
-        include_summary_rows=True,
-        summary_groups=("external_xray", "external_sz", "external_overall"),
-    )
-)
-
-plot_benchmark_variant_delta(
-    scorecard_df_a=external_strat_scorecard_df,
-    scorecard_df_b=external_scorecard_df,
-    candidate_keys=external_candidate_order,
-    save_path=OUTPUT_EXTERNAL_STRATIFIED_DELTA_PNG,
-    label_a="Stratified",
-    label_b="Raw",
-    display_names=DISPLAY_NAMES,
-    title=(
-        "External Benchmark Recovery Rate Shift: Stratified vs. Raw\n"
-        "(External References Without Reference Redshift Cuts, Candidates Matched to redMaPPer N(z))"
-    ),
 )

@@ -1,4 +1,4 @@
-"""Public cluster references clipped to the master HSC Y3 shape footprint."""
+"""Eight external cluster references using native centers and the HSC Y3 footprint."""
 
 import hashlib
 import json
@@ -9,40 +9,32 @@ import numpy as np
 import pandas as pd
 
 from hsc_wl.coverage import CANONICAL_FIELDS, Y3_MASK_PATH, in_field, load_y3_mask
-from src.data import download_public_catalog, read_catalog_frame
+from src.data import (
+    download_archive_catalog,
+    download_public_catalog,
+    read_catalog_frame,
+)
 
 PUBLIC_DOWNLOADS = (
     (
-        "des_y6_wazp.fits",
-        "https://datasets.linea.org.br/wazp/y6a2_dnf_wazp_v5.0.12.6801_clusters.fits",
-    ),
-    (
-        "xxl_dr2.fits",
-        "https://vizier.cds.unistra.fr/viz-bin/asu-binfits?-source=IX/52/xxl365gc&-out.all&-out.max=unlimited",
-    ),
-    (
-        "act_dr6.fits",
-        "https://lambda.gsfc.nasa.gov/data/suborbital/ACT/actadv_dr6_cluster_cat/DR6_cluster-catalog_v1.0.fits",
-    ),
-    (
-        "des_y3_redmapper.h5",
-        "https://data.darkenergysurvey.org/fnalmisc/y3-clusters/y3_redmapper_v6.4.22+2_release.h5",
-    ),
-    (
-        "erass1_primary.tgz",
-        "https://erosita.mpe.mpg.de/dr1/AllSkySurveyData_dr1/Catalogues_dr1/BulbulE_DR1/erass1cl_primary_v3.2.fits.tgz",
-    ),
-    (
-        "erass1_optical.tgz",
-        "https://erosita.mpe.mpg.de/dr1/AllSkySurveyData_dr1/Catalogues_dr1/KlugeM_DR1/eRASS1_clusters_optical.fits.tgz",
+        "erass3_main.fits.gz",
+        "https://erosita.mpe.mpg.de/dr2/AllSkySurveyData_dr2/Catalogues_dr2/RamosM_DR2/eRASS3_Main_v1.3.fits.gz",
     ),
     (
         "efeds_clusters.fits.gz",
         "https://erosita.mpe.mpg.de/edr/eROSITAObservations/Catalogues/liuA/eFEDS_clusters_V3.2.fits.gz",
     ),
     (
-        "efeds_optical.fits.gz",
-        "https://erosita.mpe.mpg.de/edr/eROSITAObservations/Catalogues/klein/eFEDS_c001_main_ctp_clus_v2.1.fits.gz",
+        "xxl_dr2_sources.fits",
+        "https://vizier.cds.unistra.fr/viz-bin/asu-binfits?-source=IX/52/3xlss&-out.all&-out.max=unlimited",
+    ),
+    (
+        "des_y6_wazp.fits",
+        "https://datasets.linea.org.br/wazp/y6a2_dnf_wazp_v5.0.12.6801_clusters.fits",
+    ),
+    (
+        "des_y3_redmapper.h5",
+        "https://data.darkenergysurvey.org/fnalmisc/y3-clusters/y3_redmapper_v6.4.22+2_release.h5",
     ),
     (
         "kids_dr3_amico.fits",
@@ -50,43 +42,108 @@ PUBLIC_DOWNLOADS = (
     ),
 )
 
-REFERENCE_CATALOGS = {
-    "des_y6_wazp": dict(
-        label="DES Y6 WaZP",
-        source_url="https://data.linea.org.br/en/sci_products/wazp.html",
-        selection="v5.0.12.6801; IN_COSMO == True and NGALS >= 25; density-map centers; ZPHOT.",
-    ),
-    "xxl_dr2": dict(
-        label="XXL DR2 C1/C2",
-        source_url="https://cdsarc.cds.unistra.fr/viz-bin/cat/IX/52",
-        selection="Updated CDS IX/52/xxl365gc confirmed C1/C2 sample; X-ray centers.",
-    ),
-    "act_dr6": dict(
-        label="ACT DR6 SZ v1.0",
-        source_url="https://lambda.gsfc.nasa.gov/product/act/actadv_dr6_szcluster_catalog_info.html",
-        selection="Full optically confirmed DR6 catalog; SZ centers; flags retained.",
-    ),
-    "erass1": dict(
-        label="eRASS1 + eROMaPPer",
-        source_url="https://erosita.mpe.mpg.de/dr1/AllSkySurveyData_dr1/Catalogues_dr1/",
-        selection="Primary v3.2; X-ray centers; optical properties joined by DETUID. eROMaPPer is optical follow-up of the same X-ray sample.",
-    ),
-    "efeds": dict(
-        label="eFEDS + MCMF",
-        source_url="https://erosita.mpe.mpg.de/edr/eROSITAObservations/Catalogues/",
-        selection="Liu v3.2 + Klein v2.1; X-ray centers; 0 <= F_CONT_BEST_COMB < 0.3.",
-    ),
-    "kids_dr3_amico": dict(
-        label="KiDS DR3 AMICO",
-        source_url="https://cdsarc.cds.unistra.fr/viz-bin/cat/J/A%2BA/665/A100",
-        selection="Published CDS J/A+A/665/A100 subset: intrinsic richness >= 15, S/N >= 3.5; corrected zfix; AMICO centers. This is not the full 7988-object DR3 sample.",
-    ),
-    "des_y3_redmapper": dict(
-        label="DES Y3 redMaPPer",
-        source_url="https://data.darkenergysurvey.org/fnalmisc/y3-clusters/",
-        selection="v6.4.22+2; official index/redmapper/lgt20/select selection; optical centers; z_lambda.",
-    ),
+ACT_CANDIDATE_ARCHIVE = (
+    "https://lambda.gsfc.nasa.gov/data/suborbital/ACT/actadv_dr6_cluster_cat/DR6_nemo-products_v1.0.tgz",
+    "DR6ClusterSearch/DR6ClusterSearch_optimalCatalog.fits",
+    "act_dr6_candidates.fits",
+)
+
+OPTICAL_REFERENCE_KEYS = ("des_y3_redmapper", "des_y6_wazp", "kids_dr3_amico")
+
+EXTERNAL_REFERENCE_METADATA = {
+    "erass3": {
+        "label": "eRASS:3 (EXT_LIKE >= 6)",
+        "type": "X-ray",
+        "region": "Spring",
+        "selection": "Main v1.3; EXT_LIKE >= 6; native X-ray centers; no optical join.",
+    },
+    "efeds": {
+        "label": "eFEDS (EXT_LIKE >= 6)",
+        "type": "X-ray",
+        "region": "GAMA09H",
+        "selection": "Liu v3.2; EXT_LIKE >= 6; no MCMF selection.",
+    },
+    "xxl_dr2": {
+        "label": "XXL DR2 (Bextlike >= 33)",
+        "type": "X-ray",
+        "region": "XMM",
+        "selection": "3XLSS raw X-ray sources; Bextlike >= 33; no optical confirmation.",
+    },
+    "act_dr6": {
+        "label": "ACT DR6 SZ (fixed S/N > 5.5)",
+        "type": "SZ",
+        "region": "Spring+Fall",
+        "selection": "Nemo v1.0 optimal candidates; fixed_SNR > 5.5; no confirmation or post-flags cut.",
+    },
+    "chen2024": {
+        "label": "Chen+2024 WL (S/N >= 4.7)",
+        "type": "WL Shear",
+        "region": "Full Survey",
+        "selection": "Published shear peaks; snr >= 4.7; native peak centers.",
+    },
+    "des_y3_redmapper": {
+        "label": "DES Y3 redMaPPer",
+        "type": "Optical",
+        "region": "Fall",
+        "selection": "v6.4.22+2; official lgt20 selection; z_lambda in comparison interval.",
+    },
+    "des_y6_wazp": {
+        "label": "DES Y6 WaZP",
+        "type": "Optical",
+        "region": "Fall",
+        "selection": "v5.0.12.6801; IN_COSMO and NGALS >= 25; ZPHOT in comparison interval.",
+    },
+    "kids_dr3_amico": {
+        "label": "KiDS DR3 AMICO",
+        "type": "Optical",
+        "region": "Spring",
+        "selection": "Published richness >= 15 and S/N >= 3.5 subset; zfix in comparison interval.",
+    },
 }
+
+# Exactly one likelihood or S/N threshold per physical probe.
+EXTERNAL_REFERENCE_SELECTIONS = (
+    (
+        "erass3",
+        "erass3_main.fits.gz",
+        {"IAUNAME": "name", "RA": "ra", "DEC": "dec", "EXT_LIKE": "quality"},
+        "quality",
+        6.0,
+        False,
+    ),
+    (
+        "efeds",
+        "efeds_clusters.fits.gz",
+        {"ID_SRC": "name", "RA": "ra", "DEC": "dec", "EXT_LIKE": "quality"},
+        "quality",
+        6.0,
+        False,
+    ),
+    (
+        "xxl_dr2",
+        "xxl_dr2_sources.fits",
+        {"Xcatname": "name", "RABdeg": "ra", "DEBdeg": "dec", "Bextlike": "quality"},
+        "quality",
+        33.0,
+        False,
+    ),
+    (
+        "act_dr6",
+        "act_dr6_candidates.fits",
+        {"name": "name", "RADeg": "ra", "decDeg": "dec", "fixed_SNR": "snr"},
+        "snr",
+        5.5,
+        True,
+    ),
+    (
+        "chen2024",
+        "chen2024_shear_selected_clusters.parquet",
+        {"peak_id": "name", "ra": "ra", "dec": "dec", "snr": "snr"},
+        "snr",
+        4.7,
+        False,
+    ),
+)
 
 
 def standardize_reference(frame: pd.DataFrame, columns: dict[str, str]) -> pd.DataFrame:
@@ -109,8 +166,8 @@ def standardize_reference(frame: pd.DataFrame, columns: dict[str, str]) -> pd.Da
     return result
 
 
-def read_public_references(raw_dir: Path) -> dict[str, pd.DataFrame]:
-    """Read current public releases and join optical follow-up by unique source ID."""
+def read_optical_references(raw_dir: Path) -> dict[str, pd.DataFrame]:
+    """Read the three optical releases with their published richness selections."""
     wazp = read_catalog_frame(
         raw_dir / "des_y6_wazp.fits",
         (
@@ -135,112 +192,6 @@ def read_public_references(raw_dir: Path) -> dict[str, pd.DataFrame]:
             "SNR": "snr",
             "NGALS": "richness",
             "COVER_FRAC_1MPC": "quality",
-        },
-    )
-    xxl = read_catalog_frame(
-        raw_dir / "xxl_dr2.fits", ("XLSSC", "RAJ2000", "DEJ2000", "z", "Class")
-    )
-    xxl_frame = standardize_reference(
-        xxl,
-        {
-            "XLSSC": "name",
-            "RAJ2000": "ra",
-            "DEJ2000": "dec",
-            "z": "z",
-            "Class": "quality",
-        },
-    )
-    xxl_frame["name"] = "XLSSC " + xxl_frame["name"]
-    act = read_catalog_frame(raw_dir / "act_dr6.fits")
-    act_frame = standardize_reference(
-        act,
-        {
-            "name": "name",
-            "RADeg": "ra",
-            "decDeg": "dec",
-            "redshift": "z",
-            "SNR": "snr",
-            "M500c": "mass",
-            "opt_RADeg": "ra_opt",
-            "opt_decDeg": "dec_opt",
-            "flags": "quality",
-        },
-    )
-    act_frame["mass_definition"] = "M500c [1e14 Msun]"
-    erass = read_catalog_frame(
-        raw_dir / "erass1_primary.tgz",
-        (
-            "DETUID",
-            "NAME",
-            "RA",
-            "DEC",
-            "BEST_Z",
-            "EXT_LIKE",
-            "M500",
-            "PCONT",
-        ),
-    )
-    erass_opt = read_catalog_frame(
-        raw_dir / "erass1_optical.tgz",
-        (
-            "DETUID",
-            "RA_OPT",
-            "DEC_OPT",
-            "LAMBDA_NORM",
-        ),
-    )
-    erass = erass.merge(erass_opt, on="DETUID", how="left", validate="one_to_one")
-    erass_frame = standardize_reference(
-        erass,
-        {
-            "NAME": "name",
-            "RA": "ra",
-            "DEC": "dec",
-            "BEST_Z": "z",
-            "M500": "mass",
-            "RA_OPT": "ra_opt",
-            "DEC_OPT": "dec_opt",
-            "LAMBDA_NORM": "richness",
-            "EXT_LIKE": "quality",
-            "PCONT": "contamination",
-        },
-    )
-    erass_frame["mass_definition"] = "M500 [1e13 Msun]"
-    efeds = read_catalog_frame(
-        raw_dir / "efeds_clusters.fits.gz",
-        (
-            "ID_SRC",
-            "RA",
-            "DEC",
-            "z",
-            "SNR_MAX",
-        ),
-    )
-    efeds_opt = read_catalog_frame(
-        raw_dir / "efeds_optical.fits.gz",
-        (
-            "ID_SRC",
-            "Name",
-            "F_CONT_BEST_COMB",
-            "LAMBDA_BEST_COMB",
-            "RA_OPTCEN_BEST_COMB",
-            "DEC_OPTCEN_BEST_COMB",
-        ),
-    )
-    efeds = efeds.merge(efeds_opt, on="ID_SRC", how="left", validate="one_to_one")
-    efeds = efeds.loc[efeds["F_CONT_BEST_COMB"].between(0, 0.3, inclusive="left")]
-    efeds_frame = standardize_reference(
-        efeds,
-        {
-            "Name": "name",
-            "RA": "ra",
-            "DEC": "dec",
-            "z": "z",
-            "SNR_MAX": "snr",
-            "LAMBDA_BEST_COMB": "richness",
-            "F_CONT_BEST_COMB": "contamination",
-            "RA_OPTCEN_BEST_COMB": "ra_opt",
-            "DEC_OPTCEN_BEST_COMB": "dec_opt",
         },
     )
     kids = read_catalog_frame(
@@ -290,13 +241,7 @@ def read_public_references(raw_dir: Path) -> dict[str, pd.DataFrame]:
         },
     )
     return dict(
-        des_y6_wazp=wazp_frame,
-        xxl_dr2=xxl_frame,
-        act_dr6=act_frame,
-        erass1=erass_frame,
-        efeds=efeds_frame,
-        kids_dr3_amico=kids_frame,
-        des_y3_redmapper=des_frame,
+        des_y3_redmapper=des_frame, des_y6_wazp=wazp_frame, kids_dr3_amico=kids_frame
     )
 
 
@@ -313,173 +258,24 @@ def clip_reference_to_mask(frame: pd.DataFrame, mask) -> pd.DataFrame:
     return clean.loc[np.asarray(inside, dtype=bool)].reset_index(drop=True)
 
 
-def prepare_reference_catalogs(
-    root: Path, downloads: tuple[tuple[str, str], ...]
-) -> pd.DataFrame:
-    """Download, normalize, mask once, and persist references with provenance."""
-    directory = root / "data/reference_catalogs"
-    for name, url in downloads:
-        download_public_catalog(url, directory / "raw" / name)
-    logging.info("Normalizing public cluster catalogs")
-    frames = read_public_references(directory / "raw")
+def build_external_reference_catalogs(
+    root: Path, redshift_range: tuple[float, float]
+) -> dict[str, pd.DataFrame]:
+    """Load five instrument-selected samples and three optical references.
+
+    Physical probes retain unconfirmed detections and use candidate lens redshifts
+    for matching apertures. Optical references retain the comparison z interval.
+    No optical counterpart, richness, redshift, or post-flag is used to select the
+    physical probes; their native X-ray, SZ, or shear peak centers are preserved.
+    """
+    raw_dir = root / "data/reference_catalogs/raw"
+    for filename, url in PUBLIC_DOWNLOADS:
+        download_public_catalog(url, raw_dir / filename)
+    url, member, filename = ACT_CANDIDATE_ARCHIVE
+    download_archive_catalog(url, member, raw_dir / filename)
     mask = load_y3_mask(root)
     if mask.nside_sparse != 8192 or mask.dtype != np.dtype(bool):
         raise ValueError("Expected the boolean NSIDE=8192 HSC Y3 shape mask")
-    records = []
-    for key, frame in frames.items():
-        clipped = clip_reference_to_mask(frame, mask)
-        clipped.to_parquet(directory / f"{key}_y3.parquet", index=False)
-        counts = {
-            field: int(
-                in_field(
-                    clipped["ra"].to_numpy(), clipped["dec"].to_numpy(), field
-                ).sum()
-            )
-            for field in CANONICAL_FIELDS
-        }
-        records.append(
-            dict(catalog=key, source_rows=len(frame), mask_rows=len(clipped), **counts)
-        )
-        logging.info(
-            "%s: %d selected source rows -> %d Y3 centers",
-            key,
-            len(frame),
-            len(clipped),
-        )
-    manifest = dict(
-        mask=Y3_MASK_PATH,
-        nside=8192,
-        mask_sha256=hashlib.sha256((root / Y3_MASK_PATH).read_bytes()).hexdigest(),
-        downloads=[dict(file=name, url=url) for name, url in downloads],
-        catalogs={
-            key: dict(**REFERENCE_CATALOGS[key], **record)
-            for key, record in zip(frames, records)
-        },
-    )
-    (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    return pd.DataFrame(records)
-
-
-def load_reference_catalogs(
-    root: Path, keys: tuple[str, ...], redshift_range: tuple[float, float]
-) -> dict[str, pd.DataFrame]:
-    """Load masked Parquet references and apply the comparison redshift interval."""
-    directory = root / "data/reference_catalogs"
-    if not (directory / "manifest.json").exists():
-        raise FileNotFoundError(
-            "Run scripts/data_process/prepare_reference_catalogs.py first"
-        )
-    manifest = json.loads((directory / "manifest.json").read_text())
-    fingerprint = hashlib.sha256((root / Y3_MASK_PATH).read_bytes()).hexdigest()
-    if manifest["mask_sha256"] != fingerprint:
-        raise ValueError("Y3 mask changed; rerun prepare_reference_catalogs.py")
-    catalogs = {}
-    for key in keys:
-        frame = read_catalog_frame(directory / f"{key}_y3.parquet")
-        selected = frame.loc[frame["z"].between(*redshift_range)].reset_index(drop=True)
-        selected.attrs = manifest["catalogs"][key]
-        catalogs[key] = selected
-        logging.info(
-            "%s: %d Y3 references at z in %s", key, len(selected), redshift_range
-        )
-    return catalogs
-
-
-EXTERNAL_REFERENCE_METADATA = {
-    "erass3": {
-        "label": "eRASS:3 (EXT_LIKE >= 6)",
-        "type": "X-ray",
-        "region": "Spring",
-        "selection": "Main v1.3; EXT_LIKE >= 6; native X-ray centers; no optical join.",
-    },
-    "efeds": {
-        "label": "eFEDS (EXT_LIKE >= 6)",
-        "type": "X-ray",
-        "region": "GAMA09H",
-        "selection": "Liu v3.2; EXT_LIKE >= 6; no MCMF selection.",
-    },
-    "xxl_dr2": {
-        "label": "XXL DR2 C1/C2",
-        "type": "X-ray",
-        "region": "XMM",
-        "selection": "Published confirmed C1/C2 sample; no additional selection.",
-    },
-    "act_dr6": {
-        "label": "ACT DR6 SZ (fixed S/N > 5.5)",
-        "type": "SZ",
-        "region": "Spring+Fall",
-        "selection": "Published optically confirmed v1.0; fixed_SNR > 5.5.",
-    },
-    "chen2024": {
-        "label": "Chen+2024 WL (S/N >= 4.7)",
-        "type": "WL Shear",
-        "region": "Full Survey",
-        "selection": "Published shear peaks; snr >= 4.7; native peak centers.",
-    },
-}
-
-EXTERNAL_REFERENCE_DOWNLOAD = (
-    "erass3_main.fits.gz",
-    "https://erosita.mpe.mpg.de/dr2/AllSkySurveyData_dr2/Catalogues_dr2/"
-    "RamosM_DR2/eRASS3_Main_v1.3.fits.gz",
-)
-
-# Each release has one instrument selection; XXL provides no likelihood or S/N.
-EXTERNAL_REFERENCE_SELECTIONS = (
-    (
-        "erass3",
-        "erass3_main.fits.gz",
-        {"IAUNAME": "name", "RA": "ra", "DEC": "dec", "EXT_LIKE": "quality"},
-        "quality",
-        6.0,
-        False,
-    ),
-    (
-        "efeds",
-        "efeds_clusters.fits.gz",
-        {"ID_SRC": "name", "RA": "ra", "DEC": "dec", "EXT_LIKE": "quality"},
-        "quality",
-        6.0,
-        False,
-    ),
-    (
-        "xxl_dr2",
-        "xxl_dr2.fits",
-        {"XLSSC": "name", "RAJ2000": "ra", "DEJ2000": "dec", "Class": "quality"},
-        None,
-        None,
-        False,
-    ),
-    (
-        "act_dr6",
-        "act_dr6.fits",
-        {"name": "name", "RADeg": "ra", "decDeg": "dec", "fixed_SNR": "snr"},
-        "snr",
-        5.5,
-        True,
-    ),
-    (
-        "chen2024",
-        "chen2024_shear_selected_clusters.parquet",
-        {"peak_id": "name", "ra": "ra", "dec": "dec", "snr": "snr"},
-        "snr",
-        4.7,
-        False,
-    ),
-)
-
-
-def load_external_reference_catalogs(root: Path) -> dict[str, pd.DataFrame]:
-    """Load one sample per instrument, without additional optical or redshift cuts.
-
-    ACT and XXL retain the confirmation requirements of their published releases.
-    All matching apertures use candidate redshifts: reference z is explicitly NaN.
-    Missing inputs raise rather than silently changing the benchmark denominator.
-    """
-    raw_dir = root / "data/reference_catalogs/raw"
-    filename, url = EXTERNAL_REFERENCE_DOWNLOAD
-    download_public_catalog(url, raw_dir / filename)
-    mask = load_y3_mask(root)
     catalogs = {}
     for (
         key,
@@ -490,16 +286,13 @@ def load_external_reference_catalogs(root: Path) -> dict[str, pd.DataFrame]:
         strict,
     ) in EXTERNAL_REFERENCE_SELECTIONS:
         directory = root / "data" if key == "chen2024" else raw_dir
+        logging.info("Loading %s instrument detections", key)
         frame = read_catalog_frame(directory / filename, tuple(columns))
         standardized = standardize_reference(frame, columns)
-        clipped = clip_reference_to_mask(standardized, mask)
-        if metric is not None:
-            values = clipped[metric]
-            selected = values > threshold if strict else values >= threshold
-            clipped = clipped.loc[selected].reset_index(drop=True)
-        if key == "xxl_dr2":
-            clipped["name"] = "XLSSC " + clipped["name"]
-        elif key in ("chen2024", "efeds"):
+        values = standardized[metric]
+        selected = values > threshold if strict else values >= threshold
+        clipped = clip_reference_to_mask(standardized.loc[selected], mask)
+        if key in ("chen2024", "efeds"):
             clipped["name"] = (
                 ("Chen+2024" if key == "chen2024" else "eFEDS") + " #" + clipped["name"]
             )
@@ -508,5 +301,85 @@ def load_external_reference_catalogs(root: Path) -> dict[str, pd.DataFrame]:
         catalogs[key] = clipped
         logging.info(
             "%s: %d Y3 references; %s", key, len(clipped), clipped.attrs["selection"]
+        )
+    for key, frame in read_optical_references(raw_dir).items():
+        selected = frame.loc[frame["z"].between(*redshift_range)]
+        clipped = clip_reference_to_mask(selected, mask)
+        clipped.attrs = EXTERNAL_REFERENCE_METADATA[key].copy()
+        catalogs[key] = clipped
+        logging.info(
+            "%s: %d Y3 optical references at z in %s", key, len(clipped), redshift_range
+        )
+    return catalogs
+
+
+def prepare_reference_catalogs(
+    root: Path,
+    redshift_range: tuple[float, float],
+) -> pd.DataFrame:
+    """Persist the current eight masked references and explicit selection provenance."""
+    directory = root / "data/reference_catalogs"
+    frames = build_external_reference_catalogs(root, redshift_range)
+    records = []
+    for key, frame in frames.items():
+        frame.to_parquet(directory / f"{key}_y3.parquet", index=False)
+        counts = {
+            field: int(
+                in_field(frame["ra"].to_numpy(), frame["dec"].to_numpy(), field).sum()
+            )
+            for field in CANONICAL_FIELDS
+        }
+        records.append(dict(catalog=key, mask_rows=len(frame), **counts))
+    manifest = dict(
+        mask=Y3_MASK_PATH,
+        nside=8192,
+        mask_sha256=hashlib.sha256((root / Y3_MASK_PATH).read_bytes()).hexdigest(),
+        optical_redshift_range=redshift_range,
+        downloads=[dict(file=name, url=url) for name, url in PUBLIC_DOWNLOADS],
+        act_archive=dict(url=ACT_CANDIDATE_ARCHIVE[0], member=ACT_CANDIDATE_ARCHIVE[1]),
+        catalogs={
+            key: dict(**EXTERNAL_REFERENCE_METADATA[key], **record)
+            for key, record in zip(frames, records)
+        },
+    )
+    (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    return pd.DataFrame(records)
+
+
+def load_external_reference_catalogs(
+    root: Path, redshift_range: tuple[float, float]
+) -> dict[str, pd.DataFrame]:
+    """Load the eight prepared Parquet references and verify their selection provenance."""
+    directory = root / "data/reference_catalogs"
+    manifest_path = directory / "manifest.json"
+    if not manifest_path.exists():
+        raise FileNotFoundError(
+            "Run scripts/data_process/prepare_reference_catalogs.py first"
+        )
+    manifest = json.loads(manifest_path.read_text())
+    fingerprint = hashlib.sha256((root / Y3_MASK_PATH).read_bytes()).hexdigest()
+    if manifest["mask_sha256"] != fingerprint:
+        raise ValueError("Y3 mask changed; rerun prepare_reference_catalogs.py")
+    if tuple(manifest["optical_redshift_range"]) != redshift_range:
+        raise ValueError(
+            "Optical redshift interval changed; rerun prepare_reference_catalogs.py"
+        )
+    if tuple(manifest["catalogs"]) != tuple(EXTERNAL_REFERENCE_METADATA):
+        raise ValueError(
+            "Expected five physical probes and three optical references; rerun preparation"
+        )
+    catalogs = {}
+    for key, metadata in EXTERNAL_REFERENCE_METADATA.items():
+        if manifest["catalogs"][key]["selection"] != metadata["selection"]:
+            raise ValueError(
+                f"{key} selection changed; rerun prepare_reference_catalogs.py"
+            )
+        frame = read_catalog_frame(directory / f"{key}_y3.parquet")
+        if len(frame) != manifest["catalogs"][key]["mask_rows"]:
+            raise ValueError(f"{key} cached row count changed; rerun preparation")
+        frame.attrs = metadata.copy()
+        catalogs[key] = frame
+        logging.info(
+            "%s: %d prepared Y3 references; %s", key, len(frame), metadata["selection"]
         )
     return catalogs

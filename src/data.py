@@ -86,6 +86,114 @@ def download_public_catalog(url: str, destination: Path) -> Path:
     return destination
 
 
+ARCHIVE_CHUNK_BYTES = 8 * 1024 * 1024
+ARCHIVE_DOWNLOAD_WORKERS = 16
+
+
+def download_archive_range(url: str, destination: Path, start: int, stop: int) -> None:
+    """Write one disjoint HTTP byte range, retrying transient transfer failures."""
+    import requests
+
+    for attempt in range(3):
+        try:
+            with requests.get(
+                url,
+                headers={"Range": f"bytes={start}-{stop - 1}"},
+                stream=True,
+                timeout=(20, 120),
+            ) as response:
+                response.raise_for_status()
+                if response.status_code != 206:
+                    raise ValueError("Archive server must support HTTP byte ranges")
+                content_range = response.headers.get("Content-Range", "")
+                if not content_range.startswith(f"bytes {start}-{stop - 1}/"):
+                    raise ValueError(f"Unexpected archive byte range: {content_range}")
+                written = 0
+                with destination.open("r+b") as handle:
+                    handle.seek(start)
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        written += len(chunk)
+                        if written > stop - start:
+                            raise ValueError(
+                                "Archive byte range exceeds requested length"
+                            )
+                        handle.write(chunk)
+                if written != stop - start:
+                    raise requests.exceptions.ConnectionError(
+                        "Incomplete archive byte range"
+                    )
+                return
+        except requests.exceptions.RequestException as error:
+            if attempt == 2:
+                raise
+            logging.warning("Retrying archive range %d:%d: %s", start, stop, error)
+
+
+def download_archive_catalog(url: str, member_name: str, destination: Path) -> Path:
+    """Cache one exact FITS member; temporary archive bytes are removed on exit."""
+    import shutil
+    import tarfile
+    import tempfile
+    from concurrent.futures import ThreadPoolExecutor
+
+    import requests
+
+    if destination.exists():
+        return destination
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_suffix(destination.suffix + ".part")
+    try:
+        with requests.head(url, timeout=(20, 120), allow_redirects=True) as response:
+            response.raise_for_status()
+            size = int(response.headers["Content-Length"])
+        logging.info("Downloading archive ranges for %s (%d bytes)", member_name, size)
+        with tempfile.TemporaryDirectory(prefix="hsc-wl-archive-") as temporary:
+            archive_path = Path(temporary) / "catalogs.tgz"
+            with archive_path.open("wb") as handle:
+                handle.truncate(size)
+            ranges = tuple(
+                (start, min(start + ARCHIVE_CHUNK_BYTES, size))
+                for start in range(0, size, ARCHIVE_CHUNK_BYTES)
+            )
+            with ThreadPoolExecutor(max_workers=ARCHIVE_DOWNLOAD_WORKERS) as executor:
+                futures = [
+                    executor.submit(
+                        download_archive_range, url, archive_path, start, stop
+                    )
+                    for start, stop in ranges
+                ]
+                try:
+                    for index, future in enumerate(futures, 1):
+                        future.result()
+                        if index % 128 == 0:
+                            logging.info(
+                                "Archive ranges complete: %d/%d", index, len(futures)
+                            )
+                except Exception:
+                    for future in futures:
+                        future.cancel()
+                    raise
+            logging.info("Extracting %s", member_name)
+            with tarfile.open(archive_path) as archive:
+                member = archive.getmember(member_name)
+                if not member.isfile():
+                    raise ValueError(
+                        f"Archive member is not a regular file: {member_name}"
+                    )
+                with (
+                    archive.extractfile(member) as source,
+                    partial.open("wb") as target,
+                ):
+                    shutil.copyfileobj(source, target)
+                # Read through the gzip footer to verify the archive CRC.
+                while archive.fileobj.read(8 * 1024 * 1024):
+                    pass
+            partial.replace(destination)
+    finally:
+        partial.unlink(missing_ok=True)
+    return destination
+
+
 def load_s23b_scalar_sample(
     base_dir: Path,
     fields: tuple[str, ...],

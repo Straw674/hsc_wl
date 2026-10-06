@@ -19,11 +19,11 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from hsc_wl.reference_catalogs import PUBLIC_DOWNLOADS, prepare_reference_catalogs
+from hsc_wl.reference_catalogs import prepare_reference_catalogs
 from initial import *
 
-# %% [Stage 1: Download and Mask Public Cluster References]
+# %% [Stage 1: Prepare Eight External References]
 
-DOWNLOADS = PUBLIC_DOWNLOADS
-reference_summary = prepare_reference_catalogs(project_root, DOWNLOADS)
+REDSHIFT_RANGE = (0.19, 0.52)
+reference_summary = prepare_reference_catalogs(project_root, REDSHIFT_RANGE)
 print(reference_summary.to_string(index=False))
