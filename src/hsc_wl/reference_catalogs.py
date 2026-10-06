@@ -385,169 +385,128 @@ def load_reference_catalogs(
     return catalogs
 
 
-PURE_REFERENCE_METADATA = {
-    "erass1_ext3": {
-        "label": "eRASS1 (EXT>=3 Complete)",
+EXTERNAL_REFERENCE_METADATA = {
+    "erass3": {
+        "label": "eRASS:3 (EXT_LIKE >= 6)",
         "type": "X-ray",
         "region": "Spring",
+        "selection": "Main v1.3; EXT_LIKE >= 6; native X-ray centers; no optical join.",
     },
-    "erass1_ext6": {
-        "label": "eRASS1 (EXT>=6 Standard)",
-        "type": "X-ray",
-        "region": "Spring",
-    },
-    "erass1_ext10": {
-        "label": "eRASS1 (EXT>=10 Pure)",
-        "type": "X-ray",
-        "region": "Spring",
-    },
-    "efeds_raw": {
-        "label": "eFEDS Raw X-ray",
+    "efeds": {
+        "label": "eFEDS (EXT_LIKE >= 6)",
         "type": "X-ray",
         "region": "GAMA09H",
+        "selection": "Liu v3.2; EXT_LIKE >= 6; no MCMF selection.",
     },
-    "xxl_dr2_pure": {
+    "xxl_dr2": {
         "label": "XXL DR2 C1/C2",
         "type": "X-ray",
         "region": "XMM",
+        "selection": "Published confirmed C1/C2 sample; no additional selection.",
     },
-    "act_dr6_pure": {
-        "label": "ACT DR6 SZ All",
+    "act_dr6": {
+        "label": "ACT DR6 SZ (fixed S/N > 5.5)",
         "type": "SZ",
         "region": "Spring+Fall",
+        "selection": "Published optically confirmed v1.0; fixed_SNR > 5.5.",
     },
-    "act_dr6_snr55": {
-        "label": "ACT DR6 SZ (SNR>=5.5)",
-        "type": "SZ",
-        "region": "Spring+Fall",
-    },
-    "chen2024_pure": {
-        "label": "Chen+2024 WL (Pure)",
+    "chen2024": {
+        "label": "Chen+2024 WL (S/N >= 4.7)",
         "type": "WL Shear",
         "region": "Full Survey",
+        "selection": "Published shear peaks; snr >= 4.7; native peak centers.",
     },
 }
 
-PURE_REFERENCE_ORDER = [
-    # X-ray
-    "erass1_ext3",
-    "erass1_ext6",
-    "erass1_ext10",
-    "efeds_raw",
-    "xxl_dr2_pure",
-    # SZ
-    "act_dr6_pure",
-    "act_dr6_snr55",
-    # WL
-    "chen2024_pure",
-]
+EXTERNAL_REFERENCE_DOWNLOAD = (
+    "erass3_main.fits.gz",
+    "https://erosita.mpe.mpg.de/dr2/AllSkySurveyData_dr2/Catalogues_dr2/"
+    "RamosM_DR2/eRASS3_Main_v1.3.fits.gz",
+)
+
+# Each release has one instrument selection; XXL provides no likelihood or S/N.
+EXTERNAL_REFERENCE_SELECTIONS = (
+    (
+        "erass3",
+        "erass3_main.fits.gz",
+        {"IAUNAME": "name", "RA": "ra", "DEC": "dec", "EXT_LIKE": "quality"},
+        "quality",
+        6.0,
+        False,
+    ),
+    (
+        "efeds",
+        "efeds_clusters.fits.gz",
+        {"ID_SRC": "name", "RA": "ra", "DEC": "dec", "EXT_LIKE": "quality"},
+        "quality",
+        6.0,
+        False,
+    ),
+    (
+        "xxl_dr2",
+        "xxl_dr2.fits",
+        {"XLSSC": "name", "RAJ2000": "ra", "DEJ2000": "dec", "Class": "quality"},
+        None,
+        None,
+        False,
+    ),
+    (
+        "act_dr6",
+        "act_dr6.fits",
+        {"name": "name", "RADeg": "ra", "decDeg": "dec", "fixed_SNR": "snr"},
+        "snr",
+        5.5,
+        True,
+    ),
+    (
+        "chen2024",
+        "chen2024_shear_selected_clusters.parquet",
+        {"peak_id": "name", "ra": "ra", "dec": "dec", "snr": "snr"},
+        "snr",
+        4.7,
+        False,
+    ),
+)
 
 
-def load_pure_reference_catalogs(
-    root: Path,
-    keys: tuple[str, ...] | None = None,
-    ext_like_thresholds: tuple[float, ...] = (3.0, 6.0, 10.0),
-    act_snr_threshold: float = 5.5,
-) -> dict[str, pd.DataFrame]:
-    """Load pure X-ray, SZ, and WL references clipped to Y3 mask without optical or redshift cuts.
+def load_external_reference_catalogs(root: Path) -> dict[str, pd.DataFrame]:
+    """Load one sample per instrument, without additional optical or redshift cuts.
 
-    Coordinates are native instrument/survey centers. The 'z' column is explicitly set
-    to NaN so that downstream matching dynamically converts physical apertures using
-    the candidate optical cluster's redshift.
+    ACT and XXL retain the confirmation requirements of their published releases.
+    All matching apertures use candidate redshifts: reference z is explicitly NaN.
+    Missing inputs raise rather than silently changing the benchmark denominator.
     """
     raw_dir = root / "data/reference_catalogs/raw"
+    filename, url = EXTERNAL_REFERENCE_DOWNLOAD
+    download_public_catalog(url, raw_dir / filename)
     mask = load_y3_mask(root)
-    all_catalogs = {}
-
-    # 1. Chen et al. (2024) blind WL shear peaks
-    chen_path = root / "data/chen2024_shear_selected_clusters.parquet"
-    if chen_path.exists():
-        chen_df = read_catalog_frame(chen_path)
-        chen_clipped = clip_reference_to_mask(chen_df, mask)
-        chen_clipped["name"] = "Chen+2024 #" + chen_clipped["peak_id"].astype(str)
-        chen_clipped["z"] = np.nan
-        all_catalogs["chen2024_pure"] = chen_clipped
-
-    # 2. eFEDS raw X-ray candidates (Liu et al. 2022, no MCMF cut)
-    efeds_path = raw_dir / "efeds_clusters.fits.gz"
-    if efeds_path.exists():
-        ef_raw = read_catalog_frame(efeds_path, ("ID_SRC", "RA", "DEC", "SNR_MAX"))
-        ef_std = standardize_reference(
-            ef_raw,
-            {"ID_SRC": "name", "RA": "ra", "DEC": "dec", "SNR_MAX": "snr"},
+    catalogs = {}
+    for (
+        key,
+        filename,
+        columns,
+        metric,
+        threshold,
+        strict,
+    ) in EXTERNAL_REFERENCE_SELECTIONS:
+        directory = root / "data" if key == "chen2024" else raw_dir
+        frame = read_catalog_frame(directory / filename, tuple(columns))
+        standardized = standardize_reference(frame, columns)
+        clipped = clip_reference_to_mask(standardized, mask)
+        if metric is not None:
+            values = clipped[metric]
+            selected = values > threshold if strict else values >= threshold
+            clipped = clipped.loc[selected].reset_index(drop=True)
+        if key == "xxl_dr2":
+            clipped["name"] = "XLSSC " + clipped["name"]
+        elif key in ("chen2024", "efeds"):
+            clipped["name"] = (
+                ("Chen+2024" if key == "chen2024" else "eFEDS") + " #" + clipped["name"]
+            )
+        clipped["z"] = np.nan
+        clipped.attrs = EXTERNAL_REFERENCE_METADATA[key].copy()
+        catalogs[key] = clipped
+        logging.info(
+            "%s: %d Y3 references; %s", key, len(clipped), clipped.attrs["selection"]
         )
-        ef_clipped = clip_reference_to_mask(ef_std, mask)
-        ef_clipped["name"] = "eFEDS #" + ef_clipped["name"].astype(str)
-        ef_clipped["z"] = np.nan
-        all_catalogs["efeds_raw"] = ef_clipped
-
-    # 3. eRASS1 extended X-ray sources (Bulbul et al. 2024, no eROMaPPer optical cut)
-    erass_path = raw_dir / "erass1_primary.tgz"
-    if erass_path.exists():
-        er_raw = read_catalog_frame(
-            erass_path, ("DETUID", "NAME", "RA", "DEC", "EXT_LIKE", "DET_LIKE_0")
-        )
-        er_std = standardize_reference(
-            er_raw,
-            {"NAME": "name", "RA": "ra", "DEC": "dec", "DET_LIKE_0": "snr"},
-        )
-        er_std["EXT_LIKE"] = er_raw["EXT_LIKE"]
-        er_clipped = clip_reference_to_mask(er_std, mask)
-        er_clipped["z"] = np.nan
-        for thr in ext_like_thresholds:
-            thr_int = int(thr) if thr == int(thr) else thr
-            sub = er_clipped.loc[er_clipped["EXT_LIKE"] >= thr].reset_index(drop=True)
-            all_catalogs[f"erass1_ext{thr_int}"] = sub
-
-    # 4. ACT DR6 SZ catalog (no redshift cut; all and high SNR)
-    act_path = raw_dir / "act_dr6.fits"
-    if act_path.exists():
-        act_raw = read_catalog_frame(
-            act_path, ("name", "RADeg", "decDeg", "SNR", "M500c", "flags")
-        )
-        act_std = standardize_reference(
-            act_raw,
-            {
-                "name": "name",
-                "RADeg": "ra",
-                "decDeg": "dec",
-                "SNR": "snr",
-                "M500c": "mass",
-                "flags": "quality",
-            },
-        )
-        act_clipped = clip_reference_to_mask(act_std, mask)
-        act_clipped["z"] = np.nan
-        all_catalogs["act_dr6_pure"] = act_clipped
-        all_catalogs["act_dr6_snr55"] = act_clipped.loc[
-            act_clipped["snr"] >= act_snr_threshold
-        ].reset_index(drop=True)
-
-    # 5. XXL DR2 C1/C2 (no redshift cut)
-    xxl_path = raw_dir / "xxl_dr2.fits"
-    if xxl_path.exists():
-        xxl_raw = read_catalog_frame(xxl_path, ("XLSSC", "RAJ2000", "DEJ2000", "Class"))
-        xxl_std = standardize_reference(
-            xxl_raw,
-            {
-                "XLSSC": "name",
-                "RAJ2000": "ra",
-                "DEJ2000": "dec",
-                "Class": "quality",
-            },
-        )
-        xxl_clipped = clip_reference_to_mask(xxl_std, mask)
-        xxl_clipped["name"] = "XLSSC " + xxl_clipped["name"].astype(str)
-        xxl_clipped["z"] = np.nan
-        all_catalogs["xxl_dr2_pure"] = xxl_clipped
-
-    target_keys = keys if keys is not None else tuple(all_catalogs.keys())
-    result = {}
-    for k in target_keys:
-        if k in all_catalogs:
-            df = all_catalogs[k]
-            if k in PURE_REFERENCE_METADATA:
-                df.attrs = PURE_REFERENCE_METADATA[k]
-            result[k] = df
-            logging.info("%s: %d Y3 pure references (no optical/z cuts)", k, len(df))
-    return result
+    return catalogs
