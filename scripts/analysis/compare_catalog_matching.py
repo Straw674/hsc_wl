@@ -135,6 +135,17 @@ def compute_pairwise_matches(
     return df_match
 
 
+def is_homologous_pair(name_i: str, name_j: str) -> bool:
+    """Determine if two catalogs belong to the same method/family or are diagonal."""
+    if name_i == name_j:
+        return True
+    families = ("rz_diff", "yang21", "clumpr")
+    for fam in families:
+        if name_i.startswith(fam) and name_j.startswith(fam):
+            return True
+    return False
+
+
 def plot_matching_heatmap(
     df_match: pd.DataFrame,
     save_path: Path,
@@ -163,18 +174,23 @@ def plot_matching_heatmap(
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     data = df_match.values
-    labels = [names_map.get(k, k) for k in df_match.index]
+    cat_keys = list(df_match.index)
+    labels = [names_map.get(k, k) for k in cat_keys]
 
     # Row i is the source catalog, cell (i, j) is the fraction of row i matched to column j
     row_totals = np.diag(data)
     row_totals_safe = np.where(row_totals == 0, 1, row_totals)
     data_pct = (data / row_totals_safe[:, None]) * 100.0
 
-    mask = np.eye(n, dtype=bool)
-    off_diag = data_pct[~mask]
-    if len(off_diag) > 0:
-        vmin = max(0.0, float(np.floor(off_diag.min() / 5.0) * 5.0))
-        vmax = min(100.0, float(np.ceil(off_diag.max() / 5.0) * 5.0))
+    mask = np.zeros((n, n), dtype=bool)
+    for i in range(n):
+        for j in range(n):
+            mask[i, j] = is_homologous_pair(cat_keys[i], cat_keys[j])
+
+    cross_method_vals = data_pct[~mask]
+    if len(cross_method_vals) > 0:
+        vmin = max(0.0, float(np.floor(cross_method_vals.min() / 5.0) * 5.0))
+        vmax = min(100.0, float(np.ceil(cross_method_vals.max() / 5.0) * 5.0))
         if vmin >= vmax:
             vmax = min(100.0, vmin + 5.0)
     else:
@@ -188,7 +204,7 @@ def plot_matching_heatmap(
     im = ax.imshow(data_pct_masked, cmap=cmap, aspect="equal", norm=norm)
 
     cbar = fig.colorbar(im, ax=ax, shrink=0.82)
-    cbar.set_label("Match Fraction (%)", fontsize=10.5)
+    cbar.set_label("Cross-Method Match Fraction (%)", fontsize=10.5)
 
     ax.set_xticks(np.arange(n))
     ax.set_yticks(np.arange(n))
@@ -211,8 +227,11 @@ def plot_matching_heatmap(
             pct = data_pct[i, j]
             total = row_totals[i]
 
-            if i == j:
-                text = f"{val}\n(100.0%)"
+            if mask[i, j]:
+                if i == j:
+                    text = f"{val}\n(100.0%)"
+                else:
+                    text = f"{val}/{total}\n({pct:.1f}%)"
                 text_color = "#4B5563"
             else:
                 text = f"{val}/{total}\n({pct:.1f}%)"
@@ -708,6 +727,7 @@ def plot_tier_pairwise_heatmaps(
     tier_pairwise_dict: dict[int, pd.DataFrame],
     save_path: Path,
     r_phys_mpc_h: float = 0.5,
+    catalog_order: list[str] | None = None,
 ):
     """Plot 2x2 grid of pairwise match fractions across proxy tiers."""
     from matplotlib.colors import Normalize
@@ -726,14 +746,36 @@ def plot_tier_pairwise_heatmaps(
     label_fs = 9.0 if n <= 8 else (8.0 if n <= 12 else 7.0)
     cell_fs = 9.0 if n <= 8 else (7.5 if n <= 12 else 6.5)
 
+    mask = np.zeros((n, n), dtype=bool)
+    if catalog_order and len(catalog_order) == n:
+        for i in range(n):
+            for j in range(n):
+                mask[i, j] = is_homologous_pair(catalog_order[i], catalog_order[j])
+    else:
+        mask = np.eye(n, dtype=bool)
+
+    cross_vals = []
+    for b_idx in range(4):
+        d = tier_pairwise_dict[b_idx].values
+        cross_vals.extend(d[~mask])
+    cross_vals = np.array(cross_vals)
+    if len(cross_vals) > 0:
+        vmin = max(0.0, float(np.floor(cross_vals.min() / 5.0) * 5.0))
+        vmax = min(100.0, float(np.ceil(cross_vals.max() / 5.0) * 5.0))
+    else:
+        vmin, vmax = 20.0, 75.0
+
     fig, axes = plt.subplots(2, 2, figsize=(fig_w, fig_h), sharex=True, sharey=True)
-    norm = Normalize(vmin=20.0, vmax=100.0)
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    cmap = plt.colormaps["YlGnBu"].copy()
+    cmap.set_bad(color="#E5E7EB")
 
     for b_idx, ax in enumerate(axes.flat):
         df_mat = tier_pairwise_dict[b_idx]
         data = df_mat.values
 
-        im = ax.imshow(data, cmap="YlGnBu", norm=norm, aspect="equal")
+        data_masked = np.ma.masked_array(data, mask=mask)
+        im = ax.imshow(data_masked, cmap=cmap, norm=norm, aspect="equal")
         ax.set_title(
             f"({chr(97 + b_idx)}) {bin_titles[b_idx]}",
             fontsize=10.5,
@@ -754,8 +796,13 @@ def plot_tier_pairwise_heatmaps(
         for i in range(n):
             for j in range(n):
                 val = data[i, j]
-                text_col = "white" if val > 65.0 else "black"
-                txt = f"{val:.0f}%" if i != j else "100%"
+                if mask[i, j]:
+                    txt = f"{val:.0f}%" if i != j else "100%"
+                    text_col = "#4B5563"
+                else:
+                    txt = f"{val:.0f}%"
+                    norm_val = norm(val)
+                    text_col = "white" if norm_val > 0.60 else "black"
                 ax.text(
                     j,
                     i,
@@ -1075,4 +1122,5 @@ plot_tier_pairwise_heatmaps(
     tier_pairwise_dict,
     save_path=OUTPUT_TIER_PAIRWISE_HEATMAPS,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    catalog_order=LABELS_TO_COMPARE,
 )
