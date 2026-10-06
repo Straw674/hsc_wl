@@ -201,7 +201,6 @@ YANG21_RAW_TAR = RAW_DIR / "yang21_groups.tar.gz"
 
 LABELS_TO_PREPARE = [
     "wh24_1bin",
-    "wh24_mass_1bin",
     "zou21_1bin",
     "clumpr_mass_1bin",
     "clumpr_richness_1bin",

@@ -484,14 +484,8 @@ _COLS_CCA2 = {
 }
 
 # External DESI Legacy Surveys cluster column mappings
-_COLS_WH24_RICH = {
+_COLS_WH24 = {
     "col_rank": "lam500",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z",
-}
-_COLS_WH24_MASS = {
-    "col_rank": "m500",
     "ra": "ra",
     "dec": "dec",
     "z": "z",
@@ -970,8 +964,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     # -----------------------------------------------------------------------
     # External DESI Legacy Surveys cluster catalogs (full Y3 footprint)
     # -----------------------------------------------------------------------
-    **_make_pair("wh24", _PATH_WH24, _RAND_Y3, columns=_COLS_WH24_RICH),
-    **_make_pair("wh24_mass", _PATH_WH24, _RAND_Y3, columns=_COLS_WH24_MASS),
+    **_make_pair("wh24", _PATH_WH24, _RAND_Y3, columns=_COLS_WH24),
     **_make_pair("zou21", _PATH_ZOU21, _RAND_Y3, columns=_COLS_ZOU21),
     **_make_pair("clumpr_mass", _PATH_CLUMPR, _RAND_Y3, columns=_COLS_CLUMPR_MASS),
     **_make_pair("clumpr_richness", _PATH_CLUMPR, _RAND_Y3, columns=_COLS_CLUMPR_RICH),
