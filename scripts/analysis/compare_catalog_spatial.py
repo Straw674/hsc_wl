@@ -20,7 +20,12 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from hsc_wl.prepare import load_stratified_candidates
-from hsc_wl.reference_catalogs import REFERENCE_CATALOGS, load_reference_catalogs
+from hsc_wl.reference_catalogs import (
+    PURE_REFERENCE_METADATA,
+    REFERENCE_CATALOGS,
+    load_pure_reference_catalogs,
+    load_reference_catalogs,
+)
 from initial import *  # noqa: F401,F403
 from src.data import read_catalog_frame
 
@@ -884,6 +889,27 @@ def compute_global_benchmark_scorecard(
                 "region": f"{len(reference_dict)} References",
                 "keys": tuple(reference_dict.keys()),
             },
+            "pure_xray": {
+                "name": "Mean (Pure X-ray · 5 sets)",
+                "region": "eRASS1/eFEDS/XXL",
+                "keys": (
+                    "erass1_ext3",
+                    "erass1_ext6",
+                    "erass1_ext10",
+                    "efeds_raw",
+                    "xxl_dr2_pure",
+                ),
+            },
+            "pure_sz": {
+                "name": "Mean (Pure SZ · 2 sets)",
+                "region": "ACT DR6",
+                "keys": ("act_dr6_pure", "act_dr6_snr55"),
+            },
+            "pure_overall": {
+                "name": "Mean (All Pure Probes · 8 sets)",
+                "region": "X-ray / SZ / WL",
+                "keys": tuple(reference_dict.keys()),
+            },
         }
 
         for grp_id in summary_groups:
@@ -1526,7 +1552,7 @@ def run_benchmark_comparison_suite(
     rz_keys: list[str],
     output_scorecard_png: Path,
     output_release_table_png: Path,
-    output_diff_heatmaps_png: Path,
+    output_diff_heatmaps_png: Path | None = None,
     baseline_key: str = "camira_1bin",
     r_phys_mpc_h: float = 0.5,
     ref_metadata: dict[str, dict[str, str]] | None = None,
@@ -1592,16 +1618,17 @@ def run_benchmark_comparison_suite(
         for ref_k in reference_dict
     }
 
-    plot_differential_advantage_heatmaps(
-        diff_matrices,
-        first_class_keys=first_class_keys,
-        rz_keys=rz_keys,
-        save_path=output_diff_heatmaps_png,
-        ref_keys=list(reference_dict.keys()),
-        display_names=display_names,
-        ref_metadata=ref_metadata,
-        suptitle=diff_suptitle,
-    )
+    if output_diff_heatmaps_png is not None:
+        plot_differential_advantage_heatmaps(
+            diff_matrices,
+            first_class_keys=first_class_keys,
+            rz_keys=rz_keys,
+            save_path=output_diff_heatmaps_png,
+            ref_keys=list(reference_dict.keys()),
+            display_names=display_names,
+            ref_metadata=ref_metadata,
+            suptitle=diff_suptitle,
+        )
 
     return scorecard_df, diff_matrices
 
@@ -1731,6 +1758,30 @@ OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG = (
 OUTPUT_STRATIFIED_DELTA_PNG = (
     project_root
     / "output/plots_for_agents/reference_benchmark_stratified_vs_raw_delta.png"
+)
+OUTPUT_PURE_SCORECARD_PNG = (
+    project_root / "output/plots_for_agents/reference_benchmark_scorecard_pure.png"
+)
+OUTPUT_PURE_RELEASE_TABLE_PNG = (
+    project_root / "output/plots_for_agents/reference_benchmark_release_table_pure.png"
+)
+OUTPUT_PURE_STRATIFIED_SCORECARD_PNG = (
+    project_root
+    / "output/plots_for_agents/reference_benchmark_scorecard_pure_stratified.png"
+)
+OUTPUT_PURE_STRATIFIED_RELEASE_TABLE_PNG = (
+    project_root
+    / "output/plots_for_agents/reference_benchmark_release_table_pure_stratified.png"
+)
+OUTPUT_DIFF_HEATMAPS_PURE_PNG = (
+    project_root / "output/plots_for_agents/differential_advantage_pure.png"
+)
+OUTPUT_DIFF_HEATMAPS_PURE_STRATIFIED_PNG = (
+    project_root / "output/plots_for_agents/differential_advantage_pure_stratified.png"
+)
+OUTPUT_PURE_STRATIFIED_DELTA_PNG = (
+    project_root
+    / "output/plots_for_agents/reference_benchmark_pure_stratified_vs_raw_delta.png"
 )
 
 
@@ -2073,4 +2124,81 @@ plot_benchmark_variant_delta(
     label_a="Stratified",
     label_b="Raw",
     display_names=DISPLAY_NAMES,
+)
+
+
+# %% [Stage 6: Pure Probe Benchmark Suite (Unbiased / No Optical Pre-filtering)]
+
+pure_references_dict = load_pure_reference_catalogs(project_root)
+
+print(
+    f"\n=== Pure Probe Benchmark Suite (Unbiased / No Optical Confirmation, N={len(pure_references_dict)}) ==="
+)
+
+pure_candidate_order = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
+
+pure_scorecard_df, pure_diff_matrices = run_benchmark_comparison_suite(
+    reference_dict=pure_references_dict,
+    lens_dict=dfs_dict,
+    candidate_order=pure_candidate_order,
+    release_table_candidate_order=pure_candidate_order,
+    first_class_keys=FIRST_CLASS_KEYS,
+    rz_keys=RZ_DIFF_KEYS,
+    output_scorecard_png=OUTPUT_PURE_SCORECARD_PNG,
+    output_release_table_png=OUTPUT_PURE_RELEASE_TABLE_PNG,
+    output_diff_heatmaps_png=OUTPUT_DIFF_HEATMAPS_PURE_PNG,
+    baseline_key="camira_1bin",
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    ref_metadata=PURE_REFERENCE_METADATA,
+    display_names=DISPLAY_NAMES,
+    scorecard_title=(
+        f"Pure Probe Benchmark Recovery Scorecard (Raw Top 1020, Unbiased / No Optical Cuts)\n"
+        f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Radius using Candidate Redshift)"
+    ),
+    sample_label="Pure Physical Probes · No Optical Confirmation / No Redshift Cuts",
+    diff_suptitle="Pure Probe Differential Advantage (rz_diff variants vs Class 1)",
+    include_summary_rows=True,
+    summary_groups=("pure_xray", "pure_sz", "pure_overall"),
+)
+
+print(
+    f"\n=== Pure Probe Stratified Redshift-Controlled Suite (Matched redMaPPer N(z), Top {TOTAL_STRATIFIED_TOP_N}) ==="
+)
+
+pure_strat_scorecard_df, pure_strat_diff_matrices = run_benchmark_comparison_suite(
+    reference_dict=pure_references_dict,
+    lens_dict=stratified_lens_dict,
+    candidate_order=pure_candidate_order,
+    release_table_candidate_order=pure_candidate_order,
+    first_class_keys=FIRST_CLASS_KEYS,
+    rz_keys=RZ_DIFF_KEYS,
+    output_scorecard_png=OUTPUT_PURE_STRATIFIED_SCORECARD_PNG,
+    output_release_table_png=OUTPUT_PURE_STRATIFIED_RELEASE_TABLE_PNG,
+    output_diff_heatmaps_png=OUTPUT_DIFF_HEATMAPS_PURE_STRATIFIED_PNG,
+    baseline_key="camira_1bin",
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    ref_metadata=PURE_REFERENCE_METADATA,
+    display_names=DISPLAY_NAMES,
+    scorecard_title=(
+        f"Pure Probe Stratified Benchmark Recovery Scorecard (Equal P(z), Unbiased / No Optical Cuts)\n"
+        f"(Matching within {MATCH_RADIUS_MPC_H:g} Mpc/h Physical Radius using Candidate Redshift)"
+    ),
+    sample_label="Pure Probes (Stratified Lens N(z)) · No Optical Confirmation",
+    diff_suptitle="Pure Probe Stratified Differential Advantage (rz_diff vs Class 1)",
+    include_summary_rows=True,
+    summary_groups=("pure_xray", "pure_sz", "pure_overall"),
+)
+
+plot_benchmark_variant_delta(
+    scorecard_df_a=pure_strat_scorecard_df,
+    scorecard_df_b=pure_scorecard_df,
+    candidate_keys=pure_candidate_order,
+    save_path=OUTPUT_PURE_STRATIFIED_DELTA_PNG,
+    label_a="Stratified",
+    label_b="Raw",
+    display_names=DISPLAY_NAMES,
+    title=(
+        "Pure Benchmark Recovery Rate Shift: Stratified vs. Raw\n"
+        "(Pure Physical Probes Without Optical Confirmation, Candidates Matched to redMaPPer N(z))"
+    ),
 )
