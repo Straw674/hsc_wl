@@ -1517,13 +1517,14 @@ FIRST_CLASS_KEYS = [
 ]
 
 RZ_DIFF_KEYS = [
-    "rz_diff_1bin",
     "rz_diff_preset_1bin",
-    "rz_diff_single_box_1bin",
-    "rz_diff_two_box_red_1bin",
+    "rz_diff_1bin",
     "rz_diff_two_box_match_recovery_1bin",
+    "rz_diff_single_box_1bin",
     "rz_diff_single_box_match_recovery_1bin",
+    "rz_diff_two_box_red_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_six_param_1bin",
     "rz_diff_six_param_match_recovery_1bin",
 ]
 
@@ -1546,6 +1547,7 @@ DISPLAY_NAMES = {
     "rz_diff_two_box_match_recovery_1bin": "r-z Diff (Two Box · Match)",
     "rz_diff_single_box_match_recovery_1bin": "r-z Diff (Single Box · Match)",
     "rz_diff_two_box_red_match_recovery_1bin": "r-z Diff (Two Box Red · Match)",
+    "rz_diff_six_param_1bin": "r-z Diff (Six Param · WL)",
     "rz_diff_six_param_match_recovery_1bin": "r-z Diff (Six Param · Match)",
 }
 
@@ -1595,13 +1597,14 @@ HTML_MAIN_KEYS = (
     "clumpr_mass_1bin",
     "clumpr_richness_1bin",
     "amico_1bin",
-    "rz_diff_1bin",
     "rz_diff_preset_1bin",
-    "rz_diff_single_box_1bin",
-    "rz_diff_two_box_red_1bin",
+    "rz_diff_1bin",
     "rz_diff_two_box_match_recovery_1bin",
+    "rz_diff_single_box_1bin",
     "rz_diff_single_box_match_recovery_1bin",
+    "rz_diff_two_box_red_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_six_param_1bin",
     "rz_diff_six_param_match_recovery_1bin",
 )
 HTML_GROUPS = {
@@ -1617,13 +1620,14 @@ HTML_GROUPS = {
     ),
     "AMICO / RZ diff": (
         "amico_1bin",
-        "rz_diff_1bin",
         "rz_diff_preset_1bin",
-        "rz_diff_single_box_1bin",
-        "rz_diff_two_box_red_1bin",
+        "rz_diff_1bin",
         "rz_diff_two_box_match_recovery_1bin",
+        "rz_diff_single_box_1bin",
         "rz_diff_single_box_match_recovery_1bin",
+        "rz_diff_two_box_red_1bin",
         "rz_diff_two_box_red_match_recovery_1bin",
+        "rz_diff_six_param_1bin",
         "rz_diff_six_param_match_recovery_1bin",
     ),
     "External reference catalogs": (
@@ -1760,6 +1764,14 @@ HTML_STYLES = {
     ),
     "rz_diff_two_box_red_match_recovery_1bin": dict(
         color="#0F766E",
+        shape="triangle",
+        diameter=0.23,
+        line_width=1.8,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_six_param_1bin": dict(
+        color="#2563EB",
         shape="triangle",
         diameter=0.23,
         line_width=1.8,

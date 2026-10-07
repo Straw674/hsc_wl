@@ -963,13 +963,14 @@ LABELS_TO_COMPARE = [
     "clumpr_richness_1bin",
     # HSC reproduced / pipeline candidates
     "amico_1bin",
-    "rz_diff_1bin",
     "rz_diff_preset_1bin",
-    "rz_diff_single_box_1bin",
-    "rz_diff_two_box_red_1bin",
+    "rz_diff_1bin",
     "rz_diff_two_box_match_recovery_1bin",
+    "rz_diff_single_box_1bin",
     "rz_diff_single_box_match_recovery_1bin",
+    "rz_diff_two_box_red_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_six_param_1bin",
     "rz_diff_six_param_match_recovery_1bin",
 ]
 
@@ -990,6 +991,7 @@ DISPLAY_NAMES = {
     "rz_diff_two_box_match_recovery_1bin": "r-z Diff (Two Box · Match)",
     "rz_diff_single_box_match_recovery_1bin": "r-z Diff (Single Box · Match)",
     "rz_diff_two_box_red_match_recovery_1bin": "r-z Diff (Two Box Red · Match)",
+    "rz_diff_six_param_1bin": "r-z Diff (Six Param · WL)",
     "rz_diff_six_param_match_recovery_1bin": "r-z Diff (Six Param · Match)",
 }
 
@@ -1003,14 +1005,15 @@ PALETTE = [
     "#AA3377",  # Purple (CluMPR Mass)
     "#EE8866",  # Coral (CluMPR Richness)
     "#10B981",  # Emerald (AMICO)
-    "#E69F00",  # Orange (r-z Diff)
-    "#D55E00",  # Rust (r-z Diff Preset)
-    "#009E73",  # Teal (r-z Diff Single Box)
-    "#B91C1C",  # Dark Red (r-z Diff Two Box Red)
-    "#7B2CBF",
-    "#A16207",
-    "#0F766E",
-    "#334155",
+    "#D55E00",  # Preset
+    "#E69F00",  # Two Box WL
+    "#7B2CBF",  # Two Box Match
+    "#009E73",  # Single Box WL
+    "#A16207",  # Single Box Match
+    "#B91C1C",  # Two Box Red WL
+    "#0F766E",  # Two Box Red Match
+    "#2563EB",  # Six Param WL
+    "#334155",  # Six Param Match
 ]
 
 MARKERS = [
@@ -1023,13 +1026,14 @@ MARKERS = [
     "p",
     "h",
     "*",
-    "8",
     "<",
-    ">",
-    "P",
+    "8",
     "X",
+    ">",
     "d",
+    "P",
     "+",
+    "o",
     "H",
 ]
 
