@@ -1002,10 +1002,7 @@ def plot_benchmark_scorecard(
     title: str | None = None,
 ):
     """Plot public benchmark cluster recovery scorecard across references."""
-    from itertools import groupby
-
     from matplotlib.colors import Normalize
-    from matplotlib.patches import Rectangle
 
     names_map = display_names or {}
     n_refs = len(scorecard_df)
@@ -1054,42 +1051,12 @@ def plot_benchmark_scorecard(
     ax.set_xticklabels(col_labels, rotation=20, ha="right", fontsize=9.5)
     ax.set_yticklabels(row_labels, fontsize=9.0)
 
-    # Mark catalog families independently of the match-fraction color scale.
-    family_colors = {False: "#475569", True: "#9A3412"}
-    for key, tick in zip(candidate_keys, ax.get_xticklabels(), strict=True):
-        tick.set_color(family_colors[key.startswith("rz_diff")])
-
-    families = groupby(
-        enumerate(candidate_keys), key=lambda item: item[1].startswith("rz_diff")
-    )
-    for is_rz, members in families:
-        columns = [index for index, _ in members]
-        start, end = columns[0], columns[-1]
-        if start > 0:
-            ax.axvline(start - 0.5, color="#374151", linewidth=1.8)
-        ax.add_patch(
-            Rectangle(
-                (start - 0.5, 1.01),
-                end - start + 1,
-                0.065,
-                transform=ax.get_xaxis_transform(),
-                facecolor="#FFEDD5" if is_rz else "#E2E8F0",
-                edgecolor="none",
-                clip_on=False,
-            )
-        )
-        ax.text(
-            (start + end) / 2,
-            1.0425,
-            "r-z Diff Series" if is_rz else "Other Catalogs",
-            transform=ax.get_xaxis_transform(),
-            ha="center",
-            va="center",
-            fontsize=9.5,
-            fontweight="normal",
-            color=family_colors[is_rz],
-            clip_on=False,
-        )
+    # Separate adjacent catalog families without changing their order.
+    for j in range(1, n_cands):
+        if candidate_keys[j].startswith("rz_diff") != candidate_keys[j - 1].startswith(
+            "rz_diff"
+        ):
+            ax.axvline(j - 0.5, color="#374151", linewidth=1.8)
 
     for i in range(n_refs):
         is_row_sum = is_summary_arr[i]
@@ -1134,7 +1101,7 @@ def plot_benchmark_scorecard(
     ax.set_title(
         scorecard_title,
         fontsize=11.0,
-        pad=42,
+        pad=12,
         fontweight="normal",
     )
 
