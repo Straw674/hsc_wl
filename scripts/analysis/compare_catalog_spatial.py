@@ -888,7 +888,7 @@ def plot_differential_advantage_heatmaps(
     cmap = plt.colormaps["coolwarm"]
 
     n_fc = len(first_class_keys)
-    ncols = 2 if n_fc >= 6 else (4 if n_plots >= 4 else n_plots)
+    ncols = min(4, n_plots)
     nrows = (n_plots + ncols - 1) // ncols
     sub_w = max(5.0, 0.72 * n_fc + 1.2)
     sub_h = max(4.5, 0.65 * len(rz_keys) + 0.5)
