@@ -1531,6 +1531,8 @@ RZ_DIFF_KEYS = [
     "rz_diff_single_box_match_recovery_1bin",
     "rz_diff_two_box_red_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_two_box_red_redmapper_matching_1bin",
+    "rz_diff_two_box_red_camira_matching_1bin",
     "rz_diff_six_param_1bin",
     "rz_diff_six_param_match_recovery_1bin",
 ]
@@ -1554,6 +1556,8 @@ DISPLAY_NAMES = {
     "rz_diff_two_box_match_recovery_1bin": "r-z Diff (Two Box · Match)",
     "rz_diff_single_box_match_recovery_1bin": "r-z Diff (Single Box · Match)",
     "rz_diff_two_box_red_match_recovery_1bin": "r-z Diff (Two Box Red · Match)",
+    "rz_diff_two_box_red_redmapper_matching_1bin": "r-z Diff (Two Box Red · redMaPPer Match)",
+    "rz_diff_two_box_red_camira_matching_1bin": "r-z Diff (Two Box Red · CAMIRA Match)",
     "rz_diff_six_param_1bin": "r-z Diff (Six Param · WL)",
     "rz_diff_six_param_match_recovery_1bin": "r-z Diff (Six Param · Match)",
 }
@@ -1611,6 +1615,8 @@ HTML_MAIN_KEYS = (
     "rz_diff_single_box_match_recovery_1bin",
     "rz_diff_two_box_red_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_two_box_red_redmapper_matching_1bin",
+    "rz_diff_two_box_red_camira_matching_1bin",
     "rz_diff_six_param_1bin",
     "rz_diff_six_param_match_recovery_1bin",
 )
@@ -1634,6 +1640,8 @@ HTML_GROUPS = {
         "rz_diff_single_box_match_recovery_1bin",
         "rz_diff_two_box_red_1bin",
         "rz_diff_two_box_red_match_recovery_1bin",
+        "rz_diff_two_box_red_redmapper_matching_1bin",
+        "rz_diff_two_box_red_camira_matching_1bin",
         "rz_diff_six_param_1bin",
         "rz_diff_six_param_match_recovery_1bin",
     ),
@@ -1771,6 +1779,22 @@ HTML_STYLES = {
     ),
     "rz_diff_two_box_red_match_recovery_1bin": dict(
         color="#0F766E",
+        shape="triangle",
+        diameter=0.23,
+        line_width=1.8,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_two_box_red_redmapper_matching_1bin": dict(
+        color="#CC79A7",
+        shape="triangle",
+        diameter=0.23,
+        line_width=1.8,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_two_box_red_camira_matching_1bin": dict(
+        color="#56B4E9",
         shape="triangle",
         diameter=0.23,
         line_width=1.8,
