@@ -369,6 +369,9 @@ _PATH_RZ_DIFF_SINGLE_BOX_MATCH_RECOVERY = "/Users/xinq/cluster_finder/output/fal
 _PATH_RZ_DIFF_TWO_BOX_RED_MATCH_RECOVERY = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_match_recovery/rz_diff_cluster_catalog.parquet"
 _PATH_RZ_DIFF_SIX_PARAM_MATCH_RECOVERY = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/six_param_match_recovery/rz_diff_cluster_catalog.parquet"
 
+_PATH_RZ_DIFF_TWO_BOX_RED_REDMAPPER_MATCHING = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_redmapper_matching/rz_diff_cluster_catalog.parquet"
+_PATH_RZ_DIFF_TWO_BOX_RED_CAMIRA_MATCHING = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_camira_matching/rz_diff_cluster_catalog.parquet"
+
 # Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
 _PATH_REGRESSION = (
     "/Users/xinq/cluster_finder/output/regression/regression_cluster_catalog.parquet"
@@ -974,6 +977,20 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     **_make_pair(
         "rz_diff_two_box_red_match_recovery",
         _PATH_RZ_DIFF_TWO_BOX_RED_MATCH_RECOVERY,
+        _RAND_Y3,
+        columns=_COLS_RZ_DIFF,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "rz_diff_two_box_red_redmapper_matching",
+        _PATH_RZ_DIFF_TWO_BOX_RED_REDMAPPER_MATCHING,
+        _RAND_Y3,
+        columns=_COLS_RZ_DIFF,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "rz_diff_two_box_red_camira_matching",
+        _PATH_RZ_DIFF_TWO_BOX_RED_CAMIRA_MATCHING,
         _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         lens_format="parquet",

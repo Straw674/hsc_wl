@@ -933,6 +933,8 @@ LABELS_TO_COMPARE = [
     "rz_diff_single_box_match_recovery_1bin",
     "rz_diff_two_box_red_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_two_box_red_redmapper_matching_1bin",
+    "rz_diff_two_box_red_camira_matching_1bin",
     "rz_diff_six_param_1bin",
     "rz_diff_six_param_match_recovery_1bin",
 ]
@@ -954,6 +956,8 @@ DISPLAY_NAMES = {
     "rz_diff_two_box_match_recovery_1bin": "r-z Diff (Two Box · Match)",
     "rz_diff_single_box_match_recovery_1bin": "r-z Diff (Single Box · Match)",
     "rz_diff_two_box_red_match_recovery_1bin": "r-z Diff (Two Box Red · Match)",
+    "rz_diff_two_box_red_redmapper_matching_1bin": "r-z Diff (Two Box Red · redMaPPer Match)",
+    "rz_diff_two_box_red_camira_matching_1bin": "r-z Diff (Two Box Red · CAMIRA Match)",
     "rz_diff_six_param_1bin": "r-z Diff (Six Param · WL)",
     "rz_diff_six_param_match_recovery_1bin": "r-z Diff (Six Param · Match)",
 }
@@ -975,6 +979,8 @@ PALETTE = [
     "#A16207",  # Single Box Match
     "#B91C1C",  # Two Box Red WL
     "#0F766E",  # Two Box Red Match
+    "#CC79A7",  # Two Box Red redMaPPer Match
+    "#56B4E9",  # Two Box Red CAMIRA Match
     "#2563EB",  # Six Param WL
     "#334155",  # Six Param Match
 ]
@@ -996,6 +1002,8 @@ MARKERS = [
     "d",
     "P",
     "+",
+    "s",
+    "^",
     "o",
     "H",
 ]
