@@ -347,12 +347,13 @@ CONFIGS_TO_COMPARE = [
     # ("cosine", "1bin", "Y3"),
     # ("pls", "1bin", "Y3"),
     # ("regression", "1bin", "Y3"),
-    # ("rz_diff", "1bin", "Y3"),
+    ("rz_diff", "1bin", "Y3"),
     # ("rz_diff_lum", "1bin", "Y3"),
     ("rz_diff_preset", "1bin", "Y3"),
-    ("rz_diff_preset_lum", "1bin", "Y3"),
+    # ("rz_diff_preset_lum", "1bin", "Y3"),
     ("rz_diff_single_box", "1bin", "Y3"),
-    ("rz_diff_single_box_lum", "1bin", "Y3"),
+    # ("rz_diff_single_box_lum", "1bin", "Y3"),
+    ("rz_diff_two_box_red", "1bin", "Y3"),
     # ("cca1", "1bin", "Y3"),
     # ("cca2", "1bin", "Y3"),
 ]
@@ -395,6 +396,13 @@ CONFIGS_TO_COMPARE = [
 #     ("redm_r16_hectomap", "1bin", "Y3"),
 #     ("redm_pdr3_5band_free", "1bin", "Y3"),
 # ]
+
+CONFIGS_TO_COMPARE = [
+    ("ideal_mdpl2", "1bin", "Y3"),
+    ("rz_diff_preset", "1bin", "Y3"),
+    ("rz_diff", "1bin", "Y3"),
+    ("rz_diff_two_box_red_match_recovery", "1bin", "Y3"),
+]
 
 MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
 
