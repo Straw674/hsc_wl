@@ -924,18 +924,18 @@ LABELS_TO_COMPARE = [
     "clumpr_mass_1bin",
     "clumpr_richness_1bin",
     "amico_1bin",
-    # Inner radius: 0.21-0.30 Mpc/h.
-    "rz_diff_single_box_1bin",
-    "rz_diff_1bin",
-    "rz_diff_six_param_1bin",
     "rz_diff_preset_1bin",
-    "rz_diff_two_box_red_1bin",
+    # Inner radius: 0.21-0.30 Mpc/h; single, two, red two, six parameter.
+    "rz_diff_single_box_1bin",
     "rz_diff_single_box_match_recovery_1bin",
-    # Inner radius: 0.52-0.57 Mpc/h.
-    "rz_diff_two_box_red_redmapper_matching_1bin",
-    "rz_diff_six_param_match_recovery_1bin",
+    "rz_diff_1bin",
+    "rz_diff_two_box_red_1bin",
+    "rz_diff_six_param_1bin",
+    # Inner radius: 0.52-0.57 Mpc/h; matching targets follow the model sequence.
     "rz_diff_two_box_match_recovery_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_six_param_match_recovery_1bin",
+    "rz_diff_two_box_red_redmapper_matching_1bin",
     "rz_diff_two_box_red_camira_matching_1bin",
 ]
 
@@ -972,16 +972,16 @@ PALETTE = [
     "#AA3377",  # Purple (CluMPR Mass)
     "#EE8866",  # Coral (CluMPR Richness)
     "#10B981",  # Emerald (AMICO)
-    "#009E73",  # Single Box WL
-    "#E69F00",  # Two Box WL
-    "#2563EB",  # Six Param WL
     "#D55E00",  # Preset
-    "#B91C1C",  # Two Box Red WL
+    "#009E73",  # Single Box WL
     "#A16207",  # Single Box Match
-    "#CC79A7",  # Two Box Red redMaPPer Match
-    "#334155",  # Six Param Match
+    "#E69F00",  # Two Box WL
+    "#B91C1C",  # Two Box Red WL
+    "#2563EB",  # Six Param WL
     "#7B2CBF",  # Two Box Match
     "#0F766E",  # Two Box Red Match
+    "#334155",  # Six Param Match
+    "#CC79A7",  # Two Box Red redMaPPer Match
     "#56B4E9",  # Two Box Red CAMIRA Match
 ]
 
@@ -995,16 +995,16 @@ MARKERS = [
     "p",
     "h",
     "*",
-    ">",
-    "8",
-    "o",
     "<",
-    "P",
+    ">",
     "d",
-    "s",
-    "H",
+    "8",
+    "P",
+    "o",
     "X",
     "+",
+    "H",
+    "s",
     "^",
 ]
 

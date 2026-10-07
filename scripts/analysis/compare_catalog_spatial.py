@@ -1524,18 +1524,18 @@ FIRST_CLASS_KEYS = [
 ]
 
 RZ_DIFF_KEYS = [
-    # Inner radius: 0.21-0.30 Mpc/h.
-    "rz_diff_single_box_1bin",
-    "rz_diff_1bin",
-    "rz_diff_six_param_1bin",
     "rz_diff_preset_1bin",
-    "rz_diff_two_box_red_1bin",
+    # Inner radius: 0.21-0.30 Mpc/h; single, two, red two, six parameter.
+    "rz_diff_single_box_1bin",
     "rz_diff_single_box_match_recovery_1bin",
-    # Inner radius: 0.52-0.57 Mpc/h.
-    "rz_diff_two_box_red_redmapper_matching_1bin",
-    "rz_diff_six_param_match_recovery_1bin",
+    "rz_diff_1bin",
+    "rz_diff_two_box_red_1bin",
+    "rz_diff_six_param_1bin",
+    # Inner radius: 0.52-0.57 Mpc/h; matching targets follow the model sequence.
     "rz_diff_two_box_match_recovery_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_six_param_match_recovery_1bin",
+    "rz_diff_two_box_red_redmapper_matching_1bin",
     "rz_diff_two_box_red_camira_matching_1bin",
 ]
 
