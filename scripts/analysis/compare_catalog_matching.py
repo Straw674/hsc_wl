@@ -71,68 +71,69 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
     return dfs
 
 
+def match_clusters_with_redshift(
+    source: Table,
+    target: Table,
+    *,
+    r_phys_mpc_h: float,
+    max_delta_z: float,
+) -> np.ndarray:
+    """Find any target within the source-centered aperture and absolute redshift cut."""
+    from astropy.coordinates import search_around_sky
+
+    matched = np.zeros(len(source), dtype=bool)
+    if len(source) == 0 or len(target) == 0:
+        return matched
+    source_z = np.asarray(source["z"], dtype=float)
+    target_z = np.asarray(target["z"], dtype=float)
+    source_valid = np.isfinite(source_z) & (source_z > 0)
+    target_valid = np.isfinite(target_z) & (target_z > 0)
+    source_indices = np.flatnonzero(source_valid)
+    if not source_valid.any() or not target_valid.any():
+        return matched
+    source_coords = SkyCoord(
+        ra=np.asarray(source["ra"], dtype=float)[source_valid] * u.deg,
+        dec=np.asarray(source["dec"], dtype=float)[source_valid] * u.deg,
+    )
+    target_coords = SkyCoord(
+        ra=np.asarray(target["ra"], dtype=float)[target_valid] * u.deg,
+        dec=np.asarray(target["dec"], dtype=float)[target_valid] * u.deg,
+    )
+    distances = Planck18.angular_diameter_distance(source_z[source_valid]).value
+    radii_rad = (r_phys_mpc_h / Planck18.h) / distances
+    source_idx, target_idx, separations, _ = search_around_sky(
+        source_coords, target_coords, np.max(radii_rad) * u.rad
+    )
+    accepted = (separations.rad < radii_rad[source_idx]) & (
+        np.abs(source_z[source_valid][source_idx] - target_z[target_valid][target_idx])
+        < max_delta_z
+    )
+    matched[source_indices[source_idx[accepted]]] = True
+    return matched
+
+
 def compute_pairwise_matches(
     dfs: dict[str, Table],
-    r_phys_mpc_h: float = 0.5,
+    *,
+    r_phys_mpc_h: float,
+    max_delta_z: float,
 ) -> pd.DataFrame:
-    """Compute pairwise matching statistics within a physical radius.
-
-    Parameters
-    ----------
-    dfs : dict of label -> Table
-        Loaded lens catalogs.
-    r_phys_mpc_h : float, default 0.5
-        Physical transverse matching radius in Mpc/h.
-
-    Returns
-    -------
-    pd.DataFrame
-        Table of pairwise match counts.
-    """
-    from astropy import units as u
-    from astropy.coordinates import SkyCoord
-    from astropy.cosmology import Planck18
-
-    catalog_names = list(dfs.keys())
-    n_cats = len(catalog_names)
-    matrix = np.zeros((n_cats, n_cats), dtype=int)
-
-    coords = {
-        name: SkyCoord(
-            ra=np.asarray(dfs[name]["ra"]) * u.deg,
-            dec=np.asarray(dfs[name]["dec"]) * u.deg,
-        )
-        for name in catalog_names
-    }
-
-    h = Planck18.h
-
-    for i in range(n_cats):
-        for j in range(n_cats):
-            if i == j:
-                matrix[i, j] = len(dfs[catalog_names[i]])
-                continue
-
-            c1 = coords[catalog_names[i]]
-            c2 = coords[catalog_names[j]]
-
-            # Match each object in c1 to the nearest neighbor in c2
-            idx, d2d, _ = c1.match_to_catalog_sky(c2)
-
-            # Compute matching radius for each object in c1 based on its redshift
-            z1 = np.clip(
-                np.asarray(dfs[catalog_names[i]]["z"], dtype=float), 1e-4, None
+    """Count clusters with any spatially and redshift-consistent counterpart."""
+    matrix = [
+        [
+            int(
+                match_clusters_with_redshift(
+                    source,
+                    target,
+                    r_phys_mpc_h=r_phys_mpc_h,
+                    max_delta_z=max_delta_z,
+                ).sum()
             )
-            da1 = Planck18.angular_diameter_distance(z1).value  # Mpc
-
-            # Matching radius in degrees: (r_phys_mpc_h / h) / da1 * (180 / pi)
-            match_radius_deg = (r_phys_mpc_h / h) / da1 * (180.0 / np.pi)
-
-            matched = d2d.deg < match_radius_deg
-            matrix[i, j] = np.sum(matched)
-
-    df_match = pd.DataFrame(matrix, index=catalog_names, columns=catalog_names)
-    return df_match
+            for target in dfs.values()
+        ]
+        for source in dfs.values()
+    ]
+    return pd.DataFrame(matrix, index=list(dfs), columns=list(dfs))
 
 
 def is_homologous_pair(name_i: str, name_j: str) -> bool:
@@ -151,6 +152,8 @@ def plot_matching_heatmap(
     save_path: Path,
     display_names: dict[str, str] | None = None,
     r_phys_mpc_h: float = 0.5,
+    *,
+    max_delta_z: float,
 ):
     """Plot pairwise matching statistics as a heatmap grid using matplotlib.
 
@@ -251,7 +254,7 @@ def plot_matching_heatmap(
             )
 
     ax.set_title(
-        f"Pairwise Lens Match Fractions ({r_phys_mpc_h:g} Mpc/h Physical Radius)\n"
+        f"Pairwise Lens Match Fractions (R < {r_phys_mpc_h:g} Mpc/h, |Δz| < {max_delta_z:g})\n"
         f"Stratified Redshift-Controlled (Matched redMaPPer N(z), N={row_totals[0]} per catalog)",
         fontsize=11.5,
         pad=14,
@@ -269,8 +272,10 @@ def plot_matching_heatmap(
 def compute_consensus_breakdown(
     dfs: dict[str, Table],
     r_phys_mpc_h: float = 0.5,
+    *,
+    max_delta_z: float,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Compute multi-catalog consensus counts and percentages within physical radius.
+    """Compute consensus counts with projected-radius and absolute-redshift cuts.
 
     Parameters
     ----------
@@ -285,42 +290,24 @@ def compute_consensus_breakdown(
         df_counts: Table of raw counts.
         df_pct: Table of percentages relative to each catalog's total.
     """
-    from astropy import units as u
-    from astropy.coordinates import SkyCoord
-    from astropy.cosmology import Planck18
-
     catalog_names = list(dfs.keys())
     n_cats = len(catalog_names)
-
-    coords = {
-        name: SkyCoord(
-            ra=np.asarray(dfs[name]["ra"]) * u.deg,
-            dec=np.asarray(dfs[name]["dec"]) * u.deg,
-        )
-        for name in catalog_names
-    }
-
-    radii_deg = {}
-    h = Planck18.h
-    for name in catalog_names:
-        z = np.clip(np.asarray(dfs[name]["z"], float), 1e-4, None)
-        da = Planck18.angular_diameter_distance(z).value
-        radii_deg[name] = (r_phys_mpc_h / h) / da * (180.0 / np.pi)
 
     counts_matrix = np.zeros((n_cats, n_cats), dtype=int)
 
     for i, name in enumerate(catalog_names):
-        c_self = coords[name]
-        r_self = radii_deg[name]
         n_obj = len(dfs[name])
 
         matched_counts = np.zeros(n_obj, dtype=int)
         for j, other_name in enumerate(catalog_names):
             if i == j:
                 continue
-            c_other = coords[other_name]
-            idx, d2d, _ = c_self.match_to_catalog_sky(c_other)
-            matched_counts += (d2d.deg < r_self).astype(int)
+            matched_counts += match_clusters_with_redshift(
+                dfs[name],
+                dfs[other_name],
+                r_phys_mpc_h=r_phys_mpc_h,
+                max_delta_z=max_delta_z,
+            ).astype(int)
 
         for k in range(n_cats):
             counts_matrix[i, k] = np.sum(matched_counts == k)
@@ -344,6 +331,8 @@ def plot_consensus_breakdown(
     save_path: Path,
     display_names: dict[str, str] | None = None,
     r_phys_mpc_h: float = 0.5,
+    *,
+    max_delta_z: float,
 ):
     """Plot consensus level profiles across catalogs as a multi-line plot."""
     names_map = display_names or {}
@@ -388,7 +377,7 @@ def plot_consensus_breakdown(
     )
     ax.set_ylabel("Cluster Fraction (%)", fontsize=11.0)
     ax.set_title(
-        f"Consensus Profiles across Stratified Catalogs ({r_phys_mpc_h:g} Mpc/h Matching, Matched redMaPPer N(z))",
+        f"Consensus Profiles across Stratified Catalogs (R < {r_phys_mpc_h:g} Mpc/h, |Δz| < {max_delta_z:g}, Matched redMaPPer N(z))",
         fontsize=11.5,
         pad=10,
         fontweight="normal",
@@ -410,45 +399,29 @@ def compute_tier_consensus_breakdown(
     n_bins: int = 4,
     display_names: dict[str, str] | None = None,
     r_phys_mpc_h: float = 0.5,
+    *,
+    max_delta_z: float,
 ) -> pd.DataFrame:
-    """Compute consensus statistics for each catalog partitioned into proxy rank tiers."""
-    from astropy import units as u
-    from astropy.coordinates import SkyCoord
-    from astropy.cosmology import Planck18
-
+    """Compute redshift-consistent consensus statistics within proxy rank tiers."""
     catalog_names = list(dfs.keys())
     n_cats = len(catalog_names)
     names_map = display_names or {}
 
-    coords = {
-        name: SkyCoord(
-            ra=np.asarray(dfs[name]["ra"], dtype=float) * u.deg,
-            dec=np.asarray(dfs[name]["dec"], dtype=float) * u.deg,
-        )
-        for name in catalog_names
-    }
-
-    radii_deg = {}
-    h = Planck18.h
-    for name in catalog_names:
-        z = np.clip(np.asarray(dfs[name]["z"], float), 1e-4, None)
-        da = Planck18.angular_diameter_distance(z).value
-        radii_deg[name] = (r_phys_mpc_h / h) / da * (180.0 / np.pi)
-
     records = []
 
     for i, name_i in enumerate(catalog_names):
-        c_i = coords[name_i]
-        r_i = radii_deg[name_i]
         n_i = len(dfs[name_i])
 
         matched_counts = np.zeros(n_i, dtype=int)
         for j, name_j in enumerate(catalog_names):
             if i == j:
                 continue
-            c_j = coords[name_j]
-            idx, d2d, _ = c_i.match_to_catalog_sky(c_j)
-            matched_counts += (d2d.deg < r_i).astype(int)
+            matched_counts += match_clusters_with_redshift(
+                dfs[name_i],
+                dfs[name_j],
+                r_phys_mpc_h=r_phys_mpc_h,
+                max_delta_z=max_delta_z,
+            ).astype(int)
 
         bin_splits = np.array_split(np.arange(n_i), n_bins)
 
@@ -499,30 +472,13 @@ def compute_tier_pairwise_matches(
     n_bins: int = 4,
     display_names: dict[str, str] | None = None,
     r_phys_mpc_h: float = 0.5,
+    *,
+    max_delta_z: float,
 ) -> dict[int, pd.DataFrame]:
-    """Compute pairwise match matrices for each proxy tier against full catalog."""
-    from astropy import units as u
-    from astropy.coordinates import SkyCoord
-    from astropy.cosmology import Planck18
-
+    """Match each proxy tier to full catalogs using spatial and redshift cuts."""
     catalog_names = list(dfs.keys())
     n_cats = len(catalog_names)
     names_map = display_names or {}
-
-    coords = {
-        name: SkyCoord(
-            ra=np.asarray(dfs[name]["ra"], dtype=float) * u.deg,
-            dec=np.asarray(dfs[name]["dec"], dtype=float) * u.deg,
-        )
-        for name in catalog_names
-    }
-
-    radii_deg = {}
-    h = Planck18.h
-    for name in catalog_names:
-        z = np.clip(np.asarray(dfs[name]["z"], float), 1e-4, None)
-        da = Planck18.angular_diameter_distance(z).value
-        radii_deg[name] = (r_phys_mpc_h / h) / da * (180.0 / np.pi)
 
     tier_matrices = {}
 
@@ -534,16 +490,18 @@ def compute_tier_pairwise_matches(
             idx_slice = bin_splits[b_idx]
             n_sub = len(idx_slice)
 
-            c_sub = coords[name_i][idx_slice]
-            r_sub = radii_deg[name_i][idx_slice]
+            source = dfs[name_i][idx_slice]
 
             for j, name_j in enumerate(catalog_names):
                 if i == j:
                     mat[i, j] = 100.0
                     continue
-                c_j = coords[name_j]
-                idx, d2d, _ = c_sub.match_to_catalog_sky(c_j)
-                matched = np.sum(d2d.deg < r_sub)
+                matched = match_clusters_with_redshift(
+                    source,
+                    dfs[name_j],
+                    r_phys_mpc_h=r_phys_mpc_h,
+                    max_delta_z=max_delta_z,
+                ).sum()
                 mat[i, j] = (matched / n_sub) * 100.0
 
         disp_labels = [names_map.get(name, name) for name in catalog_names]
@@ -559,6 +517,9 @@ def plot_tier_consensus_profiles(
     markers: list[str],
     save_path: Path,
     display_names: dict[str, str] | None = None,
+    *,
+    r_phys_mpc_h: float,
+    max_delta_z: float,
 ):
     """Plot multi-panel tiered consensus breakdown figure."""
     import matplotlib.gridspec as gridspec
@@ -608,7 +569,7 @@ def plot_tier_consensus_profiles(
     ax_heat.set_yticks(np.arange(4))
     ax_heat.set_yticklabels(bin_row_labels, fontsize=10)
     ax_heat.set_title(
-        "(a) Mean Consensus Score by Proxy Tier (Stratified Sample)",
+        f"(a) Mean Consensus Score by Proxy Tier (R < {r_phys_mpc_h:g} Mpc/h, |Δz| < {max_delta_z:g})",
         fontsize=11.5,
         pad=10,
         fontweight="normal",
@@ -727,6 +688,8 @@ def plot_tier_pairwise_heatmaps(
     tier_pairwise_dict: dict[int, pd.DataFrame],
     save_path: Path,
     r_phys_mpc_h: float = 0.5,
+    *,
+    max_delta_z: float,
     catalog_order: list[str] | None = None,
 ):
     """Plot 2x2 grid of pairwise match fractions across proxy tiers."""
@@ -824,7 +787,7 @@ def plot_tier_pairwise_heatmaps(
     )
 
     fig.suptitle(
-        f"Tier-Resolved Pairwise Lens Matching Fractions ({r_phys_mpc_h:g} Mpc/h Matching Radius)\n"
+        f"Tier-Resolved Pairwise Lens Matching Fractions (R < {r_phys_mpc_h:g} Mpc/h, |Δz| < {max_delta_z:g})\n"
         "Row: Clusters in Given Proxy Tier  |  Column: Matched in Full Stratified Top 1020 of Target Catalog",
         fontsize=12.0,
         fontweight="normal",
@@ -1041,6 +1004,7 @@ REDSHIFT_RANGE = (0.19, 0.52)
 N_STRATIFIED_BINS = 10
 TOTAL_STRATIFIED_TOP_N = 1020
 MATCH_RADIUS_MPC_H = 0.5
+MATCH_MAX_DELTA_Z = 0.05
 
 OUTPUT_REDSHIFT_DISTRIBUTIONS = (
     project_root / "output/plots_for_agents/matching_redshift_distributions.png"
@@ -1098,20 +1062,23 @@ plot_redshift_distributions(
 
 # %% [Stage 3: Pairwise Matching Heatmap (Stratified Redshift-Controlled)]
 
-match_df = compute_pairwise_matches(strat_dfs_dict, r_phys_mpc_h=MATCH_RADIUS_MPC_H)
+match_df = compute_pairwise_matches(
+    strat_dfs_dict, r_phys_mpc_h=MATCH_RADIUS_MPC_H, max_delta_z=MATCH_MAX_DELTA_Z
+)
 
 plot_matching_heatmap(
     match_df,
     save_path=OUTPUT_MATCH_HEATMAP,
     display_names=DISPLAY_NAMES,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
 )
 
 
 # %% [Stage 4: Overall Consensus Breakdown Analysis]
 
 consensus_counts_df, consensus_pct_df = compute_consensus_breakdown(
-    strat_dfs_dict, r_phys_mpc_h=MATCH_RADIUS_MPC_H
+    strat_dfs_dict, r_phys_mpc_h=MATCH_RADIUS_MPC_H, max_delta_z=MATCH_MAX_DELTA_Z
 )
 
 plot_consensus_breakdown(
@@ -1122,6 +1089,7 @@ plot_consensus_breakdown(
     save_path=OUTPUT_CONSENSUS_BREAKDOWN,
     display_names=DISPLAY_NAMES,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
 )
 
 
@@ -1132,6 +1100,7 @@ tier_consensus_df = compute_tier_consensus_breakdown(
     n_bins=4,
     display_names=DISPLAY_NAMES,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
 )
 
 plot_tier_consensus_profiles(
@@ -1140,6 +1109,8 @@ plot_tier_consensus_profiles(
     colors=PALETTE,
     markers=MARKERS,
     save_path=OUTPUT_TIER_CONSENSUS_PROFILES,
+    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
     display_names=DISPLAY_NAMES,
 )
 
@@ -1151,10 +1122,12 @@ tier_pairwise_dict = compute_tier_pairwise_matches(
     n_bins=4,
     display_names=DISPLAY_NAMES,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
 )
 plot_tier_pairwise_heatmaps(
     tier_pairwise_dict,
     save_path=OUTPUT_TIER_PAIRWISE_HEATMAPS,
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
+    max_delta_z=MATCH_MAX_DELTA_Z,
     catalog_order=LABELS_TO_COMPARE,
 )
