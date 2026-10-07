@@ -351,7 +351,7 @@ def plot_consensus_breakdown(
     catalog_names = list(df_pct.index)
     n_cats = len(catalog_names)
 
-    fig, ax = plt.subplots(figsize=(8.0, 5.2))
+    fig, ax = plt.subplots(figsize=(12.0, 7.0))
     x_vals = np.arange(n_cats)
 
     for idx, name in enumerate(catalog_names):
@@ -395,7 +395,7 @@ def plot_consensus_breakdown(
     )
     ax.grid(False, which="both")
     ax.set_ylim(0, max(50.0, float(np.max(pct_matrix)) + 8.0))
-    ax.legend(fontsize=9.5, loc="upper right", framealpha=0.9)
+    ax.legend(fontsize=8.5, loc="upper right", framealpha=0.9, ncol=2)
 
     fig.tight_layout()
     save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -570,8 +570,8 @@ def plot_tier_consensus_profiles(
     ncols = 3 if n_cats > 4 else 2
     nrows = (n_cats + ncols - 1) // ncols
 
-    fig = plt.figure(figsize=(14 if ncols == 3 else 13, 10))
-    gs = gridspec.GridSpec(2, 1, height_ratios=[1.0, 1.2], hspace=0.35)
+    fig = plt.figure(figsize=(max(14.0, 1.05 * n_cats), max(10.0, 2.0 * nrows + 4.0)))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[0.8, 1.4], hspace=0.35)
 
     # Top Subplot: Transposed Heatmap Matrix (4 bins x n_cats catalogs)
     ax_heat = fig.add_subplot(gs[0])
@@ -604,7 +604,7 @@ def plot_tier_consensus_profiles(
     ]
 
     ax_heat.set_xticks(np.arange(n_cats))
-    ax_heat.set_xticklabels(cat_labels, fontsize=10, rotation=15, ha="right")
+    ax_heat.set_xticklabels(cat_labels, fontsize=9, rotation=35, ha="right")
     ax_heat.set_yticks(np.arange(4))
     ax_heat.set_yticklabels(bin_row_labels, fontsize=10)
     ax_heat.set_title(
@@ -642,7 +642,7 @@ def plot_tier_consensus_profiles(
 
     # Bottom Subplot: Stacked Consensus Spectrum (Grid)
     gs_spec = gridspec.GridSpecFromSubplotSpec(
-        nrows, ncols, subplot_spec=gs[1], hspace=0.35, wspace=0.22
+        nrows, ncols, subplot_spec=gs[1], hspace=0.8, wspace=0.22
     )
     cmap = plt.colormaps["RdYlBu"]
     spec_colors = [cmap(i / max(1, n_cats - 1)) for i in range(n_cats)]
@@ -709,8 +709,8 @@ def plot_tier_consensus_profiles(
         spec_labels,
         loc="lower center",
         bbox_to_anchor=(0.5, -0.015),
-        ncol=n_cats,
-        fontsize=10,
+        ncol=min(6, n_cats),
+        fontsize=9,
         frameon=True,
         facecolor="white",
         edgecolor="#cccccc",
@@ -858,7 +858,7 @@ def plot_redshift_distributions(
     delta_z = z_edges[1] - z_edges[0]
     z_grid = np.linspace(redshift_range[0] - 0.02, redshift_range[1] + 0.02, 256)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5), sharey=True)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7.0), sharey=True)
 
     # Panel 1: Raw Top 1020
     for idx, name in enumerate(catalog_names):
@@ -894,7 +894,7 @@ def plot_redshift_distributions(
     ax1.set_ylabel(f"Cluster Count (per $\\Delta z = {delta_z:.3f}$)", fontsize=11.0)
     ax1.set_xlim(redshift_range[0] - 0.01, redshift_range[1] + 0.01)
     ax1.grid(False, which="both")
-    ax1.legend(fontsize=9.0, loc="upper right", framealpha=0.9)
+    ax1.legend(fontsize=8.0, loc="upper right", framealpha=0.9)
 
     # Panel 2: Stratified Top 1020 (Matched redMaPPer N(z))
     for idx, name in enumerate(catalog_names):
@@ -931,7 +931,7 @@ def plot_redshift_distributions(
     ax2.set_xlabel("Redshift z", fontsize=11.0)
     ax2.set_xlim(redshift_range[0] - 0.01, redshift_range[1] + 0.01)
     ax2.grid(False, which="both")
-    ax2.legend(fontsize=9.0, loc="upper right", framealpha=0.9)
+    ax2.legend(fontsize=8.0, loc="upper right", framealpha=0.9)
 
     fig.suptitle(
         f"Lens Catalog Redshift Distribution Comparison (N=1020 per catalog, {redshift_range[0]:.2f} ≤ z ≤ {redshift_range[1]:.2f})\n"
@@ -967,6 +967,10 @@ LABELS_TO_COMPARE = [
     "rz_diff_preset_1bin",
     "rz_diff_single_box_1bin",
     "rz_diff_two_box_red_1bin",
+    "rz_diff_two_box_match_recovery_1bin",
+    "rz_diff_single_box_match_recovery_1bin",
+    "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_six_param_match_recovery_1bin",
 ]
 
 DISPLAY_NAMES = {
@@ -979,10 +983,14 @@ DISPLAY_NAMES = {
     "clumpr_mass_1bin": "CluMPR (Mass)",
     "clumpr_richness_1bin": "CluMPR (Richness)",
     "amico_1bin": "AMICO",
-    "rz_diff_1bin": "r-z Diff",
+    "rz_diff_1bin": "r-z Diff (Two Box · WL)",
     "rz_diff_preset_1bin": "r-z Diff (Preset)",
-    "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
-    "rz_diff_two_box_red_1bin": "r-z Diff (Two Box Red)",
+    "rz_diff_single_box_1bin": "r-z Diff (Single Box · WL)",
+    "rz_diff_two_box_red_1bin": "r-z Diff (Two Box Red · WL)",
+    "rz_diff_two_box_match_recovery_1bin": "r-z Diff (Two Box · Match)",
+    "rz_diff_single_box_match_recovery_1bin": "r-z Diff (Single Box · Match)",
+    "rz_diff_two_box_red_match_recovery_1bin": "r-z Diff (Two Box Red · Match)",
+    "rz_diff_six_param_match_recovery_1bin": "r-z Diff (Six Param · Match)",
 }
 
 PALETTE = [
@@ -999,9 +1007,31 @@ PALETTE = [
     "#D55E00",  # Rust (r-z Diff Preset)
     "#009E73",  # Teal (r-z Diff Single Box)
     "#B91C1C",  # Dark Red (r-z Diff Two Box Red)
+    "#7B2CBF",
+    "#A16207",
+    "#0F766E",
+    "#334155",
 ]
 
-MARKERS = ["s", "x", "o", "v", "^", "D", "p", "h", "*", "8", "<", ">", "P"]
+MARKERS = [
+    "s",
+    "x",
+    "o",
+    "v",
+    "^",
+    "D",
+    "p",
+    "h",
+    "*",
+    "8",
+    "<",
+    ">",
+    "P",
+    "X",
+    "d",
+    "+",
+    "H",
+]
 
 REDSHIFT_RANGE = (0.19, 0.52)
 N_STRATIFIED_BINS = 10

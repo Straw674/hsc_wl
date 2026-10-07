@@ -1521,6 +1521,10 @@ RZ_DIFF_KEYS = [
     "rz_diff_preset_1bin",
     "rz_diff_single_box_1bin",
     "rz_diff_two_box_red_1bin",
+    "rz_diff_two_box_match_recovery_1bin",
+    "rz_diff_single_box_match_recovery_1bin",
+    "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_six_param_match_recovery_1bin",
 ]
 
 LABELS_TO_COMPARE = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
@@ -1535,10 +1539,14 @@ DISPLAY_NAMES = {
     "clumpr_mass_1bin": "CluMPR (Mass)",
     "clumpr_richness_1bin": "CluMPR (Richness)",
     "amico_1bin": "AMICO",
-    "rz_diff_1bin": "r-z Diff",
+    "rz_diff_1bin": "r-z Diff (Two Box · WL)",
     "rz_diff_preset_1bin": "r-z Diff (Preset)",
-    "rz_diff_single_box_1bin": "r-z Diff (Single Box)",
-    "rz_diff_two_box_red_1bin": "r-z Diff (Two Box Red)",
+    "rz_diff_single_box_1bin": "r-z Diff (Single Box · WL)",
+    "rz_diff_two_box_red_1bin": "r-z Diff (Two Box Red · WL)",
+    "rz_diff_two_box_match_recovery_1bin": "r-z Diff (Two Box · Match)",
+    "rz_diff_single_box_match_recovery_1bin": "r-z Diff (Single Box · Match)",
+    "rz_diff_two_box_red_match_recovery_1bin": "r-z Diff (Two Box Red · Match)",
+    "rz_diff_six_param_match_recovery_1bin": "r-z Diff (Six Param · Match)",
 }
 
 OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
@@ -1591,6 +1599,10 @@ HTML_MAIN_KEYS = (
     "rz_diff_preset_1bin",
     "rz_diff_single_box_1bin",
     "rz_diff_two_box_red_1bin",
+    "rz_diff_two_box_match_recovery_1bin",
+    "rz_diff_single_box_match_recovery_1bin",
+    "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_six_param_match_recovery_1bin",
 )
 HTML_GROUPS = {
     "Optical candidate catalogs": (
@@ -1609,6 +1621,10 @@ HTML_GROUPS = {
         "rz_diff_preset_1bin",
         "rz_diff_single_box_1bin",
         "rz_diff_two_box_red_1bin",
+        "rz_diff_two_box_match_recovery_1bin",
+        "rz_diff_single_box_match_recovery_1bin",
+        "rz_diff_two_box_red_match_recovery_1bin",
+        "rz_diff_six_param_match_recovery_1bin",
     ),
     "External reference catalogs": (
         "act_dr6",
@@ -1723,6 +1739,38 @@ HTML_STYLES = {
         shape="inverted_triangle",
         diameter=0.23,
         line_width=1.7,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_two_box_match_recovery_1bin": dict(
+        color="#7B2CBF",
+        shape="triangle",
+        diameter=0.23,
+        line_width=1.8,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_single_box_match_recovery_1bin": dict(
+        color="#A16207",
+        shape="triangle",
+        diameter=0.23,
+        line_width=1.8,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_two_box_red_match_recovery_1bin": dict(
+        color="#0F766E",
+        shape="triangle",
+        diameter=0.23,
+        line_width=1.8,
+        alpha=0.95,
+        visible=False,
+    ),
+    "rz_diff_six_param_match_recovery_1bin": dict(
+        color="#334155",
+        shape="triangle",
+        diameter=0.23,
+        line_width=1.8,
         alpha=0.95,
         visible=False,
     ),
