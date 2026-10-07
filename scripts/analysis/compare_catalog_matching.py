@@ -915,7 +915,6 @@ def plot_redshift_distributions(
 # %% Global Configuration
 
 LABELS_TO_COMPARE = [
-    # External benchmarks (SDSS & DESI Legacy Surveys)
     "camira_1bin",
     "redm_r16_1bin",
     "wh24_1bin",
@@ -924,19 +923,20 @@ LABELS_TO_COMPARE = [
     "yang21_richness_1bin",
     "clumpr_mass_1bin",
     "clumpr_richness_1bin",
-    # HSC reproduced / pipeline candidates
     "amico_1bin",
-    "rz_diff_preset_1bin",
-    "rz_diff_1bin",
-    "rz_diff_two_box_match_recovery_1bin",
+    # Inner radius: 0.21-0.30 Mpc/h.
     "rz_diff_single_box_1bin",
-    "rz_diff_single_box_match_recovery_1bin",
-    "rz_diff_two_box_red_1bin",
-    "rz_diff_two_box_red_match_recovery_1bin",
-    "rz_diff_two_box_red_redmapper_matching_1bin",
-    "rz_diff_two_box_red_camira_matching_1bin",
+    "rz_diff_1bin",
     "rz_diff_six_param_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_two_box_red_1bin",
+    "rz_diff_single_box_match_recovery_1bin",
+    # Inner radius: 0.52-0.57 Mpc/h.
+    "rz_diff_two_box_red_redmapper_matching_1bin",
     "rz_diff_six_param_match_recovery_1bin",
+    "rz_diff_two_box_match_recovery_1bin",
+    "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_two_box_red_camira_matching_1bin",
 ]
 
 DISPLAY_NAMES = {
@@ -972,17 +972,17 @@ PALETTE = [
     "#AA3377",  # Purple (CluMPR Mass)
     "#EE8866",  # Coral (CluMPR Richness)
     "#10B981",  # Emerald (AMICO)
-    "#D55E00",  # Preset
-    "#E69F00",  # Two Box WL
-    "#7B2CBF",  # Two Box Match
     "#009E73",  # Single Box WL
-    "#A16207",  # Single Box Match
-    "#B91C1C",  # Two Box Red WL
-    "#0F766E",  # Two Box Red Match
-    "#CC79A7",  # Two Box Red redMaPPer Match
-    "#56B4E9",  # Two Box Red CAMIRA Match
+    "#E69F00",  # Two Box WL
     "#2563EB",  # Six Param WL
+    "#D55E00",  # Preset
+    "#B91C1C",  # Two Box Red WL
+    "#A16207",  # Single Box Match
+    "#CC79A7",  # Two Box Red redMaPPer Match
     "#334155",  # Six Param Match
+    "#7B2CBF",  # Two Box Match
+    "#0F766E",  # Two Box Red Match
+    "#56B4E9",  # Two Box Red CAMIRA Match
 ]
 
 MARKERS = [
@@ -995,17 +995,17 @@ MARKERS = [
     "p",
     "h",
     "*",
-    "<",
-    "8",
-    "X",
     ">",
-    "d",
-    "P",
-    "+",
-    "s",
-    "^",
+    "8",
     "o",
+    "<",
+    "P",
+    "d",
+    "s",
     "H",
+    "X",
+    "+",
+    "^",
 ]
 
 REDSHIFT_RANGE = (0.19, 0.52)

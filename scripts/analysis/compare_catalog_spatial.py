@@ -1524,17 +1524,19 @@ FIRST_CLASS_KEYS = [
 ]
 
 RZ_DIFF_KEYS = [
-    "rz_diff_preset_1bin",
-    "rz_diff_1bin",
-    "rz_diff_two_box_match_recovery_1bin",
+    # Inner radius: 0.21-0.30 Mpc/h.
     "rz_diff_single_box_1bin",
-    "rz_diff_single_box_match_recovery_1bin",
-    "rz_diff_two_box_red_1bin",
-    "rz_diff_two_box_red_match_recovery_1bin",
-    "rz_diff_two_box_red_redmapper_matching_1bin",
-    "rz_diff_two_box_red_camira_matching_1bin",
+    "rz_diff_1bin",
     "rz_diff_six_param_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_two_box_red_1bin",
+    "rz_diff_single_box_match_recovery_1bin",
+    # Inner radius: 0.52-0.57 Mpc/h.
+    "rz_diff_two_box_red_redmapper_matching_1bin",
     "rz_diff_six_param_match_recovery_1bin",
+    "rz_diff_two_box_match_recovery_1bin",
+    "rz_diff_two_box_red_match_recovery_1bin",
+    "rz_diff_two_box_red_camira_matching_1bin",
 ]
 
 LABELS_TO_COMPARE = FIRST_CLASS_KEYS + RZ_DIFF_KEYS
@@ -1598,28 +1600,7 @@ print(
 
 # %% [Stage 2: Interactive Regional Spatial Web Visualizer (Bokeh HTML)]
 
-HTML_MAIN_KEYS = (
-    "camira_1bin",
-    "redm_r16_1bin",
-    "wh24_1bin",
-    "zou21_1bin",
-    "yang21_mass_1bin",
-    "yang21_richness_1bin",
-    "clumpr_mass_1bin",
-    "clumpr_richness_1bin",
-    "amico_1bin",
-    "rz_diff_preset_1bin",
-    "rz_diff_1bin",
-    "rz_diff_two_box_match_recovery_1bin",
-    "rz_diff_single_box_1bin",
-    "rz_diff_single_box_match_recovery_1bin",
-    "rz_diff_two_box_red_1bin",
-    "rz_diff_two_box_red_match_recovery_1bin",
-    "rz_diff_two_box_red_redmapper_matching_1bin",
-    "rz_diff_two_box_red_camira_matching_1bin",
-    "rz_diff_six_param_1bin",
-    "rz_diff_six_param_match_recovery_1bin",
-)
+HTML_MAIN_KEYS = tuple(LABELS_TO_COMPARE)
 HTML_GROUPS = {
     "Optical candidate catalogs": (
         "camira_1bin",
@@ -1631,20 +1612,7 @@ HTML_GROUPS = {
         "clumpr_mass_1bin",
         "clumpr_richness_1bin",
     ),
-    "AMICO / RZ diff": (
-        "amico_1bin",
-        "rz_diff_preset_1bin",
-        "rz_diff_1bin",
-        "rz_diff_two_box_match_recovery_1bin",
-        "rz_diff_single_box_1bin",
-        "rz_diff_single_box_match_recovery_1bin",
-        "rz_diff_two_box_red_1bin",
-        "rz_diff_two_box_red_match_recovery_1bin",
-        "rz_diff_two_box_red_redmapper_matching_1bin",
-        "rz_diff_two_box_red_camira_matching_1bin",
-        "rz_diff_six_param_1bin",
-        "rz_diff_six_param_match_recovery_1bin",
-    ),
+    "AMICO / RZ diff": ("amico_1bin", *RZ_DIFF_KEYS),
     "External reference catalogs": (
         "act_dr6",
         "erass3",
