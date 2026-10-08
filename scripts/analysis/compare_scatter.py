@@ -260,12 +260,10 @@ def plot_panel_scatter_comparison(
 # Labels to compare (must be 4bin configurations, e.g. ("amico_4bin", "Y3")).
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
 LABELS = [
-    ("logm_s16a_4bin", "Y3"),
-    ("redm_s16a_4bin", "Y3"),
-    ("camira_4bin", "Y3"),
-    # ("rz_diff_4bin", "Y3"),
-    # ("rz_diff_lum_4bin", "Y3"),
+    ("rz_diff_4bin", "Y3"),
     ("rz_diff_preset_4bin", "Y3"),
+    ("rz_diff_single_box_4bin", "Y3"),
+    ("rz_diff_two_box_red_4bin", "Y3"),
 ]
 
 # Optional: display names for labels in the legend

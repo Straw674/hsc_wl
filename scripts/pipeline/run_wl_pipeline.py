@@ -31,19 +31,11 @@ from initial import *  # noqa: F401,F403
 #   RUN_LABEL = ["redm_s16a_hectomap_4bin", "camira_hectomap_4bin"]
 #   RUN_LABEL = list(RUN_REGISTRY.keys())  # run all configurations
 RUN_LABEL = [
-    # "rz_diff_1bin",
-    # "rz_diff_lum_1bin",
-    # "rz_diff_preset_1bin",
-    # "rz_diff_preset_lum_1bin",
-    "rz_diff_single_box_1bin",
-    "rz_diff_single_box_lum_1bin",
+    "rz_diff_4bin",
+    "rz_diff_preset_4bin",
+    "rz_diff_single_box_4bin",
+    "rz_diff_two_box_red_4bin",
 ]
-# RUN_LABEL = [
-#     "rz_diff_4bin",
-#     "rz_diff_lum_4bin",
-#     "rz_diff_preset_4bin",
-#     "rz_diff_preset_lum_4bin",
-# ]
 
 # %% Local Functions
 
