@@ -90,6 +90,45 @@ def load_comparison_data(configs_to_compare, root_path, display_names=None):
     return present_labels, loaded_tables, label_time_texts
 
 
+def resolve_comparison_styles(
+    configs_to_compare,
+    present_labels,
+    catalog_styles,
+    default_palette,
+    default_markers,
+    display_names=None,
+):
+    """Resolve distinct colors and markers for each loaded configuration."""
+    display_names = display_names or {}
+    config_by_display = {}
+    for catalog_id, nbins, _ in configs_to_compare:
+        key = f"{catalog_id}_{nbins}"
+        dname = display_names.get(
+            key, display_names.get(catalog_id, f"{catalog_id} ({nbins})")
+        )
+        config_by_display[dname] = catalog_id
+
+    resolved_palette = []
+    resolved_markers = []
+    for i, label in enumerate(present_labels):
+        cat_id = config_by_display.get(label, label)
+        base_cat = cat_id.removesuffix("_4bin").removesuffix("_1bin")
+        matched = None
+        for key in (label, cat_id, base_cat):
+            if key in catalog_styles:
+                matched = catalog_styles[key]
+                break
+
+        if matched:
+            resolved_palette.append(matched["color"])
+            resolved_markers.append(matched["marker"])
+        else:
+            resolved_palette.append(default_palette[i % len(default_palette)])
+            resolved_markers.append(default_markers[i % len(default_markers)])
+
+    return resolved_palette, resolved_markers
+
+
 def plot_main_comparison(
     present_labels,
     loaded_tables,
@@ -99,11 +138,16 @@ def plot_main_comparison(
     use_log_y,
     reference_line_y,
     color_mode,
+    palette=None,
+    markers=None,
     marker_size=4.0,
     capsize=0.0,
     elinewidth=0.8,
 ):
     """Plot the main ΔΣ comparison profile across all labels."""
+    palette = palette or LABEL_PALETTE
+    markers = markers or MARKERS
+
     fig_height = max(4.0, 3.3 * n_bins)
     fig, axes = plt.subplots(
         n_bins, 1, figsize=(8.6, fig_height), sharex=True, sharey=False
@@ -121,9 +165,9 @@ def plot_main_comparison(
             label_text=display_name,
             label_index=i,
             n_labels=len(present_labels),
-            marker=MARKERS[i % len(MARKERS)],
+            marker=markers[i % len(markers)],
             color_mode=color_mode,
-            palette=LABEL_PALETTE,
+            palette=palette,
             multiply_by_radius=multiply_by_radius,
             use_spline=use_spline,
             use_log_y=use_log_y,
@@ -207,6 +251,8 @@ def plot_ratio_comparison(
     use_log_y,
     reference_line_y,
     color_mode,
+    palette=None,
+    markers=None,
     marker_size=4.0,
     capsize=0.0,
     elinewidth=0.8,
@@ -214,6 +260,9 @@ def plot_ratio_comparison(
     """Plot ratio ΔΣ / ΔΣ_ref across all non-reference labels."""
     if not loaded_tables or len(loaded_tables) <= 1:
         return None
+
+    palette = palette or LABEL_PALETTE
+    markers = markers or MARKERS
 
     reference_tables = loaded_tables[0]
     fig_height = max(4.0, 3.3 * n_bins)
@@ -243,9 +292,9 @@ def plot_ratio_comparison(
             label_text=label_name,
             label_index=config_index,
             n_labels=len(present_labels),
-            marker=MARKERS[config_index % len(MARKERS)],
+            marker=markers[config_index % len(markers)],
             color_mode=color_mode,
-            palette=LABEL_PALETTE,
+            palette=palette,
             multiply_by_radius=multiply_by_radius,
             use_spline=use_spline,
             use_log_y=use_log_y,
@@ -404,36 +453,142 @@ CONFIGS_TO_COMPARE = [
 CONFIGS_TO_COMPARE = [
     ("ideal_mdpl2", "1bin", "Y3"),
     ("camira", "1bin", "Y3"),
+    ("redm_r16", "1bin", "Y3"),
     ("wh24", "1bin", "Y3"),
     ("zou21", "1bin", "Y3"),
-    ("yang21_mass", "1bin", "Y3"),
+    # ("yang21_mass", "1bin", "Y3"),
     ("yang21_richness", "1bin", "Y3"),
-    ("clumpr_mass", "1bin", "Y3"),
+    # ("clumpr_mass", "1bin", "Y3"),
     ("clumpr_richness", "1bin", "Y3"),
+    ("rz_diff", "1bin", "Y3"),
+    # ("rz_diff_preset", "1bin", "Y3"),
+    # ("rz_diff_single_box", "1bin", "Y3"),
+    # ("rz_diff_two_box_red", "1bin", "Y3"),
 ]
 
 DISPLAY_NAMES = {
     "ideal_mdpl2": "Ideal MDPL2",
+    "ideal_colossus": "Ideal Colossus",
     "camira": "CAMIRA",
+    "redm_r16": "redMaPPer R16",
+    "redm_r16_hectomap": "redMaPPer R16 (HectoMAP)",
+    "redm_pdr3_5band_free": "redMaPPer PDR3",
     "wh24": "WH24",
     "zou21": "Zou21",
     "yang21_mass": "Yang21 (Halo Mass)",
     "yang21_richness": "Yang21 (Richness)",
     "clumpr_mass": "CluMPR (Mass)",
     "clumpr_richness": "CluMPR (Richness)",
+    "amico": "AMICO",
+    "cosine": "COSINE",
+    "pls": "PLS",
+    "regression": "Regression",
+    "rz_diff": "r-z Diff",
+    "rz_diff_lum": "r-z Diff (Lum)",
+    "rz_diff_preset": "r-z Diff (Preset)",
+    "rz_diff_preset_lum": "r-z Diff (Preset Lum)",
+    "rz_diff_single_box": "r-z Diff (Single Box)",
+    "rz_diff_single_box_lum": "r-z Diff (Single Box Lum)",
+    "rz_diff_two_box_red": "r-z Diff (Two Box Red)",
+    "rz_diff_two_box_red_lum": "r-z Diff (Two Box Red Lum)",
+    "cca1": "CCA1",
+    "cca1_specz": "CCA1 (spec-z)",
+    "cca2": "CCA2",
+    "cca2_specz": "CCA2 (spec-z)",
+    "logm_s16a": "logM* (S16a)",
 }
 
-MARKERS = ["o", "s", "o", "v", "^", "D", "p", "h"]
+CATALOG_STYLES = {
+    "ideal_mdpl2": {"color": "#000000", "marker": "o"},
+    "ideal_colossus": {"color": "#555555", "marker": "s"},
+    "camira": {"color": "#EE6677", "marker": "s"},
+    "redm_r16": {"color": "#4477AA", "marker": "d"},
+    "redm_r16_hectomap": {"color": "#4477AA", "marker": "d"},
+    "redm_s16a": {"color": "#4477AA", "marker": "x"},
+    "redm_pdr3_5band_free": {"color": "#CC79A7", "marker": "+"},
+    "wh24": {"color": "#228833", "marker": "o"},
+    "zou21": {"color": "#CCBB44", "marker": "v"},
+    "yang21_mass": {"color": "#66CCEE", "marker": "^"},
+    "yang21_richness": {"color": "#332288", "marker": "D"},
+    "clumpr_mass": {"color": "#AA3377", "marker": "p"},
+    "clumpr_richness": {"color": "#EE8866", "marker": "h"},
+    "rz_diff": {"color": "#E69F00", "marker": "P"},
+    "rz_diff_lum": {"color": "#E69F00", "marker": "P"},
+    "rz_diff_preset": {"color": "#D55E00", "marker": "*"},
+    "rz_diff_preset_lum": {"color": "#D55E00", "marker": "*"},
+    "rz_diff_single_box": {"color": "#009E73", "marker": ">"},
+    "rz_diff_single_box_lum": {"color": "#009E73", "marker": ">"},
+    "rz_diff_two_box_red": {"color": "#B91C1C", "marker": "8"},
+    "rz_diff_two_box_red_lum": {"color": "#B91C1C", "marker": "8"},
+    "rz_diff_six_param": {"color": "#2563EB", "marker": "X"},
+    "amico": {"color": "#10B981", "marker": "*"},
+    "cosine": {"color": "#009988", "marker": "H"},
+    "pls": {"color": "#7B2CBF", "marker": "d"},
+    "regression": {"color": "#334155", "marker": "p"},
+    "cca1": {"color": "#0F766E", "marker": "^"},
+    "cca1_specz": {"color": "#0F766E", "marker": "^"},
+    "cca2": {"color": "#56B4E9", "marker": "v"},
+    "cca2_specz": {"color": "#56B4E9", "marker": "v"},
+    "logm_s16a": {"color": "#DDAA33", "marker": "s"},
+}
 
+# Distinct marker symbols ensuring no repetition for up to 21 samples
+MARKERS = [
+    "o",  # Circle
+    "s",  # Square
+    "d",  # Diamond (thin)
+    "^",  # Triangle Up
+    "v",  # Triangle Down
+    "<",  # Triangle Left
+    "D",  # Diamond
+    "p",  # Pentagon
+    "h",  # Hexagon 1
+    "P",  # Plus (filled)
+    "*",  # Star
+    ">",  # Triangle Right
+    "8",  # Octagon
+    "X",  # Cross (filled)
+    "H",  # Hexagon 2
+    "x",  # Cross (unfilled)
+    "+",  # Plus (unfilled)
+    "1",  # Tri Down
+    "2",  # Tri Up
+    "3",  # Tri Left
+    "4",  # Tri Right
+]
+
+# Curated high-contrast 30-color palette aligned across project scripts
 LABEL_PALETTE = [
     "#000000",  # Black (Ideal MDPL2)
     "#EE6677",  # Red (CAMIRA)
+    "#4477AA",  # Blue (redMaPPer R16)
     "#228833",  # Dark Green (WH24)
     "#CCBB44",  # Yellow-Olive (Zou21)
     "#66CCEE",  # Cyan (Yang21 Halo Mass)
     "#332288",  # Indigo (Yang21 Richness)
     "#AA3377",  # Purple (CluMPR Mass)
     "#EE8866",  # Coral (CluMPR Richness)
+    "#E69F00",  # Orange (r-z Diff)
+    "#10B981",  # Emerald (AMICO)
+    "#D55E00",  # Vermilion (r-z Diff Preset)
+    "#009E73",  # Bluish Green (r-z Diff Single Box)
+    "#B91C1C",  # Crimson (r-z Diff Two Box Red)
+    "#2563EB",  # Royal Blue (r-z Diff Six Param)
+    "#7B2CBF",  # Violet (PLS)
+    "#0F766E",  # Deep Teal (CCA1)
+    "#334155",  # Slate (Regression)
+    "#CC79A7",  # Rose Pink (redMaPPer PDR3)
+    "#56B4E9",  # Sky Blue (CCA2)
+    "#009988",  # Teal (COSINE)
+    "#555555",  # Dark Gray (Ideal Colossus)
+    "#DDAA33",  # Sand / Ochre (logM* S16a)
+    "#8B4513",  # Saddle Brown
+    "#D81B60",  # Magenta / Cerise
+    "#88BB44",  # Apple Green
+    "#662244",  # Dark Plum
+    "#00A389",  # Mint / Turquoise
+    "#2E3440",  # Nordic Charcoal
+    "#994F00",  # Burnt Orange
 ]
 
 COLOR_MODE = "by_label"
@@ -448,6 +603,14 @@ OUTPUT_RATIO_FIG = project_root / "output/plots_for_agents/visual_multi_ratio.pn
 # %% [Stage 1: Load comparison data]
 present_labels, loaded_tables, label_time_texts = load_comparison_data(
     CONFIGS_TO_COMPARE, project_root, display_names=DISPLAY_NAMES
+)
+active_palette, active_markers = resolve_comparison_styles(
+    CONFIGS_TO_COMPARE,
+    present_labels,
+    CATALOG_STYLES,
+    LABEL_PALETTE,
+    MARKERS,
+    display_names=DISPLAY_NAMES,
 )
 
 
@@ -468,6 +631,8 @@ if loaded_tables:
         use_log_y=MAIN_USE_LOG_Y,
         reference_line_y=MAIN_REFERENCE_LINE_Y,
         color_mode=COLOR_MODE,
+        palette=active_palette,
+        markers=active_markers,
         marker_size=MARKER_SIZE,
         capsize=CAPSIZE,
         elinewidth=ERRORBAR_LINEWIDTH,
@@ -494,6 +659,8 @@ if loaded_tables:
         use_log_y=RATIO_USE_LOG_Y,
         reference_line_y=RATIO_REFERENCE_LINE_Y,
         color_mode=COLOR_MODE,
+        palette=active_palette,
+        markers=active_markers,
         marker_size=MARKER_SIZE,
         capsize=CAPSIZE,
         elinewidth=ERRORBAR_LINEWIDTH,

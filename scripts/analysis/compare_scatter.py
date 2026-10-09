@@ -53,15 +53,27 @@ def load_scatter_summaries(labels, root_path):
     return data_dict
 
 
-def get_sample_style(label, sample_styles, default_style):
+def get_sample_style(
+    label,
+    sample_styles,
+    default_colors=None,
+    default_markers=None,
+    fallback_index=0,
+):
     """Resolve catalog-family styles independently of sample order or presence."""
-    lens_label = label[0]
+    lens_label = label[0] if isinstance(label, tuple) else str(label)
     catalog_id = lens_label.removesuffix("_4bin")
     catalog_family = lens_label.split("_", 1)[0]
     for key in (label, lens_label, catalog_id, catalog_family):
         if key in sample_styles:
             return sample_styles[key]
-    return default_style
+    colors = default_colors or COMPARISON_COLORS
+    markers = default_markers or MARKERS
+    return {
+        "color": colors[fallback_index % len(colors)],
+        "marker": markers[fallback_index % len(markers)],
+        "filled": True,
+    }
 
 
 def plot_scatter_comparison(
@@ -104,7 +116,13 @@ def plot_scatter_comparison(
         marker = style["marker"]
 
         lens_label, source_label = label
-        display_name = display_names.get(label, f"{lens_label} ({source_label})")
+        catalog_id = lens_label.removesuffix("_4bin")
+        display_name = (
+            display_names.get(label)
+            or display_names.get(lens_label)
+            or display_names.get(catalog_id)
+            or f"{catalog_id} ({source_label})"
+        )
 
         offset = 1.0 + 0.05 * (i - (len(data_dict) - 1) / 2.0)
         ax.errorbar(
@@ -117,17 +135,30 @@ def plot_scatter_comparison(
             capsize=3,
             alpha=0.9,
         )
-        ax.scatter(
-            x_val * offset,
-            y_val,
-            s=150,
-            marker=marker,
-            alpha=0.9,
-            facecolor=color if style["filled"] else "none",
-            edgecolor="k" if style["filled"] else color,
-            linewidth=1.5,
-            label=display_name,
-        )
+        is_unfilled_marker = marker in {"x", "+", "1", "2", "3", "4", "|", "_"}
+        if is_unfilled_marker:
+            ax.scatter(
+                x_val * offset,
+                y_val,
+                s=150,
+                marker=marker,
+                alpha=0.9,
+                color=color,
+                linewidth=1.5,
+                label=display_name,
+            )
+        else:
+            ax.scatter(
+                x_val * offset,
+                y_val,
+                s=150,
+                marker=marker,
+                alpha=0.9,
+                facecolor=color if style["filled"] else "none",
+                edgecolor="k" if style["filled"] else color,
+                linewidth=1.5,
+                label=display_name,
+            )
 
     ax.set_xlabel(r"$N(>M)\ [\rm Mpc^{-3}]$", fontsize=20)
     ax.set_ylabel(r"$\sigma_{\mathcal{M}|\mathcal{O}}\ [\rm dex]$", fontsize=20)
@@ -168,18 +199,38 @@ def plot_grouped_scatter_comparison(
         fig, ax = plt.subplots(figsize=(9, 5), layout="constrained")
         for label, offset in zip(available_labels, offsets, strict=True):
             summary = data_dict[label]
-            color = colors[labels.index(label) % len(colors)]
+            idx = labels.index(label)
+            if isinstance(colors, dict):
+                style_entry = colors.get(label, {})
+                color = (
+                    style_entry.get("color")
+                    if isinstance(style_entry, dict)
+                    else style_entry
+                )
+                marker = (
+                    style_entry.get("marker", "o")
+                    if isinstance(style_entry, dict)
+                    else "o"
+                )
+            else:
+                color = colors[idx % len(colors)]
+                marker = MARKERS[idx % len(MARKERS)]
+
             run_label, version = label
-            display_name = display_names.get(
-                label, f"{run_label.removesuffix('_4bin')} ({version})"
+            catalog_id = run_label.removesuffix("_4bin")
+            display_name = (
+                display_names.get(label)
+                or display_names.get(run_label)
+                or display_names.get(catalog_id)
+                or f"{catalog_id} ({version})"
             )
             ax.errorbar(
                 bin_positions + offset,
                 np.asarray(summary["sig_med_bt"]),
                 yerr=np.asarray(summary["sig_err_bt"]),
-                fmt="o",
+                fmt=marker,
                 color=color,
-                markersize=5,
+                markersize=6,
                 markeredgewidth=1,
                 elinewidth=1.2,
                 capsize=3,
@@ -213,7 +264,10 @@ def plot_panel_scatter_comparison(
     """Compare samples in one panel per bin using shared scatter limits."""
     available_labels = [label for label in labels if label in data_dict]
     sample_names = [
-        display_names.get(label, f"{label[0].removesuffix('_4bin')} ({label[1]})")
+        display_names.get(label)
+        or display_names.get(label[0])
+        or display_names.get(label[0].removesuffix("_4bin"))
+        or f"{label[0].removesuffix('_4bin')} ({label[1]})"
         for label in available_labels
     ]
     with plt.rc_context({"font.size": 12, "font.weight": "normal"}):
@@ -231,13 +285,30 @@ def plot_panel_scatter_comparison(
         ):
             for sample_index, label in enumerate(available_labels):
                 summary = data_dict[label]
+                idx = labels.index(label)
+                if isinstance(colors, dict):
+                    style_entry = colors.get(label, {})
+                    color = (
+                        style_entry.get("color")
+                        if isinstance(style_entry, dict)
+                        else style_entry
+                    )
+                    marker = (
+                        style_entry.get("marker", "o")
+                        if isinstance(style_entry, dict)
+                        else "o"
+                    )
+                else:
+                    color = colors[idx % len(colors)]
+                    marker = MARKERS[idx % len(MARKERS)]
+
                 ax.errorbar(
                     np.asarray(summary["sig_med_bt"])[bin_index],
                     sample_index,
                     xerr=np.asarray(summary["sig_err_bt"])[bin_index],
-                    fmt="o",
-                    color=colors[labels.index(label) % len(colors)],
-                    markersize=5,
+                    fmt=marker,
+                    color=color,
+                    markersize=6,
                     elinewidth=1.2,
                     capsize=3,
                 )
@@ -265,6 +336,10 @@ def plot_panel_scatter_comparison(
 # Labels to compare (must be 4bin configurations, e.g. ("amico_4bin", "Y3")).
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
 LABELS = [
+    ("rz_diff_4bin", "Y3"),
+    # ("rz_diff_preset_4bin", "Y3"),
+    # ("rz_diff_single_box_4bin", "Y3"),
+    # ("rz_diff_two_box_red_4bin", "Y3"),
     ("camira_4bin", "Y3"),
     ("wh24_4bin", "Y3"),
     ("zou21_4bin", "Y3"),
@@ -283,6 +358,20 @@ DISPLAY_NAMES = {
     ("yang21_richness_4bin", "Y3"): "Yang21 (Richness)",
     ("clumpr_mass_4bin", "Y3"): "CluMPR (Mass)",
     ("clumpr_richness_4bin", "Y3"): "CluMPR (Richness)",
+    ("rz_diff_4bin", "Y3"): "r-z Diff",
+    ("rz_diff_preset_4bin", "Y3"): "r-z Diff (Preset)",
+    ("rz_diff_single_box_4bin", "Y3"): "r-z Diff (Single Box)",
+    ("rz_diff_two_box_red_4bin", "Y3"): "r-z Diff (Two Box Red)",
+    ("rz_diff_six_param_4bin", "Y3"): "r-z Diff (Six Param)",
+    ("redm_r16_4bin", "Y3"): "redMaPPer R16",
+    ("amico_4bin", "Y3"): "AMICO",
+    ("cosine_4bin", "Y3"): "COSINE",
+    ("pls_4bin", "Y3"): "PLS",
+    ("regression_4bin", "Y3"): "Regression",
+    ("cca1_4bin", "Y3"): "CCA1",
+    ("cca2_4bin", "Y3"): "CCA2",
+    ("ideal_mdpl2_4bin", "Y3"): "Ideal MDPL2",
+    ("ideal_colossus_4bin", "Y3"): "Ideal Colossus",
 }
 
 # Bind first-figure styles to catalog families across run and source versions.
@@ -294,18 +383,81 @@ SAMPLE_STYLES = {
     "yang21_richness": {"color": "#332288", "marker": "D", "filled": True},
     "clumpr_mass": {"color": "#AA3377", "marker": "p", "filled": True},
     "clumpr_richness": {"color": "#EE8866", "marker": "h", "filled": True},
+    "redm_r16": {"color": "#4477AA", "marker": "d", "filled": True},
+    "redm_s16a": {"color": "#4477AA", "marker": "x", "filled": False},
+    "redm_pdr3_5band_free": {"color": "#CC79A7", "marker": "+", "filled": False},
+    "amico": {"color": "#10B981", "marker": "*", "filled": True},
+    "rz_diff": {"color": "#E69F00", "marker": "P", "filled": True},
+    "rz_diff_preset": {"color": "#D55E00", "marker": "*", "filled": True},
+    "rz_diff_single_box": {"color": "#009E73", "marker": ">", "filled": True},
+    "rz_diff_two_box_red": {"color": "#B91C1C", "marker": "8", "filled": True},
+    "rz_diff_six_param": {"color": "#2563EB", "marker": "X", "filled": True},
+    "cosine": {"color": "#009988", "marker": "H", "filled": True},
+    "pls": {"color": "#7B2CBF", "marker": "d", "filled": True},
+    "regression": {"color": "#334155", "marker": "p", "filled": True},
+    "cca1": {"color": "#0F766E", "marker": "^", "filled": True},
+    "cca2": {"color": "#56B4E9", "marker": "v", "filled": True},
+    "ideal_mdpl2": {"color": "#000000", "marker": "o", "filled": False},
+    "ideal_colossus": {"color": "#555555", "marker": "s", "filled": False},
 }
-DEFAULT_STYLE = {"color": "#7f7f7f", "marker": "v", "filled": True}
 
-# Assign colors by LABELS order in the grouped and panel figures.
+# Distinct marker symbols ensuring no repetition for up to 21 samples
+MARKERS = [
+    "o",  # Circle
+    "s",  # Square
+    "d",  # Diamond (thin)
+    "^",  # Triangle Up
+    "v",  # Triangle Down
+    "<",  # Triangle Left
+    "D",  # Diamond
+    "p",  # Pentagon
+    "h",  # Hexagon 1
+    "P",  # Plus (filled)
+    "*",  # Star
+    ">",  # Triangle Right
+    "8",  # Octagon
+    "X",  # Cross (filled)
+    "H",  # Hexagon 2
+    "x",  # Cross (unfilled)
+    "+",  # Plus (unfilled)
+    "1",  # Tri Down
+    "2",  # Tri Up
+    "3",  # Tri Left
+    "4",  # Tri Right
+]
+
+# Curated high-contrast 30-color palette aligned across project scripts
 COMPARISON_COLORS = [
     "#EE6677",  # Red (CAMIRA)
+    "#4477AA",  # Blue (redMaPPer R16)
     "#228833",  # Dark Green (WH24)
     "#CCBB44",  # Yellow-Olive (Zou21)
     "#66CCEE",  # Cyan (Yang21 Halo Mass)
     "#332288",  # Indigo (Yang21 Richness)
     "#AA3377",  # Purple (CluMPR Mass)
     "#EE8866",  # Coral (CluMPR Richness)
+    "#E69F00",  # Orange (r-z Diff)
+    "#10B981",  # Emerald (AMICO)
+    "#D55E00",  # Vermilion (r-z Diff Preset)
+    "#009E73",  # Bluish Green (r-z Diff Single Box)
+    "#B91C1C",  # Crimson (r-z Diff Two Box Red)
+    "#2563EB",  # Royal Blue (r-z Diff Six Param)
+    "#7B2CBF",  # Violet (PLS)
+    "#0F766E",  # Deep Teal (CCA1)
+    "#334155",  # Slate (Regression)
+    "#CC79A7",  # Rose Pink (redMaPPer PDR3)
+    "#56B4E9",  # Sky Blue (CCA2)
+    "#009988",  # Teal (COSINE)
+    "#555555",  # Dark Gray (Ideal Colossus)
+    "#DDAA33",  # Sand / Ochre (logM* S16a)
+    "#8B4513",  # Saddle Brown
+    "#D81B60",  # Magenta / Cerise
+    "#88BB44",  # Apple Green
+    "#662244",  # Dark Plum
+    "#00A389",  # Mint / Turquoise
+    "#2E3440",  # Nordic Charcoal
+    "#994F00",  # Burnt Orange
+    "#000000",  # Black (Ideal MDPL2)
 ]
 
 # Hardcoded rho bins (Mpc^-3) as they might be missing from some pkl files
@@ -325,7 +477,14 @@ OUTPUT_FIG = project_root / "output/plots_for_agents/compare_scatter.png"
 # %% [Stage 1: Load data]
 data_dict = load_scatter_summaries(LABELS, project_root)
 styles = {
-    label: get_sample_style(label, SAMPLE_STYLES, DEFAULT_STYLE) for label in LABELS
+    label: get_sample_style(
+        label,
+        SAMPLE_STYLES,
+        default_colors=COMPARISON_COLORS,
+        default_markers=MARKERS,
+        fallback_index=i,
+    )
+    for i, label in enumerate(LABELS)
 }
 
 
@@ -355,7 +514,7 @@ if data_dict:
         labels=LABELS,
         display_names=DISPLAY_NAMES,
         rho_bins=RHO_BINS,
-        colors=COMPARISON_COLORS,
+        colors=styles,
         offset_width=GROUPED_OFFSET_WIDTH,
         output_path=GROUPED_OUTPUT_FIG,
     )
@@ -372,7 +531,7 @@ if data_dict:
         labels=LABELS,
         display_names=DISPLAY_NAMES,
         rho_bins=RHO_BINS,
-        colors=COMPARISON_COLORS,
+        colors=styles,
         output_path=PANEL_OUTPUT_FIG,
     )
 else:
