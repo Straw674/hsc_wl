@@ -119,48 +119,65 @@ def save_summary_pkl(custom_sum, output_pkl_path):
     print(f"Final summary table saved to: {output_pkl_path}")
 
 
-def visualize_summary(custom_sum):
-    """Generate the standard jianbing summary visualization."""
-    print("\nGenerating standard jianbing visualization...")
-    return visual.sum_plot_topn(
-        custom_sum, label="Custom Sample", cov_type="jk", show_bin=True
+def _as_list(label):
+    """Normalize *label* to a list of labels."""
+    return [label] if isinstance(label, str) else list(label)
+
+
+def process_scatter_for_label(
+    label: str, version: str, sim_cat: Table, root_path: Path
+) -> Table:
+    """Fit scatter and save summary pickle for a single run label."""
+    catalog_id, nbins = label.rsplit("_", 1)
+    if nbins not in ("3bin", "4bin"):
+        raise ValueError(
+            f"Scatter fitting requires a 3bin or 4bin configuration, got {nbins}"
+        )
+
+    dsigma_dir = root_path / f"output/{catalog_id}/{nbins}/{version}/dsigma"
+    fits_files = sorted(
+        [str(p.relative_to(root_path)) for p in dsigma_dir.glob("hsc_hsc_bin*.fits")],
+        key=lambda s: int(Path(s).stem.replace("hsc_hsc_bin", "")),
     )
+    if not fits_files:
+        raise FileNotFoundError(f"No dsigma FITS files found in {dsigma_dir}")
+    if len(fits_files) > 4:
+        raise ValueError(
+            f"Simulation model templates only support up to 4 bins, but found {len(fits_files)}."
+        )
+
+    output_pkl = (
+        root_path
+        / f"output/{catalog_id}/{nbins}/{version}/pkl/{catalog_id}_{nbins}_{version}_sum.pkl"
+    )
+
+    print(f"\n{'=' * 60}")
+    print(f"Processing scatter fitting for: {label} ({version})")
+    print(f"{'=' * 60}")
+
+    obs = load_observed_profiles(root_path, fits_files)
+    custom_sum = fit_scatter(obs, sim_cat)
+    summarize_scatter_results(custom_sum, obs.meta["r_mpc"])
+    save_summary_pkl(custom_sum, output_pkl)
+    return custom_sum
 
 
 # %% Global Configuration
 
+# Labels to compute (single label or list of labels).
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
-LABEL = "rz_diff_two_box_red_4bin"  # Supports 3bin or 4bin configurations
+LABELS = [
+    "wh24_4bin",
+    "zou21_4bin",
+    "clumpr_mass_4bin",
+    "clumpr_richness_4bin",
+    "yang21_mass_4bin",
+    "yang21_richness_4bin",
+]
 VERSION = "Y3"  # "Y1" or "Y3"
-
-# Parse catalog_id and nbins from the unified run label
-catalog_id, nbins = LABEL.rsplit("_", 1)
-if nbins not in ("3bin", "4bin"):
-    raise ValueError(
-        f"Scatter fitting requires a 3bin or 4bin configuration, got {nbins}"
-    )
 
 # Path to simulation data (relative to project_root)
 SIM_PATH = "libs/jianbing/data/simulation/sim_mdpl2_cen_dsig.fits"
-
-# Observed dsigma FITS files in order (bin_id=1 corresponds to bin0 / richest bin).
-# Automatically detects available bin FITS files (e.g. 3 bins for redm_r16, 4 bins for standard runs).
-_dsigma_dir = project_root / f"output/{catalog_id}/{nbins}/{VERSION}/dsigma"
-FITS_FILES = sorted(
-    [str(p.relative_to(project_root)) for p in _dsigma_dir.glob("hsc_hsc_bin*.fits")],
-    key=lambda s: int(Path(s).stem.replace("hsc_hsc_bin", "")),
-)
-if not FITS_FILES:
-    raise FileNotFoundError(f"No dsigma FITS files found in {_dsigma_dir}")
-if len(FITS_FILES) > 4:
-    raise ValueError(
-        f"Simulation model templates only support up to 4 bins, but found {len(FITS_FILES)}."
-    )
-
-OUTPUT_PKL = (
-    project_root
-    / f"output/{catalog_id}/{nbins}/{VERSION}/pkl/{catalog_id}_{nbins}_{VERSION}_sum.pkl"
-)
 
 plt.rcParams["mathtext.fontset"] = "stix"
 
@@ -169,18 +186,17 @@ plt.rcParams["mathtext.fontset"] = "stix"
 sim_cat = load_simulation_model(project_root, SIM_PATH)
 
 
-# %% [Stage 2: Load observed profiles]
-obs = load_observed_profiles(project_root, FITS_FILES)
+# %% [Stage 2: Fit and save scatter for all configured labels]
+summaries = {}
+for lbl in _as_list(LABELS):
+    summaries[lbl] = process_scatter_for_label(
+        lbl, version=VERSION, sim_cat=sim_cat, root_path=project_root
+    )
 
 
-# %% [Stage 3: Fit scatter]
-custom_sum = fit_scatter(obs, sim_cat)
-summarize_scatter_results(custom_sum, obs.meta["r_mpc"])
-
-
-# %% [Stage 4: Save results]
-save_summary_pkl(custom_sum, OUTPUT_PKL)
-
-
-# %% [Stage 5: Visualize]
-_ = visualize_summary(custom_sum)
+# %% [Stage 3: Visualize]
+if summaries:
+    last_label = _as_list(LABELS)[-1]
+    _ = visual.sum_plot_topn(
+        summaries[last_label], label=last_label, cov_type="jk", show_bin=True
+    )

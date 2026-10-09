@@ -55,8 +55,13 @@ def load_scatter_summaries(labels, root_path):
 
 def get_sample_style(label, sample_styles, default_style):
     """Resolve catalog-family styles independently of sample order or presence."""
-    catalog_family = label[0].split("_", 1)[0]
-    return sample_styles.get(catalog_family, default_style)
+    lens_label = label[0]
+    catalog_id = lens_label.removesuffix("_4bin")
+    catalog_family = lens_label.split("_", 1)[0]
+    for key in (label, lens_label, catalog_id, catalog_family):
+        if key in sample_styles:
+            return sample_styles[key]
+    return default_style
 
 
 def plot_scatter_comparison(
@@ -126,7 +131,7 @@ def plot_scatter_comparison(
 
     ax.set_xlabel(r"$N(>M)\ [\rm Mpc^{-3}]$", fontsize=20)
     ax.set_ylabel(r"$\sigma_{\mathcal{M}|\mathcal{O}}\ [\rm dex]$", fontsize=20)
-    ax.legend(loc="best", fontsize=15)
+    ax.legend(loc="best", fontsize=11, ncol=2)
 
     ax.set_xlim(np.max(rho_bins) * 1.5, np.min(rho_bins) * 0.5)
 
@@ -260,36 +265,47 @@ def plot_panel_scatter_comparison(
 # Labels to compare (must be 4bin configurations, e.g. ("amico_4bin", "Y3")).
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
 LABELS = [
-    ("rz_diff_4bin", "Y3"),
-    ("rz_diff_preset_4bin", "Y3"),
-    ("rz_diff_single_box_4bin", "Y3"),
-    ("rz_diff_two_box_red_4bin", "Y3"),
+    ("camira_4bin", "Y3"),
+    ("wh24_4bin", "Y3"),
+    ("zou21_4bin", "Y3"),
+    ("yang21_mass_4bin", "Y3"),
+    ("yang21_richness_4bin", "Y3"),
+    ("clumpr_mass_4bin", "Y3"),
+    ("clumpr_richness_4bin", "Y3"),
 ]
 
-# Optional: display names for labels in the legend
-DISPLAY_NAMES = {}
+# Display names for labels in the legend
+DISPLAY_NAMES = {
+    ("camira_4bin", "Y3"): "CAMIRA",
+    ("wh24_4bin", "Y3"): "WH24",
+    ("zou21_4bin", "Y3"): "Zou21",
+    ("yang21_mass_4bin", "Y3"): "Yang21 (Halo Mass)",
+    ("yang21_richness_4bin", "Y3"): "Yang21 (Richness)",
+    ("clumpr_mass_4bin", "Y3"): "CluMPR (Mass)",
+    ("clumpr_richness_4bin", "Y3"): "CluMPR (Richness)",
+}
 
 # Bind first-figure styles to catalog families across run and source versions.
-# Reference: [50, 100] -> logm; redMaPPer -> redm; CAMIRA -> camira.
 SAMPLE_STYLES = {
-    "logm": {"color": "#1f78b4", "marker": "o", "filled": True},
-    "redm": {"color": "#e41a1c", "marker": "D", "filled": True},
-    "camira": {"color": "#e41a1c", "marker": "s", "filled": False},
-    "rz": {"color": "#984ea3", "marker": "P", "filled": True},
-    "cosine": {"color": "#33a02c", "marker": "H", "filled": True},
-    "amico": {"color": "#ff7f00", "marker": "^", "filled": True},
+    "camira": {"color": "#EE6677", "marker": "s", "filled": False},
+    "wh24": {"color": "#228833", "marker": "o", "filled": True},
+    "zou21": {"color": "#CCBB44", "marker": "v", "filled": True},
+    "yang21_mass": {"color": "#66CCEE", "marker": "^", "filled": True},
+    "yang21_richness": {"color": "#332288", "marker": "D", "filled": True},
+    "clumpr_mass": {"color": "#AA3377", "marker": "p", "filled": True},
+    "clumpr_richness": {"color": "#EE8866", "marker": "h", "filled": True},
 }
 DEFAULT_STYLE = {"color": "#7f7f7f", "marker": "v", "filled": True}
 
 # Assign colors by LABELS order in the grouped and panel figures.
 COMPARISON_COLORS = [
-    "#33a02c",
-    "#984ea3",
-    "#ff7f00",
-    "#1f78b4",
-    "#e41a1c",
-    "#a65628",
-    "#f781bf",
+    "#EE6677",  # Red (CAMIRA)
+    "#228833",  # Dark Green (WH24)
+    "#CCBB44",  # Yellow-Olive (Zou21)
+    "#66CCEE",  # Cyan (Yang21 Halo Mass)
+    "#332288",  # Indigo (Yang21 Richness)
+    "#AA3377",  # Purple (CluMPR Mass)
+    "#EE8866",  # Coral (CluMPR Richness)
 ]
 
 # Hardcoded rho bins (Mpc^-3) as they might be missing from some pkl files
