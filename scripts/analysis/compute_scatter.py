@@ -162,17 +162,32 @@ def process_scatter_for_label(
     return custom_sum
 
 
+def visualize_scatter_summaries(
+    summaries: dict[str, Table], version: str, root_path: Path
+) -> None:
+    """Generate and save standard jianbing visualization for each summary."""
+    plot_dir = root_path / "output/plots_for_agents"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    for lbl, summary in summaries.items():
+        fig = visual.sum_plot_topn(summary, label=lbl, cov_type="jk", show_bin=True)
+        plot_path = plot_dir / f"scatter_{lbl}_{version}.png"
+        fig.savefig(plot_path, bbox_inches="tight")
+        print(f"Saved scatter plot to: {plot_path}")
+        plt.show()
+        plt.close(fig)
+
+
 # %% Global Configuration
 
 # Labels to compute (single label or list of labels).
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
 LABELS = [
-    "wh24_4bin",
-    "zou21_4bin",
+    # "wh24_4bin",
+    # "zou21_4bin",
     "clumpr_mass_4bin",
     "clumpr_richness_4bin",
-    "yang21_mass_4bin",
-    "yang21_richness_4bin",
+    # "yang21_mass_4bin",
+    # "yang21_richness_4bin",
 ]
 VERSION = "Y3"  # "Y1" or "Y3"
 
@@ -195,8 +210,4 @@ for lbl in _as_list(LABELS):
 
 
 # %% [Stage 3: Visualize]
-if summaries:
-    last_label = _as_list(LABELS)[-1]
-    _ = visual.sum_plot_topn(
-        summaries[last_label], label=last_label, cov_type="jk", show_bin=True
-    )
+visualize_scatter_summaries(summaries, version=VERSION, root_path=project_root)
