@@ -43,7 +43,7 @@ def _get_result_time_text(base_dir: Path) -> str:
     return _format_ls_time(latest_file)
 
 
-def load_comparison_data(configs_to_compare, root_path):
+def load_comparison_data(configs_to_compare, root_path, display_names=None):
     """Load dsigma result tables for all (catalog_id, nbins, version) configurations.
 
     Returns
@@ -55,6 +55,7 @@ def load_comparison_data(configs_to_compare, root_path):
     label_time_texts : list[str]
         Formatted file timestamps for each config (for informative prints).
     """
+    display_names = display_names or {}
     present_labels = []
     loaded_tables = []
     label_time_texts = []
@@ -65,7 +66,10 @@ def load_comparison_data(configs_to_compare, root_path):
             print(f"Warning: {current_dir} does not exist. Skipping.")
             continue
         time_text = _get_result_time_text(current_dir)
-        display_name = f"{catalog_id} ({nbins})"
+        key = f"{catalog_id}_{nbins}"
+        display_name = display_names.get(
+            key, display_names.get(catalog_id, f"{catalog_id} ({nbins})")
+        )
         print(f"Loading data for {display_name} | file time: {time_text}")
         current_tables = load_result_tables(current_dir)
         present_labels.append(display_name)
@@ -399,25 +403,37 @@ CONFIGS_TO_COMPARE = [
 
 CONFIGS_TO_COMPARE = [
     ("ideal_mdpl2", "1bin", "Y3"),
-    ("rz_diff_preset", "1bin", "Y3"),
-    ("rz_diff", "1bin", "Y3"),
-    ("rz_diff_two_box_red_match_recovery", "1bin", "Y3"),
+    ("camira", "1bin", "Y3"),
+    ("wh24", "1bin", "Y3"),
+    ("zou21", "1bin", "Y3"),
+    ("yang21_mass", "1bin", "Y3"),
+    ("yang21_richness", "1bin", "Y3"),
+    ("clumpr_mass", "1bin", "Y3"),
+    ("clumpr_richness", "1bin", "Y3"),
 ]
 
-MARKERS = ["o", "x", "s", "^", "D", "v", "P", "*", "H", "<", ">"]
+DISPLAY_NAMES = {
+    "ideal_mdpl2": "Ideal MDPL2",
+    "camira": "CAMIRA",
+    "wh24": "WH24",
+    "zou21": "Zou21",
+    "yang21_mass": "Yang21 (Halo Mass)",
+    "yang21_richness": "Yang21 (Richness)",
+    "clumpr_mass": "CluMPR (Mass)",
+    "clumpr_richness": "CluMPR (Richness)",
+}
 
-# Paul Tol "bright"-based palette (grey/yellow dropped for white-bg visibility,
-# orange & teal added for extra distinguishability). 8 distinct hues.
+MARKERS = ["o", "s", "o", "v", "^", "D", "p", "h"]
+
 LABEL_PALETTE = [
-    "#000000",
-    "#4477AA",  # blue
-    "#EE6677",  # red
-    "#228833",  # green
-    "#66CCEE",  # cyan
-    "#AA3377",  # purple
-    "#EE7733",  # orange
-    "#009988",  # teal
-    "#332288",  # indigo
+    "#000000",  # Black (Ideal MDPL2)
+    "#EE6677",  # Red (CAMIRA)
+    "#228833",  # Dark Green (WH24)
+    "#CCBB44",  # Yellow-Olive (Zou21)
+    "#66CCEE",  # Cyan (Yang21 Halo Mass)
+    "#332288",  # Indigo (Yang21 Richness)
+    "#AA3377",  # Purple (CluMPR Mass)
+    "#EE8866",  # Coral (CluMPR Richness)
 ]
 
 COLOR_MODE = "by_label"
@@ -429,13 +445,13 @@ OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_multi_main.png"
 OUTPUT_RATIO_FIG = project_root / "output/plots_for_agents/visual_multi_ratio.png"
 
 
-# [Stage 1: Load comparison data]
+# %% [Stage 1: Load comparison data]
 present_labels, loaded_tables, label_time_texts = load_comparison_data(
-    CONFIGS_TO_COMPARE, project_root
+    CONFIGS_TO_COMPARE, project_root, display_names=DISPLAY_NAMES
 )
 
 
-# [Stage 2: Plot main comparison]
+# %% [Stage 2: Plot main comparison]
 MAIN_MULTIPLY_BY_RADIUS = True
 MAIN_USE_LOG_Y = not MAIN_MULTIPLY_BY_RADIUS
 MAIN_USE_SPLINE = False
@@ -461,7 +477,7 @@ if loaded_tables:
     plt.close(fig)
 
 
-# %%[Stage 3: Plot ratio comparison]
+# %% [Stage 3: Plot ratio comparison]
 RATIO_MULTIPLY_BY_RADIUS = False
 RATIO_USE_LOG_Y = False
 RATIO_USE_SPLINE = False
