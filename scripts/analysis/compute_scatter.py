@@ -139,6 +139,13 @@ def process_scatter_for_label(
         [str(p.relative_to(root_path)) for p in dsigma_dir.glob("hsc_hsc_bin*.fits")],
         key=lambda s: int(Path(s).stem.replace("hsc_hsc_bin", "")),
     )
+    complete_indices = get_complete_bin_indices(dsigma_dir)
+    if complete_indices is not None:
+        fits_files = [
+            f
+            for f in fits_files
+            if int(Path(f).stem.replace("hsc_hsc_bin", "")) in complete_indices
+        ]
     if not fits_files:
         raise FileNotFoundError(f"No dsigma FITS files found in {dsigma_dir}")
     if len(fits_files) > 4:

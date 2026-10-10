@@ -146,7 +146,19 @@ def _bin_by_top_counts(lens, col_rank, binning: BinningConfig) -> list[tuple]:
     cursor = 0
     slices = []
     for i, count in enumerate(binning.top_counts):
-        next_cursor = min(cursor + count, len(sorted_lens))
+        if cursor + count > len(sorted_lens):
+            logger.warning(
+                "Bin %d requires %d objects (cumulative %d), but catalog only has %d objects (%d remaining). "
+                "Discarding incomplete bin %d and all subsequent bins.",
+                i,
+                count,
+                cursor + count,
+                len(sorted_lens),
+                len(sorted_lens) - cursor,
+                i,
+            )
+            break
+        next_cursor = cursor + count
         lens_bin = sorted_lens[cursor:next_cursor]
         bin_desc = (
             f"top_counts={count}, rank [{cursor}, {next_cursor}) by {col_rank} "

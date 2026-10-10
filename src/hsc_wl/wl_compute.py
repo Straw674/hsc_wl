@@ -15,6 +15,7 @@ import glob
 import json
 import logging
 import os
+import re
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -710,6 +711,33 @@ def load_prepared_tables(cfg: WLConfig, root: Path | None = None) -> PreparedTab
         unique_bids = np.unique(global_table_l_raw["bin_id"]).tolist()
         bin_metadata = [{"bin_id": bid, "bin_name": f"bin{bid}"} for bid in unique_bids]
 
+    complete_bin_metadata = []
+    for bmeta in bin_metadata:
+        desc = bmeta.get("bin_desc", "")
+        n_lens = bmeta.get("n_lens", 0)
+        match = re.search(r"top_counts=(\d+)", desc)
+        if match:
+            target = int(match.group(1))
+            if n_lens < target:
+                logger.warning(
+                    "Bin %s is incomplete (%d < %d); excluding from stack.",
+                    bmeta.get("bin_name", f"bin{bmeta.get('bin_id')}"),
+                    n_lens,
+                    target,
+                )
+                break
+        complete_bin_metadata.append(bmeta)
+    bin_metadata = complete_bin_metadata
+
+    valid_bids = {bmeta["bin_id"] for bmeta in bin_metadata}
+    if valid_bids and len(valid_bids) < len(np.unique(global_table_l_raw["bin_id"])):
+        global_table_l_raw = global_table_l_raw[
+            np.isin(global_table_l_raw["bin_id"], list(valid_bids))
+        ]
+        global_table_r_raw = global_table_r_raw[
+            np.isin(global_table_r_raw["bin_id"], list(valid_bids))
+        ]
+
     return PreparedTables(
         lens=global_table_l_raw, random=global_table_r_raw, bin_metadata=bin_metadata
     )
@@ -858,6 +886,12 @@ def save_profiles(
     save_root = cfg.resolved_save_root(root)
     savepath = save_root / cfg.source.version / "dsigma"
     savepath.mkdir(parents=True, exist_ok=True)
+
+    prefix = f"{cfg.source.survey.lower()}_{cfg.lens_survey}_"
+    for old_file in list(savepath.glob(f"{prefix}*.fits")) + list(
+        savepath.glob(f"{prefix}*.csv")
+    ):
+        old_file.unlink()
 
     written: list[Path] = []
     for prof in profiles:

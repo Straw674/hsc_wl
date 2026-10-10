@@ -1,13 +1,61 @@
 import colorsys
+import json
 import re
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.io import fits as fits_io
 from astropy.table import Table
 from astropy.wcs import WCS
 
 
-def load_result_tables(base_dir):
+def get_complete_bin_indices(base_dir: Path | str) -> list[int] | None:
+    """Determine which bin indices are completely filled for *base_dir*.
+
+    Inspects the corresponding prepare catalog's BIN_META header if available.
+    Returns None if no BIN_META or no top_counts requirement is found (meaning
+    all available bins should be considered valid).
+    """
+    base_dir = Path(base_dir)
+    prep_dir = None
+    for candidate in [base_dir.parent.parent / "prepare", base_dir.parent / "prepare"]:
+        if candidate.exists():
+            prep_dir = candidate
+            break
+    if prep_dir is None:
+        return None
+
+    lens_files = sorted(prep_dir.glob("*_lenses.fits"))
+    if not lens_files:
+        return None
+
+    try:
+        with fits_io.open(lens_files[0]) as hdul:
+            meta_json = hdul[1].header.get("BIN_META")
+        if not meta_json:
+            return None
+        bin_meta = json.loads(meta_json)
+    except Exception:
+        return None
+
+    complete_ids = []
+    for m in bin_meta:
+        bid = m.get("bin_id")
+        n_lens = m.get("n_lens", 0)
+        desc = m.get("bin_desc", "")
+        match = re.search(r"top_counts=(\d+)", desc)
+        if match:
+            target = int(match.group(1))
+            if n_lens < target:
+                break
+        if bid is not None:
+            complete_ids.append(int(bid))
+    return complete_ids
+
+
+def load_result_tables(base_dir, only_complete: bool = True):
+    base_dir = Path(base_dir)
     # Pattern to find hsc_hsc_lens[N].fits or .csv
     # We use a dict to store the best file path for each index
     # key: index (int), value: path (Path)
@@ -26,6 +74,15 @@ def load_result_tables(base_dir):
 
     if not bin_files:
         raise FileNotFoundError(f"No lens bin files found in {base_dir}")
+
+    if only_complete:
+        complete_indices = get_complete_bin_indices(base_dir)
+        if complete_indices is not None:
+            filtered = {
+                idx: bin_files[idx] for idx in complete_indices if idx in bin_files
+            }
+            if filtered:
+                bin_files = filtered
 
     # Sort indices to ensure order (0, 1, 2, ...)
     sorted_indices = sorted(bin_files.keys())

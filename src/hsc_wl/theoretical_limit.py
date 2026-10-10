@@ -10,6 +10,7 @@ Supports both 1-bin (cumulative top-N) and 4-bin (differential richness/mass)
 configurations.
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Literal
@@ -492,11 +493,30 @@ def ensure_theoretical_limit_outputs(root_path: Path, overwrite: bool = False) -
                 t_lens["wsys"] = np.ones(n_obj, dtype=float)
                 if nbins == "1bin":
                     t_lens["bin_id"] = np.zeros(n_obj, dtype=int)
+                    bin_meta = [
+                        {
+                            "bin_id": 0,
+                            "bin_name": "bin0",
+                            "n_lens": n_obj,
+                            "bin_desc": "top_n",
+                        }
+                    ]
                 else:
                     b_ids = []
                     for b_idx, c in enumerate(top_counts_4bin):
                         b_ids.extend([b_idx] * c)
                     t_lens["bin_id"] = np.array(b_ids)
+                    bin_meta = [
+                        {
+                            "bin_id": b_idx,
+                            "bin_name": f"bin{b_idx}",
+                            "n_lens": c,
+                            "bin_desc": f"top_counts={c}",
+                        }
+                        for b_idx, c in enumerate(top_counts_4bin)
+                    ]
+                meta_json = json.dumps(bin_meta)
+                t_lens.meta["BIN_META"] = meta_json
                 t_lens.write(lens_fits, overwrite=True)
                 t_lens.write(rand_fits, overwrite=True)
 

@@ -70,8 +70,11 @@ def load_comparison_data(configs_to_compare, root_path, display_names=None):
         display_name = display_names.get(
             key, display_names.get(catalog_id, f"{catalog_id} ({nbins})")
         )
-        print(f"Loading data for {display_name} | file time: {time_text}")
-        current_tables = load_result_tables(current_dir)
+        current_tables = load_result_tables(current_dir, only_complete=True)
+        print(
+            f"Loading data for {display_name} ({len(current_tables)} complete bins) | "
+            f"file time: {time_text}"
+        )
         present_labels.append(display_name)
         loaded_tables.append(current_tables)
         label_time_texts.append(time_text)
@@ -84,8 +87,8 @@ def load_comparison_data(configs_to_compare, root_path, display_names=None):
     max_bins = max(len(tables) for tables in loaded_tables)
     if min_bins != max_bins:
         print(
-            f"Warning: Configurations have differing bin counts ({min_bins} vs {max_bins}). "
-            f"Comparing first {min_bins} common bins."
+            f"Warning: Configurations have differing complete bin counts ({min_bins} vs {max_bins}). "
+            f"Comparing first {min_bins} common complete bins."
         )
         loaded_tables = [tables[:min_bins] for tables in loaded_tables]
     n_bins = min_bins
@@ -399,11 +402,13 @@ CONFIGS_TO_COMPARE = [
     ("wh20", "1bin", "Y3"),
 ]
 
-# CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "4bin", "Y3"),
-#     ("wh24", "4bin", "Y3"),
-#     ("wh20", "4bin", "Y3"),
-# ]
+CONFIGS_TO_COMPARE = [
+    ("ideal_mdpl2", "4bin", "Y3"),
+    ("wh24", "4bin", "Y3"),
+    ("wh20", "4bin", "Y3"),
+    ("camira", "4bin", "Y3"),
+    ("rz_diff", "4bin", "Y3"),
+]
 
 # CONFIGS_TO_COMPARE = [
 #     ("ideal_mdpl2", "1bin", "Y3"),
