@@ -385,6 +385,7 @@ _PATH_CCA2 = "/Users/xinq/cluster_finder/output/cca/cca2_cluster_catalog.parquet
 _PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
 
 # External DESI Legacy Surveys cluster catalogs (full Y3 footprint)
+_PATH_WH20 = "data/external_clusters/wh20.parquet"
 _PATH_WH24 = "data/external_clusters/wh24.parquet"
 _PATH_ZOU21 = "data/external_clusters/zou21.parquet"
 _PATH_CLUMPR = "data/external_clusters/clumpr.parquet"
@@ -498,6 +499,12 @@ _COLS_CCA2 = {
 }
 
 # External DESI Legacy Surveys cluster column mappings
+_COLS_WH20 = {
+    "col_rank": "richness",
+    "ra": "ra",
+    "dec": "dec",
+    "z": "z",
+}
 _COLS_WH24 = {
     "col_rank": "lam500",
     "ra": "ra",
@@ -1043,6 +1050,7 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     # -----------------------------------------------------------------------
     # External DESI Legacy Surveys cluster catalogs (full Y3 footprint)
     # -----------------------------------------------------------------------
+    **_make_pair("wh20", _PATH_WH20, _RAND_Y3, columns=_COLS_WH20),
     **_make_pair("wh24", _PATH_WH24, _RAND_Y3, columns=_COLS_WH24),
     **_make_pair("zou21", _PATH_ZOU21, _RAND_Y3, columns=_COLS_ZOU21),
     **_make_pair("clumpr_mass", _PATH_CLUMPR, _RAND_Y3, columns=_COLS_CLUMPR_MASS),

@@ -33,6 +33,65 @@ from src.data import download_public_catalog
 # %% Local Functions
 
 
+def build_wh20_parquet(raw_file: Path, output_parquet: Path) -> Path:
+    """Parse table1 from Wen & Han (2020/2021) and persist as Parquet."""
+    if output_parquet.exists():
+        logging.info("WH20 parquet already exists: %s", output_parquet)
+        return output_parquet
+
+    logging.info("Parsing WH20 table1 from %s...", raw_file)
+    open_fn = (
+        gzip.open
+        if str(raw_file).endswith(".gz")
+        else lambda p, m, **kw: open(p, m, **kw)
+    )
+    with open_fn(raw_file, "rt", encoding="ascii") as handle:
+        lines = handle.readlines()
+
+    names = []
+    ra = []
+    dec = []
+    z = []
+    snr = []
+    r500 = []
+    richness = []
+    m500 = []
+    ngal = []
+
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 13:
+            continue
+        names.append(parts[1] + " " + parts[2])
+        ra.append(float(parts[3]))
+        dec.append(float(parts[4]))
+        z.append(float(parts[5]))
+        snr.append(float(parts[8]))
+        r500.append(float(parts[9]))
+        richness.append(float(parts[10]))
+        m500.append(float(parts[11]))
+        ngal.append(int(parts[12]))
+
+    df = pd.DataFrame(
+        {
+            "name": names,
+            "ra": np.array(ra, dtype=np.float64),
+            "dec": np.array(dec, dtype=np.float64),
+            "z": np.array(z, dtype=np.float32),
+            "snr": np.array(snr, dtype=np.float32),
+            "r500": np.array(r500, dtype=np.float32),
+            "richness": np.array(richness, dtype=np.float32),
+            "lam500": np.array(richness, dtype=np.float32),
+            "m500": np.array(m500, dtype=np.float32),
+            "ngal": np.array(ngal, dtype=np.int32),
+        }
+    )
+    output_parquet.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(output_parquet, index=False)
+    logging.info("Saved %d WH20 clusters to %s", len(df), output_parquet)
+    return output_parquet
+
+
 def build_wh24_parquet(raw_gz: Path, output_parquet: Path) -> Path:
     """Parse fixed-width table2 from Wen & Han (2024) and persist as Parquet."""
     if output_parquet.exists():
@@ -194,6 +253,7 @@ def build_yang21_parquet(raw_ngc: Path, raw_sgc: Path, output_parquet: Path) -> 
 RAW_DIR = project_root / "data/external_clusters/raw"
 PARQUET_DIR = project_root / "data/external_clusters"
 
+WH20_RAW = RAW_DIR / "wh20_table1.dat.gz"
 WH24_RAW = RAW_DIR / "wh24_table2.dat.gz"
 ZOU21_RAW = RAW_DIR / "zou21_clusters.fits.gz"
 CLUMPR_RAW = RAW_DIR / "clumpr_simple.fits"
@@ -210,6 +270,7 @@ LABELS_TO_PREPARE = [
 
 # %% [Stage 1: Build Parquet Catalogs]
 
+build_wh20_parquet(WH20_RAW, PARQUET_DIR / "wh20.parquet")
 build_wh24_parquet(WH24_RAW, PARQUET_DIR / "wh24.parquet")
 build_zou21_parquet(ZOU21_RAW, PARQUET_DIR / "zou21.parquet")
 build_clumpr_parquet(CLUMPR_RAW, PARQUET_DIR / "clumpr.parquet")
