@@ -395,24 +395,38 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 
 CONFIGS_TO_COMPARE = [
     ("ideal_mdpl2", "1bin", "Y3"),
-    # ("redm_pdr3_5band_free", "1bin", "Y3"),
-    # ("logm_s16a", "1bin", "Y3"),
-    ("redm_r16", "1bin", "Y3"),
-    ("camira", "1bin", "Y3"),
-    # ("amico", "1bin", "Y3"),
-    # ("cosine", "1bin", "Y3"),
-    # ("pls", "1bin", "Y3"),
-    # ("regression", "1bin", "Y3"),
-    ("rz_diff", "1bin", "Y3"),
-    # ("rz_diff_lum", "1bin", "Y3"),
-    ("rz_diff_preset", "1bin", "Y3"),
-    # ("rz_diff_preset_lum", "1bin", "Y3"),
-    ("rz_diff_single_box", "1bin", "Y3"),
-    # ("rz_diff_single_box_lum", "1bin", "Y3"),
-    ("rz_diff_two_box_red", "1bin", "Y3"),
-    # ("cca1", "1bin", "Y3"),
-    # ("cca2", "1bin", "Y3"),
+    ("wh24", "1bin", "Y3"),
+    ("wh20", "1bin", "Y3"),
 ]
+
+# CONFIGS_TO_COMPARE = [
+#     ("ideal_mdpl2", "4bin", "Y3"),
+#     ("wh24", "4bin", "Y3"),
+#     ("wh20", "4bin", "Y3"),
+# ]
+
+# CONFIGS_TO_COMPARE = [
+#     ("ideal_mdpl2", "1bin", "Y3"),
+#     # ("redm_pdr3_5band_free", "1bin", "Y3"),
+#     # ("logm_s16a", "1bin", "Y3"),
+#     ("redm_r16", "1bin", "Y3"),
+#     ("camira", "1bin", "Y3"),
+#     # ("wh24", "1bin", "Y3"),
+#     # ("wh20", "1bin", "Y3"),
+#     # ("amico", "1bin", "Y3"),
+#     # ("cosine", "1bin", "Y3"),
+#     # ("pls", "1bin", "Y3"),
+#     # ("regression", "1bin", "Y3"),
+#     ("rz_diff", "1bin", "Y3"),
+#     # ("rz_diff_lum", "1bin", "Y3"),
+#     ("rz_diff_preset", "1bin", "Y3"),
+#     # ("rz_diff_preset_lum", "1bin", "Y3"),
+#     ("rz_diff_single_box", "1bin", "Y3"),
+#     # ("rz_diff_single_box_lum", "1bin", "Y3"),
+#     ("rz_diff_two_box_red", "1bin", "Y3"),
+#     # ("cca1", "1bin", "Y3"),
+#     # ("cca2", "1bin", "Y3"),
+# ]
 
 # CONFIGS_TO_COMPARE = [
 #     ("ideal_mdpl2", "4bin", "Y3"),
@@ -420,6 +434,8 @@ CONFIGS_TO_COMPARE = [
 #     # ("logm_s16a", "1bin", "Y3"),
 #     # ("redm_r16", "4bin", "Y3"),  # Only has 3 bins (lambda >= 20 cut exhausts catalog before bin3)
 #     ("camira", "4bin", "Y3"),
+#     # ("wh24", "4bin", "Y3"),
+#     # ("wh20", "4bin", "Y3"),
 #     # ("amico", "1bin", "Y3"),
 #     # ("cosine", "1bin", "Y3"),
 #     # ("pls", "1bin", "Y3"),
@@ -451,18 +467,6 @@ CONFIGS_TO_COMPARE = [
 #     # ("redm_r16", "1bin", "Y3"),
 #     ("redm_r16_hectomap", "1bin", "Y3"),
 #     ("redm_pdr3_5band_free", "1bin", "Y3"),
-# ]
-
-# CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "1bin", "Y3"),
-#     ("wh24", "1bin", "Y3"),
-#     ("wh20", "1bin", "Y3"),
-# ]
-
-# CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "4bin", "Y3"),
-#     ("wh24", "4bin", "Y3"),
-#     ("wh20", "4bin", "Y3"),
 # ]
 
 # CONFIGS_TO_COMPARE = [
