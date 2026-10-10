@@ -80,12 +80,15 @@ def load_comparison_data(configs_to_compare, root_path, display_names=None):
         print("No data loaded. Exiting.")
         return present_labels, loaded_tables, label_time_texts
 
-    n_bins = len(loaded_tables[0])
-    for label, tables in zip(present_labels, loaded_tables):
-        if len(tables) != n_bins:
-            raise ValueError(
-                f"All labels must have the same number of lens bins. For {label}: {len(tables)} != {n_bins}"
-            )
+    min_bins = min(len(tables) for tables in loaded_tables)
+    max_bins = max(len(tables) for tables in loaded_tables)
+    if min_bins != max_bins:
+        print(
+            f"Warning: Configurations have differing bin counts ({min_bins} vs {max_bins}). "
+            f"Comparing first {min_bins} common bins."
+        )
+        loaded_tables = [tables[:min_bins] for tables in loaded_tables]
+    n_bins = min_bins
 
     return present_labels, loaded_tables, label_time_texts
 
@@ -450,21 +453,34 @@ CONFIGS_TO_COMPARE = [
 #     ("redm_pdr3_5band_free", "1bin", "Y3"),
 # ]
 
+# CONFIGS_TO_COMPARE = [
+#     ("ideal_mdpl2", "1bin", "Y3"),
+#     ("wh24", "1bin", "Y3"),
+#     ("wh20", "1bin", "Y3"),
+# ]
+
 CONFIGS_TO_COMPARE = [
-    ("ideal_mdpl2", "1bin", "Y3"),
-    ("camira", "1bin", "Y3"),
-    ("redm_r16", "1bin", "Y3"),
-    ("wh24", "1bin", "Y3"),
-    ("zou21", "1bin", "Y3"),
-    # ("yang21_mass", "1bin", "Y3"),
-    ("yang21_richness", "1bin", "Y3"),
-    # ("clumpr_mass", "1bin", "Y3"),
-    ("clumpr_richness", "1bin", "Y3"),
-    ("rz_diff", "1bin", "Y3"),
-    # ("rz_diff_preset", "1bin", "Y3"),
-    # ("rz_diff_single_box", "1bin", "Y3"),
-    # ("rz_diff_two_box_red", "1bin", "Y3"),
+    ("ideal_mdpl2", "4bin", "Y3"),
+    ("wh24", "4bin", "Y3"),
+    ("wh20", "4bin", "Y3"),
 ]
+
+# CONFIGS_TO_COMPARE = [
+#     ("ideal_mdpl2", "4bin", "Y3"),
+#     ("camira", "4bin", "Y3"),
+#     # ("redm_r16", "4bin", "Y3"),
+#     ("wh24", "4bin", "Y3"),
+#     ("wh20", "4bin", "Y3"),
+#     ("zou21", "4bin", "Y3"),
+#     # ("yang21_mass", "4bin", "Y3"),
+#     ("yang21_richness", "4bin", "Y3"),
+#     # ("clumpr_mass", "4bin", "Y3"),
+#     ("clumpr_richness", "4bin", "Y3"),
+#     ("rz_diff", "4bin", "Y3"),
+#     # ("rz_diff_preset", "4bin", "Y3"),
+#     # ("rz_diff_single_box", "4bin", "Y3"),
+#     # ("rz_diff_two_box_red", "4bin", "Y3"),
+# ]
 
 DISPLAY_NAMES = {
     "ideal_mdpl2": "Ideal MDPL2",
@@ -473,6 +489,7 @@ DISPLAY_NAMES = {
     "redm_r16": "redMaPPer R16",
     "redm_r16_hectomap": "redMaPPer R16 (HectoMAP)",
     "redm_pdr3_5band_free": "redMaPPer PDR3",
+    "wh20": "WH20",
     "wh24": "WH24",
     "zou21": "Zou21",
     "yang21_mass": "Yang21 (Halo Mass)",
@@ -506,6 +523,7 @@ CATALOG_STYLES = {
     "redm_r16_hectomap": {"color": "#4477AA", "marker": "d"},
     "redm_s16a": {"color": "#4477AA", "marker": "x"},
     "redm_pdr3_5band_free": {"color": "#CC79A7", "marker": "+"},
+    "wh20": {"color": "#66BB55", "marker": "^"},
     "wh24": {"color": "#228833", "marker": "o"},
     "zou21": {"color": "#CCBB44", "marker": "v"},
     "yang21_mass": {"color": "#66CCEE", "marker": "^"},

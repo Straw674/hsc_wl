@@ -31,12 +31,8 @@ from initial import *  # noqa: F401,F403
 #   RUN_LABEL = ["redm_s16a_hectomap_4bin", "camira_hectomap_4bin"]
 #   RUN_LABEL = list(RUN_REGISTRY.keys())  # run all configurations
 RUN_LABEL = [
-    "wh24_4bin",
-    "zou21_4bin",
-    "clumpr_mass_4bin",
-    "clumpr_richness_4bin",
-    "yang21_mass_4bin",
-    "yang21_richness_4bin",
+    "wh20_1bin",
+    "wh20_4bin",
 ]
 
 # %% Local Functions
