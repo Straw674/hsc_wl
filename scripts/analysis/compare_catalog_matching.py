@@ -918,6 +918,7 @@ LABELS_TO_COMPARE = [
     "camira_1bin",
     "redm_r16_1bin",
     "wh24_1bin",
+    "wh20_1bin",
     "zou21_1bin",
     "yang21_mass_1bin",
     "yang21_richness_1bin",
@@ -943,6 +944,7 @@ DISPLAY_NAMES = {
     "camira_1bin": "CAMIRA",
     "redm_r16_1bin": "redMaPPer R16",
     "wh24_1bin": "WH24",
+    "wh20_1bin": "WH20",
     "zou21_1bin": "Zou21",
     "yang21_mass_1bin": "Yang21 (Halo Mass)",
     "yang21_richness_1bin": "Yang21 (Richness)",
@@ -966,6 +968,7 @@ PALETTE = [
     "#EE6677",  # Red (CAMIRA)
     "#4477AA",  # Blue (redMaPPer R16)
     "#228833",  # Dark Green (WH24)
+    "#66BB55",  # Light Green (WH20)
     "#CCBB44",  # Yellow-Olive (Zou21)
     "#66CCEE",  # Cyan (Yang21 Halo Mass)
     "#332288",  # Indigo (Yang21 Richness)
@@ -989,6 +992,7 @@ MARKERS = [
     "s",
     "x",
     "o",
+    "^",
     "v",
     "^",
     "D",

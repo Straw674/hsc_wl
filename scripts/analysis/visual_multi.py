@@ -459,11 +459,11 @@ CONFIGS_TO_COMPARE = [
 #     ("wh20", "1bin", "Y3"),
 # ]
 
-CONFIGS_TO_COMPARE = [
-    ("ideal_mdpl2", "4bin", "Y3"),
-    ("wh24", "4bin", "Y3"),
-    ("wh20", "4bin", "Y3"),
-]
+# CONFIGS_TO_COMPARE = [
+#     ("ideal_mdpl2", "4bin", "Y3"),
+#     ("wh24", "4bin", "Y3"),
+#     ("wh20", "4bin", "Y3"),
+# ]
 
 # CONFIGS_TO_COMPARE = [
 #     ("ideal_mdpl2", "4bin", "Y3"),
