@@ -402,12 +402,22 @@ CONFIGS_TO_COMPARE = [
     ("wh20", "1bin", "Y3"),
 ]
 
+# CONFIGS_TO_COMPARE = [
+#     ("ideal_mdpl2", "4bin", "Y3"),
+#     ("wh24", "4bin", "Y3"),
+#     ("wh20", "4bin", "Y3"),
+#     ("camira", "4bin", "Y3"),
+#     ("rz_diff", "4bin", "Y3"),
+# ]
+
 CONFIGS_TO_COMPARE = [
-    ("ideal_mdpl2", "4bin", "Y3"),
-    ("wh24", "4bin", "Y3"),
-    ("wh20", "4bin", "Y3"),
-    ("camira", "4bin", "Y3"),
-    ("rz_diff", "4bin", "Y3"),
+    ("ideal_mdpl2", "1bin", "Y3"),
+    ("redm_r16", "1bin", "Y3"),
+    ("camira", "1bin", "Y3"),
+    ("rz_diff", "1bin", "Y3"),
+    ("rz_diff_mag_2_p_5", "1bin", "Y3"),
+    ("rz_diff_mag_3_p_0", "1bin", "Y3"),
+    ("rz_diff_two_box_red", "1bin", "Y3"),
 ]
 
 # CONFIGS_TO_COMPARE = [
@@ -517,6 +527,8 @@ DISPLAY_NAMES = {
     "rz_diff_single_box_lum": "r-z Diff (Single Box Lum)",
     "rz_diff_two_box_red": "r-z Diff (Two Box Red)",
     "rz_diff_two_box_red_lum": "r-z Diff (Two Box Red Lum)",
+    "rz_diff_mag_2_p_5": "r-z Diff (m*+2.5)",
+    "rz_diff_mag_3_p_0": "r-z Diff (m*+3.0)",
     "cca1": "CCA1",
     "cca1_specz": "CCA1 (spec-z)",
     "cca2": "CCA2",
@@ -547,6 +559,8 @@ CATALOG_STYLES = {
     "rz_diff_single_box_lum": {"color": "#009E73", "marker": ">"},
     "rz_diff_two_box_red": {"color": "#B91C1C", "marker": "8"},
     "rz_diff_two_box_red_lum": {"color": "#B91C1C", "marker": "8"},
+    "rz_diff_mag_2_p_5": {"color": "#0284C7", "marker": "^"},
+    "rz_diff_mag_3_p_0": {"color": "#059669", "marker": "v"},
     "rz_diff_six_param": {"color": "#2563EB", "marker": "X"},
     "amico": {"color": "#10B981", "marker": "*"},
     "cosine": {"color": "#009988", "marker": "H"},

@@ -360,6 +360,8 @@ _PATH_RZ_DIFF_SINGLE_BOX = "/Users/xinq/cluster_finder/output/fall_hectomap_spri
 _PATH_RZ_DIFF_SINGLE_BOX_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/single_box_wl/rz_diff_lum_cluster_catalog.parquet"
 _PATH_RZ_DIFF_TWO_BOX_RED = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_wl/rz_diff_cluster_catalog.parquet"
 _PATH_RZ_DIFF_TWO_BOX_RED_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_wl/rz_diff_lum_cluster_catalog.parquet"
+_PATH_RZ_DIFF_MAG_2_P_5 = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/mag_2_p_5/rz_diff_cluster_catalog.parquet"
+_PATH_RZ_DIFF_MAG_3_P_0 = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/mag_3_p_0/rz_diff_cluster_catalog.parquet"
 
 _PATH_RZ_DIFF_SIX_PARAM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/six_param_wl/rz_diff_cluster_catalog.parquet"
 
@@ -1012,6 +1014,20 @@ RUN_REGISTRY: dict[str, WLConfig] = {
     **_make_pair(
         "rz_diff_six_param_match_recovery",
         _PATH_RZ_DIFF_SIX_PARAM_MATCH_RECOVERY,
+        _RAND_Y3,
+        columns=_COLS_RZ_DIFF,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "rz_diff_mag_2_p_5",
+        _PATH_RZ_DIFF_MAG_2_P_5,
+        _RAND_Y3,
+        columns=_COLS_RZ_DIFF,
+        lens_format="parquet",
+    ),
+    **_make_pair(
+        "rz_diff_mag_3_p_0",
+        _PATH_RZ_DIFF_MAG_3_P_0,
         _RAND_Y3,
         columns=_COLS_RZ_DIFF,
         lens_format="parquet",
