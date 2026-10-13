@@ -381,8 +381,8 @@ def collect_catalog_statistics(
 
 
 def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> None:
-    """Generate and save publication-grade visualization of catalog truncation points."""
-    fig, ax = plt.subplots(figsize=(11, 9))
+    """Generate and save publication-grade visualization of catalog truncation points grouped by probe."""
+    fig, ax = plt.subplots(figsize=(11, 10))
 
     category_colors = {
         "Optical": "#228833",  # Tol green
@@ -400,7 +400,39 @@ def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> No
         "WL Shear": "P",
     }
 
-    y_positions = np.arange(len(df))
+    # Group dataframe into three ordered sections:
+    # 1. Multi-wavelength (X-ray, SZ, WL Shear)
+    # 2. Huang et al. 2022 bins
+    # 3. Optical cluster & group catalogs
+    df_multi = df[df["category"].isin(["WL Shear", "SZ", "X-ray"])].sort_values(
+        "topn_hm", ascending=True
+    )
+    df_huang = df[df["category"] == "Huang 2022"].sort_values("topn_hm", ascending=True)
+    df_optical = df[df["category"] == "Optical"].sort_values("topn_hm", ascending=True)
+
+    ordered_groups = [
+        ("Multi-wavelength References", df_multi),
+        ("Huang et al. (2022) Reference Bins", df_huang),
+        ("Optical Cluster & Group Catalogs", df_optical),
+    ]
+
+    # Assign distinct y positions with visual gaps between groups
+    y_pos = []
+    y_labels = []
+    plot_rows = []
+    current_y = 0.0
+    group_boundaries = []
+
+    for g_idx, (g_name, g_df) in enumerate(ordered_groups):
+        g_start = current_y
+        for _, row in g_df.iterrows():
+            y_pos.append(current_y)
+            y_labels.append(row["name"])
+            plot_rows.append(row)
+            current_y += 1.0
+        g_end = current_y - 1.0
+        group_boundaries.append((g_name, g_start, g_end))
+        current_y += 1.2  # Gap between groups
 
     # Reference benchmark vertical lines
     ax.axvline(
@@ -419,13 +451,14 @@ def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> No
         linewidth=2.0,
         alpha=0.85,
         zorder=1,
-        label=r"10$\times$ Expanded Standard (Top-1k, $M_{\mathrm{vir}} \sim 4.5\times 10^{13} M_\odot$)",
+        label=r"10$\times$ Expanded Standard (Top-1k, $M_{\mathrm{vir}} \approx 4.5\times 10^{13} M_\odot$)",
     )
 
-    # Reference region bands
+    # Reference region shaded band
     ax.axvspan(100.0, 1000.0, color="#CCCCCC", alpha=0.18, zorder=0)
 
-    for i, row in df.iterrows():
+    # Plot items
+    for y, row in zip(y_pos, plot_rows):
         cat = row["category"]
         c = category_colors.get(cat, "#333333")
         m = category_markers.get(cat, "o")
@@ -433,7 +466,7 @@ def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> No
 
         # Horizontal connecting guide line
         ax.hlines(
-            y=i,
+            y=y,
             xmin=1.0,
             xmax=val,
             color=c,
@@ -445,7 +478,7 @@ def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> No
         # Main marker
         ax.scatter(
             val,
-            i,
+            y,
             color=c,
             edgecolor="#222222",
             marker=m,
@@ -458,11 +491,11 @@ def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> No
         text_str = f" {val:.1f} ({row['cutoff_desc']})"
         ax.text(
             val * 1.06,
-            i,
+            y,
             text_str,
             va="center",
             ha="left",
-            fontsize=8.2,
+            fontsize=8.0,
             fontweight="normal",
             color="#222222",
             bbox=dict(
@@ -474,11 +507,31 @@ def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> No
             zorder=4,
         )
 
-    ax.set_yticks(y_positions)
-    ax.set_yticklabels(df["name"], fontsize=9.5)
+    # Add section separator lines and background label titles
+    for g_idx, (g_name, g_start, g_end) in enumerate(group_boundaries):
+        # Section background subtle banner
+        ax.axhspan(
+            g_start - 0.45,
+            g_end + 0.45,
+            color="#F7F7F7" if g_idx % 2 == 0 else "#FFFFFF",
+            alpha=0.5,
+            zorder=-1,
+        )
+        if g_idx > 0:
+            sep_y = (group_boundaries[g_idx - 1][2] + g_start) / 2.0
+            ax.axhline(
+                y=sep_y,
+                color="#DDDDDD",
+                linestyle="-",
+                linewidth=1.0,
+                zorder=1,
+            )
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(y_labels, fontsize=9.2)
     ax.set_xscale("log")
     ax.set_xlim(3.0, 3000.0)
-    ax.set_ylim(-0.8, len(df) - 0.2)
+    ax.set_ylim(-0.8, current_y - 0.4)
 
     ax.set_xlabel(
         r"Volume-Compensated Equivalent Top-N (HectoMAP Volume Scale, $V \approx 3.37\times 10^7\ \mathrm{Mpc}^3$)",
@@ -487,7 +540,7 @@ def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> No
     )
     ax.set_ylabel("Cluster / Group Catalog", fontsize=10.5, fontweight="normal")
     ax.set_title(
-        r"Cluster Catalog Truncation Thresholds Normalized to Volume Density",
+        r"Cluster Catalog Truncation Thresholds (Grouped by Detection Probe)",
         fontsize=11.5,
         fontweight="normal",
         pad=12,
