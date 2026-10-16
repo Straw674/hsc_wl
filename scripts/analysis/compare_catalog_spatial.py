@@ -260,6 +260,7 @@ def add_reference_layer(plot, region: dict, key: str, frame: pd.DataFrame, style
         "efeds": "EXT_LIKE",
         "des_y3_redmapper": "maskfrac",
         "xxl_dr2": "Bextlike",
+        "desi_dr1_bgs": "L_TOT",
     }
     if key in quality_labels:
         tooltips.append((quality_labels[key], "@quality"))
@@ -766,13 +767,18 @@ def compute_global_benchmark_scorecard(
                 "keys": ("erass3", "efeds", "xxl_dr2", "act_dr6", "chen2024"),
             },
             "optical": {
-                "name": "Mean (Optical · 3 refs)",
-                "region": "3 Optical Surveys",
-                "keys": ("des_y3_redmapper", "des_y6_wazp", "kids_dr3_amico"),
+                "name": "Mean (Optical · 4 refs)",
+                "region": "4 Optical Surveys",
+                "keys": (
+                    "des_y3_redmapper",
+                    "des_y6_wazp",
+                    "kids_dr3_amico",
+                    "desi_dr1_bgs",
+                ),
             },
             "overall": {
-                "name": "Mean (Overall · 8 refs)",
-                "region": "8 References",
+                "name": "Mean (Overall · 9 refs)",
+                "region": "9 References",
                 "keys": tuple(EXTERNAL_REFERENCE_METADATA),
             },
         }
@@ -1596,7 +1602,7 @@ OUTPUT_STRATIFIED_DELTA_PNG = (
 dfs_dict = load_lens_data(LABELS_TO_COMPARE, project_root)
 reference_dfs = load_external_reference_catalogs(project_root, REDSHIFT_RANGE)
 print(
-    f"Loaded {len(reference_dfs)} external catalogs: 5 physical probes and 3 optical catalogs"
+    f"Loaded {len(reference_dfs)} external catalogs: 5 physical probes and 4 optical catalogs"
 )
 
 
@@ -1624,6 +1630,7 @@ HTML_GROUPS = {
         "des_y6_wazp",
         "des_y3_redmapper",
         "kids_dr3_amico",
+        "desi_dr1_bgs",
         "chen2024",
     ),
 }
@@ -1851,6 +1858,14 @@ HTML_STYLES = {
         line_width=1.2,
         alpha=0.65,
         visible=False,
+    ),
+    "desi_dr1_bgs": dict(
+        color="#D97706",
+        shape="square",
+        diameter=0.18,
+        line_width=1.5,
+        alpha=0.75,
+        visible=True,
     ),
     "chen2024": dict(
         color="#3B424A",

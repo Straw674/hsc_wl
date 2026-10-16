@@ -1,4 +1,4 @@
-"""Eight external cluster references using native centers and the HSC Y3 footprint."""
+"""Nine external cluster references using native centers and the HSC Y3 footprint."""
 
 import hashlib
 import json
@@ -40,6 +40,10 @@ PUBLIC_DOWNLOADS = (
         "kids_dr3_amico.fits",
         "https://vizier.cds.unistra.fr/viz-bin/asu-binfits?-source=J/A%2BA/665/A100/ak3&-out.all&-out.max=unlimited",
     ),
+    (
+        "bgs_groups_dr1.fits",
+        "https://data.desi.lbl.gov/public/dr1/vac/dr1/bgs-groups/v1.0/bgs-groups-dr1-v1.0.fits",
+    ),
 )
 
 ACT_CANDIDATE_ARCHIVE = (
@@ -48,7 +52,12 @@ ACT_CANDIDATE_ARCHIVE = (
     "act_dr6_candidates.fits",
 )
 
-OPTICAL_REFERENCE_KEYS = ("des_y3_redmapper", "des_y6_wazp", "kids_dr3_amico")
+OPTICAL_REFERENCE_KEYS = (
+    "des_y3_redmapper",
+    "des_y6_wazp",
+    "kids_dr3_amico",
+    "desi_dr1_bgs",
+)
 
 EXTERNAL_REFERENCE_METADATA = {
     "erass3": {
@@ -98,6 +107,12 @@ EXTERNAL_REFERENCE_METADATA = {
         "type": "Optical",
         "region": "Spring",
         "selection": "Published richness >= 15 and S/N >= 3.5 subset; zfix in comparison interval.",
+    },
+    "desi_dr1_bgs": {
+        "label": "DESI DR1 BGS Groups (M_halo >= 10^14)",
+        "type": "Optical",
+        "region": "Spring+Fall+North",
+        "selection": "BGS DR1 v1.0; central galaxies (~IS_SAT); M_HALO >= 1e14 M_sun/h; z in comparison interval.",
     },
 }
 
@@ -240,8 +255,38 @@ def read_optical_references(raw_dir: Path) -> dict[str, pd.DataFrame]:
             "maskfrac": "quality",
         },
     )
+    bgs = read_catalog_frame(
+        raw_dir / "bgs_groups_dr1.fits",
+        (
+            "IGRP",
+            "RA",
+            "DEC",
+            "Z",
+            "M_HALO",
+            "N_SAT",
+            "L_TOT",
+            "IS_SAT",
+        ),
+    )
+    bgs = bgs.loc[(~bgs["IS_SAT"]) & (bgs["M_HALO"] >= 1e14)]
+    bgs_frame = standardize_reference(
+        bgs,
+        {
+            "IGRP": "name",
+            "RA": "ra",
+            "DEC": "dec",
+            "Z": "z",
+            "M_HALO": "mass",
+            "N_SAT": "richness",
+            "L_TOT": "quality",
+        },
+    )
+    bgs_frame["mass_definition"] = "M200m"
     return dict(
-        des_y3_redmapper=des_frame, des_y6_wazp=wazp_frame, kids_dr3_amico=kids_frame
+        des_y3_redmapper=des_frame,
+        des_y6_wazp=wazp_frame,
+        kids_dr3_amico=kids_frame,
+        desi_dr1_bgs=bgs_frame,
     )
 
 
@@ -261,7 +306,7 @@ def clip_reference_to_mask(frame: pd.DataFrame, mask) -> pd.DataFrame:
 def build_external_reference_catalogs(
     root: Path, redshift_range: tuple[float, float]
 ) -> dict[str, pd.DataFrame]:
-    """Load five instrument-selected samples and three optical references.
+    """Load five instrument-selected samples and four optical references.
 
     Physical probes retain unconfirmed detections and use candidate lens redshifts
     for matching apertures. Optical references retain the comparison z interval.
@@ -317,7 +362,7 @@ def prepare_reference_catalogs(
     root: Path,
     redshift_range: tuple[float, float],
 ) -> pd.DataFrame:
-    """Persist the current eight masked references and explicit selection provenance."""
+    """Persist the current nine masked references and explicit selection provenance."""
     directory = root / "data/reference_catalogs"
     frames = build_external_reference_catalogs(root, redshift_range)
     records = []
@@ -349,7 +394,7 @@ def prepare_reference_catalogs(
 def load_external_reference_catalogs(
     root: Path, redshift_range: tuple[float, float]
 ) -> dict[str, pd.DataFrame]:
-    """Load the eight prepared Parquet references and verify their selection provenance."""
+    """Load the nine prepared Parquet references and verify their selection provenance."""
     directory = root / "data/reference_catalogs"
     manifest_path = directory / "manifest.json"
     if not manifest_path.exists():
@@ -366,7 +411,7 @@ def load_external_reference_catalogs(
         )
     if tuple(manifest["catalogs"]) != tuple(EXTERNAL_REFERENCE_METADATA):
         raise ValueError(
-            "Expected five physical probes and three optical references; rerun preparation"
+            "Expected five physical probes and four optical references; rerun preparation"
         )
     catalogs = {}
     for key, metadata in EXTERNAL_REFERENCE_METADATA.items():
