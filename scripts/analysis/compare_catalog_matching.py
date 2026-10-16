@@ -20,11 +20,6 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from hsc_wl.prepare import gaussian_kde_1d, load_stratified_candidates
-from hsc_wl.reference_catalogs import (
-    EXTERNAL_REFERENCE_METADATA,
-    OPTICAL_REFERENCE_KEYS,
-    load_external_reference_catalogs,
-)
 from initial import *  # noqa: F401,F403
 from src.data import read_catalog_frame
 
@@ -917,133 +912,6 @@ def plot_redshift_distributions(
     plt.close(fig)
 
 
-def compute_optical_reference_recovery(
-    strat_dfs: dict[str, Table],
-    reference_dict: dict[str, pd.DataFrame],
-    ref_keys: tuple[str, ...],
-    *,
-    r_phys_mpc_h: float,
-    max_delta_z: float,
-) -> pd.DataFrame:
-    """Evaluate matching completeness / recovery rate of stratified candidates against optical references."""
-    records = []
-    for ref_k in ref_keys:
-        if ref_k not in reference_dict:
-            continue
-        ref_df = reference_dict[ref_k]
-        ref_table = Table.from_pandas(ref_df)
-        n_ref = len(ref_table)
-        rec = {"ref_key": ref_k, "n_ref": n_ref}
-        for cand_k, cand_table in strat_dfs.items():
-            matched = match_clusters_with_redshift(
-                ref_table,
-                cand_table,
-                r_phys_mpc_h=r_phys_mpc_h,
-                max_delta_z=max_delta_z,
-            )
-            n_match = int(matched.sum())
-            rec[f"{cand_k}_count"] = n_match
-            rec[f"{cand_k}_pct"] = (n_match / n_ref * 100.0) if n_ref > 0 else 0.0
-        records.append(rec)
-    return pd.DataFrame(records)
-
-
-def plot_optical_reference_recovery(
-    ref_recovery_df: pd.DataFrame,
-    candidate_keys: list[str],
-    save_path: Path,
-    display_names: dict[str, str] | None = None,
-    ref_metadata: dict[str, dict[str, str]] | None = None,
-    r_phys_mpc_h: float = 0.5,
-    max_delta_z: float = 0.05,
-):
-    """Plot candidate catalog matching recovery across partial-coverage optical reference surveys."""
-    from matplotlib.colors import Normalize
-
-    names_map = display_names or {}
-    meta = ref_metadata or {}
-    n_refs = len(ref_recovery_df)
-    n_cands = len(candidate_keys)
-
-    fig_w = max(14.0, 0.85 * n_cands + 3.0)
-    fig_h = max(4.5, 0.95 * n_refs + 1.8)
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
-
-    data_pct = np.zeros((n_refs, n_cands), dtype=float)
-    data_counts = np.zeros((n_refs, n_cands), dtype=int)
-    totals = ref_recovery_df["n_ref"].values
-
-    for i, (_, row) in enumerate(ref_recovery_df.iterrows()):
-        for j, c_key in enumerate(candidate_keys):
-            data_pct[i, j] = float(row[f"{c_key}_pct"])
-            data_counts[i, j] = int(row[f"{c_key}_count"])
-
-    vmax = (
-        min(100.0, float(np.ceil(data_pct.max() / 5.0) * 5.0))
-        if len(data_pct) > 0
-        else 100.0
-    )
-    norm = Normalize(vmin=0.0, vmax=max(50.0, vmax))
-    cmap = plt.colormaps["YlGnBu"]
-
-    im = ax.imshow(data_pct, cmap=cmap, norm=norm, aspect="auto")
-
-    cbar = fig.colorbar(im, ax=ax, shrink=0.85, pad=0.02)
-    cbar.set_label("Match Recovery Fraction (%)", fontsize=10.5)
-
-    ax.set_xticks(np.arange(n_cands))
-    ax.set_yticks(np.arange(n_refs))
-    col_labels = [names_map.get(k, k) for k in candidate_keys]
-    row_labels = []
-    for _, row in ref_recovery_df.iterrows():
-        rk = row["ref_key"]
-        r_info = meta.get(rk, {})
-        label = r_info.get("label", rk)
-        region = r_info.get("region", "")
-        row_labels.append(f"{label}\n({region}, N={int(row['n_ref'])})")
-
-    ax.set_xticklabels(
-        col_labels, rotation=30, ha="right", rotation_mode="anchor", fontsize=9.5
-    )
-    ax.set_yticklabels(row_labels, fontsize=10.0)
-
-    ax.tick_params(top=False, bottom=True, labeltop=False, labelbottom=True)
-    ax.spines[:].set_visible(False)
-
-    for i in range(n_refs):
-        for j in range(n_cands):
-            pct = data_pct[i, j]
-            cnt = data_counts[i, j]
-            tot = totals[i]
-            text = f"{cnt}/{tot}\n({pct:.1f}%)"
-            norm_val = norm(pct)
-            text_color = "white" if norm_val > 0.60 else "black"
-            ax.text(
-                j,
-                i,
-                text,
-                ha="center",
-                va="center",
-                color=text_color,
-                fontsize=7.5,
-            )
-
-    ax.set_title(
-        f"Candidate Catalog Recovery against Partial-Coverage Optical References\n"
-        f"(Matching within {r_phys_mpc_h:g} Mpc/h transverse radius, |Δz| < {max_delta_z:g})",
-        fontsize=11.5,
-        pad=12,
-        fontweight="normal",
-    )
-    fig.tight_layout()
-
-    save_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(save_path, dpi=300, bbox_inches="tight")
-    print(f"Optical reference recovery plot saved to {save_path}")
-    plt.show()
-    plt.close(fig)
-
-
 # %% Global Configuration
 
 LABELS_TO_COMPARE = [
@@ -1163,9 +1031,6 @@ OUTPUT_TIER_CONSENSUS_PROFILES = (
 OUTPUT_TIER_PAIRWISE_HEATMAPS = (
     project_root / "output/plots_for_agents/tier_pairwise_heatmaps.png"
 )
-OUTPUT_OPTICAL_REFERENCE_RECOVERY = (
-    project_root / "output/plots_for_agents/matching_optical_reference_recovery.png"
-)
 
 
 # %% [Stage 1: Load Raw & Stratified Lens Catalogs]
@@ -1277,38 +1142,4 @@ plot_tier_pairwise_heatmaps(
     r_phys_mpc_h=MATCH_RADIUS_MPC_H,
     max_delta_z=MATCH_MAX_DELTA_Z,
     catalog_order=LABELS_TO_COMPARE,
-)
-
-
-# %% [Stage 7: Optical Reference Benchmark Matching (DES, KiDS, DESI BGS)]
-
-reference_dfs = load_external_reference_catalogs(project_root, REDSHIFT_RANGE)
-
-ref_recovery_df = compute_optical_reference_recovery(
-    strat_dfs=strat_dfs_dict,
-    reference_dict=reference_dfs,
-    ref_keys=OPTICAL_REFERENCE_KEYS,
-    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-    max_delta_z=MATCH_MAX_DELTA_Z,
-)
-
-print("\n=== Optical Reference Matching Recovery (Stratified N=1020) ===")
-for _, row in ref_recovery_df.iterrows():
-    rk = row["ref_key"]
-    r_label = EXTERNAL_REFERENCE_METADATA.get(rk, {}).get("label", rk)
-    print(f"\n{r_label} (N={int(row['n_ref'])}):")
-    for cand_k in LABELS_TO_COMPARE:
-        disp = DISPLAY_NAMES.get(cand_k, cand_k)
-        pct = float(row[f"{cand_k}_pct"])
-        cnt = int(row[f"{cand_k}_count"])
-        print(f"  {disp:36s}: {cnt:4d}/{int(row['n_ref']):4d} ({pct:5.1f}%)")
-
-plot_optical_reference_recovery(
-    ref_recovery_df=ref_recovery_df,
-    candidate_keys=LABELS_TO_COMPARE,
-    save_path=OUTPUT_OPTICAL_REFERENCE_RECOVERY,
-    display_names=DISPLAY_NAMES,
-    ref_metadata=EXTERNAL_REFERENCE_METADATA,
-    r_phys_mpc_h=MATCH_RADIUS_MPC_H,
-    max_delta_z=MATCH_MAX_DELTA_Z,
 )
