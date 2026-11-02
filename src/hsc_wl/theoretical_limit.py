@@ -478,7 +478,7 @@ def ensure_theoretical_limit_outputs(root_path: Path, overwrite: bool = False) -
 
     for cat_id in ["ideal_mdpl2", "ideal_colossus"]:
         for nbins in ["1bin", "4bin"]:
-            # 1. Ensure prepare lens table exists so scripts like fit_custom_scatter work seamlessly
+            # 1. Ensure prepare lens table exists so scripts like fit_scatter work seamlessly
             prep_dir = Path(root_path) / f"output/{cat_id}/{nbins}/prepare"
             prep_dir.mkdir(parents=True, exist_ok=True)
             lens_fits = prep_dir / f"{cat_id}_{nbins}_lenses.fits"
