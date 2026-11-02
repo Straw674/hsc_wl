@@ -21,6 +21,7 @@ if str(project_root) not in sys.path:
 
 from astropy.table import Table  # noqa: E402
 from colossus.cosmology import cosmology  # noqa: E402
+from colossus.halo import mass_so  # noqa: E402
 
 from hsc_wl.config import RUN_REGISTRY, resolve_config, resolve_run_dir  # noqa: E402
 from hsc_wl.profile_scatter import (  # noqa: E402
@@ -211,6 +212,12 @@ def fit_label_profile_scatter(
             f"Chi2/dof={fit_res['chi2_reduced']:.3f} (Chi2={fit_res['chi2']:.2f}, dof={fit_res['n_dof']})"
         )
 
+        r200m_val = compute_r200m_physical(
+            mean_logm=fit_res["mean_logm"],
+            z_lens=z_lens_ref,
+            cosmology_name=cosmology_name,
+            mass_def=mass_def,
+        )
         row = {
             "bin_id": b_idx + 1,
             "dsigma": ds_data,
@@ -220,6 +227,8 @@ def fit_label_profile_scatter(
             "dsigma_1h_cen": ds_1h_c_phys,
             "dsigma_1h_mis": ds_1h_m_phys,
             "dsigma_2h": ds_2h_phys,
+            "r200m": r200m_val,
+            "z_lens": z_lens_ref,
             **fit_res,
         }
         summary_rows.append(row)
@@ -239,6 +248,23 @@ def fit_label_profile_scatter(
     return summary_tbl, model_state
 
 
+def compute_r200m_physical(
+    mean_logm: float,
+    z_lens: float = 0.35,
+    cosmology_name: str = "planck18",
+    mass_def: str = "200m",
+) -> float:
+    """Compute physical R200m in Mpc from halo mass and lens redshift."""
+    try:
+        cosmo = cosmology.setCosmology(cosmology_name)
+        h = cosmo.h
+        r_kpc_h = mass_so.M_to_R(10.0**mean_logm, z_lens, mass_def)
+        return float((r_kpc_h / (1.0 + z_lens)) / 1000.0 / h)
+    except Exception as e:
+        logging.warning(f"Failed to compute R200m: {e}")
+        return float("nan")
+
+
 def _format_fit_val_err(
     val: Any, err: Any, val_fmt: str = ".2f", err_fmt: str = ".2f"
 ) -> str:
@@ -253,16 +279,17 @@ def _format_fit_val_err(
     return rf"{v_str} \pm {float(err):{err_fmt}}"
 
 
-def plot_profile_fit_panel(
-    ax: plt.Axes,
+def plot_bin_column(
+    ax_log: plt.Axes,
+    ax_lin: plt.Axes,
     rp_mpc: np.ndarray,
     row: dict,
-    panel_title: str,
+    bin_title: str,
     is_multi_bin: bool = False,
     show_ylabel: bool = True,
-    show_xlabel: bool = True,
+    show_legend: bool = True,
 ) -> None:
-    """Plot profile fit decomposition for a single bin onto the given Axes."""
+    """Plot profile fit decomposition for a single bin in log (top) and linear (bottom) subplots."""
     ds_data = row["dsigma"]
     ds_err = row["dsig_err_jk"]
     ds_mod = row["dsigma_mod"]
@@ -270,100 +297,189 @@ def plot_profile_fit_panel(
     ds_1h_mis = row["dsigma_1h_mis"]
     ds_2h = row["dsigma_2h"]
 
-    ax.errorbar(
+    has_r200m = (
+        ("r200m" in row.colnames) if hasattr(row, "colnames") else ("r200m" in row)
+    )
+    if has_r200m:
+        r200m = float(row["r200m"])
+    else:
+        has_z = (
+            ("z_lens" in row.colnames)
+            if hasattr(row, "colnames")
+            else ("z_lens" in row)
+        )
+        z_val = float(row["z_lens"]) if has_z else 0.35
+        r200m = compute_r200m_physical(float(row["mean_logm"]), z_lens=z_val)
+
+    # ---------------- Top panel: Log scale ----------------
+    ax_log.errorbar(
         rp_mpc,
         ds_data,
         yerr=ds_err,
         fmt="o",
         color="black",
         label="Data",
-        capsize=2.5,
-        markersize=4.5,
-        elinewidth=1.0,
+        capsize=2.0,
+        markersize=3.8,
+        elinewidth=0.9,
         zorder=3,
     )
-    ax.plot(
+    ax_log.plot(
         rp_mpc,
         ds_mod,
         "-",
         color="red",
-        linewidth=2.0,
+        linewidth=1.8,
         label="Total Model",
         zorder=4,
     )
-    ax.plot(
+    ax_log.plot(
         rp_mpc,
         ds_1h_cen,
         "--",
         color="blue",
-        linewidth=1.4,
+        linewidth=1.3,
         label="1-halo (Centered)",
         zorder=2,
     )
     if row["f_mis"] > 0.0:
-        ax.plot(
+        ax_log.plot(
             rp_mpc,
             ds_1h_mis,
             "--",
             color="orange",
-            linewidth=1.4,
+            linewidth=1.3,
             label="1-halo (Miscentered)",
             zorder=2,
         )
-    ax.plot(
+    ax_log.plot(
         rp_mpc,
         ds_2h,
         ":",
         color="green",
-        linewidth=1.5,
+        linewidth=1.4,
         label="2-halo Term",
         zorder=2,
     )
 
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_ylim(bottom=np.maximum(1e-1, np.nanmin(ds_data) * 0.4))
-    if show_xlabel:
-        ax.set_xlabel(r"$R_p\ [\mathrm{Mpc}]$")
+    if np.isfinite(r200m):
+        ax_log.axvline(
+            r200m,
+            color="slategray",
+            linestyle="--",
+            linewidth=1.1,
+            alpha=0.85,
+            zorder=1,
+            label=rf"$R_{{\rm 200m}} = {r200m:.2f}\ \mathrm{{Mpc}}$",
+        )
+        ax_log.text(
+            r200m * 1.05,
+            0.90,
+            r"$R_{\rm 200m}$",
+            transform=ax_log.get_xaxis_transform(),
+            color="slategray",
+            fontsize=6.8 if is_multi_bin else 7.8,
+            va="top",
+        )
+
+    ax_log.set_xscale("log")
+    ax_log.set_yscale("log")
+    ax_log.set_ylim(bottom=np.maximum(1e-1, np.nanmin(ds_data) * 0.4))
+    ax_log.grid(True, which="both", linestyle=":", alpha=0.35)
     if show_ylabel:
-        ax.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot / pc^2}]$")
-
-    ax.grid(True, which="both", linestyle=":", alpha=0.35)
-
-    fontsize = 8.5 if is_multi_bin else 9.5
-    summary_text = "\n".join(
-        [
-            rf"$\sigma = {_format_fit_val_err(row['scatter'], row['scatter_err'], '.3f', '.3f')}$",
-            rf"$\alpha_c = {_format_fit_val_err(row['alpha_c'], row['alpha_c_err'], '.2f', '.2f')}$ ($\langle c \rangle = {row['mean_c']:.1f}$)",
-            rf"$\alpha_b = {_format_fit_val_err(row['alpha_b'], row['alpha_b_err'], '.2f', '.2f')}$ ($\langle b \rangle = {row['mean_b']:.2f}$)",
-            rf"$f_{{\rm mis}} = {_format_fit_val_err(row['f_mis'], row['f_mis_err'], '.2f', '.2f')}$",
-            rf"$\sigma_R = {_format_fit_val_err(row['sigma_R'], row['sigma_R_err'], '.1f', '.1f')}\ \mathrm{{kpc}}/h$",
-            rf"$\chi^2/\nu = {row['chi2_reduced']:.3f}\ (\chi^2={row['chi2']:.1f}, \nu={row['n_dof']})$",
-            rf"$\langle \log M_{{200m}} \rangle = {row['mean_logm']:.3f}$",
-        ]
+        ax_log.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot / pc^2}]$ (log)")
+    ax_log.set_title(
+        bin_title,
+        fontweight="normal",
+        fontsize=10.0 if is_multi_bin else 11.0,
     )
-    ax.text(
-        0.05,
-        0.05,
+
+    # Parameter summary card (compact font size)
+    fontsize_card = 6.8 if is_multi_bin else 8.0
+    summary_items = [
+        rf"$\sigma = {_format_fit_val_err(row['scatter'], row['scatter_err'], '.3f', '.3f')}$",
+        rf"$\alpha_c = {_format_fit_val_err(row['alpha_c'], row['alpha_c_err'], '.2f', '.2f')}$ ($\langle c \rangle = {row['mean_c']:.1f}$)",
+        rf"$\alpha_b = {_format_fit_val_err(row['alpha_b'], row['alpha_b_err'], '.2f', '.2f')}$ ($\langle b \rangle = {row['mean_b']:.2f}$)",
+        rf"$f_{{\rm mis}} = {_format_fit_val_err(row['f_mis'], row['f_mis_err'], '.2f', '.2f')}$",
+        rf"$\sigma_R = {_format_fit_val_err(row['sigma_R'], row['sigma_R_err'], '.1f', '.1f')}\ \mathrm{{kpc}}/h$",
+        rf"$\chi^2/\nu = {row['chi2_reduced']:.3f}\ (\chi^2={row['chi2']:.1f})$",
+        rf"$\langle \log M_{{200m}} \rangle = {row['mean_logm']:.3f}$",
+    ]
+    if np.isfinite(r200m):
+        summary_items.append(rf"$R_{{\rm 200m}} = {r200m:.2f}\ \mathrm{{Mpc}}$")
+    summary_text = "\n".join(summary_items)
+    ax_log.text(
+        0.04,
+        0.04,
         summary_text,
-        transform=ax.transAxes,
-        fontsize=fontsize,
+        transform=ax_log.transAxes,
+        fontsize=fontsize_card,
         va="bottom",
         ha="left",
         bbox=dict(
-            boxstyle="round,pad=0.35",
+            boxstyle="round,pad=0.22",
             facecolor="white",
             alpha=0.88,
             edgecolor="0.75",
         ),
     )
 
-    ax.set_title(
-        panel_title,
-        fontweight="normal",
-        fontsize=10.5 if is_multi_bin else 11.5,
+    if show_legend:
+        ax_log.legend(
+            loc="upper right",
+            fontsize=6.8 if is_multi_bin else 8.0,
+            framealpha=0.85,
+        )
+
+    # ---------------- Bottom panel: Linear scale ----------------
+    ax_lin.errorbar(
+        rp_mpc,
+        ds_data,
+        yerr=ds_err,
+        fmt="o",
+        color="black",
+        capsize=2.0,
+        markersize=3.8,
+        elinewidth=0.9,
+        zorder=3,
     )
-    ax.legend(loc="upper right", fontsize=fontsize)
+    ax_lin.plot(rp_mpc, ds_mod, "-", color="red", linewidth=1.8, zorder=4)
+    ax_lin.plot(rp_mpc, ds_1h_cen, "--", color="blue", linewidth=1.3, zorder=2)
+    if row["f_mis"] > 0.0:
+        ax_lin.plot(rp_mpc, ds_1h_mis, "--", color="orange", linewidth=1.3, zorder=2)
+    ax_lin.plot(rp_mpc, ds_2h, ":", color="green", linewidth=1.4, zorder=2)
+
+    ax_lin.axhline(
+        0.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.6, zorder=1
+    )
+    if np.isfinite(r200m):
+        ax_lin.axvline(
+            r200m,
+            color="slategray",
+            linestyle="--",
+            linewidth=1.1,
+            alpha=0.85,
+            zorder=1,
+        )
+        ax_lin.text(
+            r200m * 1.05,
+            0.90,
+            r"$R_{\rm 200m}$",
+            transform=ax_lin.get_xaxis_transform(),
+            color="slategray",
+            fontsize=6.8 if is_multi_bin else 7.8,
+            va="top",
+        )
+
+    ax_lin.set_xscale("log")
+    ax_lin.set_yscale("linear")
+    y_max = max(float(np.nanmax(ds_data + ds_err)), float(np.nanmax(ds_mod))) * 1.08
+    y_min = min(-0.04 * y_max, float(np.nanmin(ds_data - ds_err)) * 1.1)
+    ax_lin.set_ylim(bottom=y_min, top=y_max)
+    ax_lin.grid(True, which="both", linestyle=":", alpha=0.35)
+    if show_ylabel:
+        ax_lin.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot / pc^2}]$ (linear)")
+    ax_lin.set_xlabel(r"$R_p\ [\mathrm{Mpc}]$")
 
 
 def plot_profile_fit_decomposition(
@@ -371,65 +487,44 @@ def plot_profile_fit_decomposition(
     label: str,
     out_plot_path: Path,
 ) -> None:
-    """Plot profile fit decomposition for all bins in a single figure.
+    """Plot profile fit decomposition in a 2xN grid (2x1 for 1bin, 2x4 for 4bin).
 
-    For 1-bin data, produces a single-panel plot. For 4-bin (or multi-bin) data,
-    arranges bins into a multi-panel grid (e.g. 2x2 for 4 bins).
+    Top row displays log-scale DeltaSigma; bottom row displays linear-scale DeltaSigma.
     """
     n_bins = len(summary)
     rp_mpc = (
         summary["r_mpc"][0] if "r_mpc" in summary.colnames else summary.meta["r_mpc"]
     )
+    is_multi_bin = n_bins > 1
 
-    if n_bins == 1:
-        fig, ax = plt.subplots(figsize=(7, 6))
-        row = summary[0]
+    fig, axes = plt.subplots(
+        2,
+        n_bins,
+        figsize=(3.8 * n_bins + 1.0, 7.2) if is_multi_bin else (6.5, 7.5),
+        sharex="col",
+        squeeze=False,
+    )
+
+    for b_idx in range(n_bins):
+        ax_log = axes[0, b_idx]
+        ax_lin = axes[1, b_idx]
+        row = summary[b_idx]
         bin_num = row["bin_id"]
-        panel_title = f"{label} - Bin {bin_num} Profile Fit Decomposition"
-        plot_profile_fit_panel(
-            ax=ax,
+
+        bin_title = f"{label} - Bin {bin_num}" if not is_multi_bin else f"Bin {bin_num}"
+        show_ylabel = b_idx == 0
+        show_legend = b_idx == 0
+
+        plot_bin_column(
+            ax_log=ax_log,
+            ax_lin=ax_lin,
             rp_mpc=rp_mpc,
             row=row,
-            panel_title=panel_title,
-            is_multi_bin=False,
-            show_ylabel=True,
-            show_xlabel=True,
+            bin_title=bin_title,
+            is_multi_bin=is_multi_bin,
+            show_ylabel=show_ylabel,
+            show_legend=show_legend,
         )
-    else:
-        ncols = 2
-        nrows = int(np.ceil(n_bins / ncols))
-        fig, axes = plt.subplots(
-            nrows,
-            ncols,
-            figsize=(12, 5.0 * nrows),
-            sharex=True,
-            sharey=False,
-        )
-        axes_flat = axes.flatten()
-
-        for b_idx in range(n_bins):
-            ax = axes_flat[b_idx]
-            row = summary[b_idx]
-            bin_num = row["bin_id"]
-            row_idx = b_idx // ncols
-            col_idx = b_idx % ncols
-
-            show_ylabel = col_idx == 0
-            show_xlabel = (row_idx == nrows - 1) or (b_idx + ncols >= n_bins)
-
-            panel_title = f"{label} - Bin {bin_num}"
-            plot_profile_fit_panel(
-                ax=ax,
-                rp_mpc=rp_mpc,
-                row=row,
-                panel_title=panel_title,
-                is_multi_bin=True,
-                show_ylabel=show_ylabel,
-                show_xlabel=show_xlabel,
-            )
-
-        for b_idx in range(n_bins, len(axes_flat)):
-            axes_flat[b_idx].set_visible(False)
 
     plt.tight_layout()
     out_plot_path.parent.mkdir(parents=True, exist_ok=True)
