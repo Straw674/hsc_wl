@@ -113,119 +113,174 @@ def plot_profile_parameter_comparison(
     display_names: dict[str, str],
     output_path: Path,
 ) -> None:
-    """Create a multi-panel comparison figure for all fitted parameters."""
+    """Create a multi-panel comparison figure showing 2D parameter plane distributions."""
     labels = list(summaries.keys())
     n_samples = len(labels)
     if n_samples == 0:
         print("No samples available to plot.")
         return
 
-    x_indices = np.arange(n_samples)
-    names = [display_names.get(lbl, lbl) for lbl in labels]
-
-    fig, axes = plt.subplots(2, 3, figsize=(15, 9), sharex=True)
-    ax_scatter = axes[0, 0]
-    ax_mass = axes[0, 1]
-    ax_chi2 = axes[0, 2]
-    ax_conc = axes[1, 0]
-    ax_bias = axes[1, 1]
-    ax_mis = axes[1, 2]
-
-    # Distinct color palette
+    markers = ["o", "s", "^", "D", "v", "P", "X", "*", "<", ">"]
     colors = plt.cm.tab10(np.linspace(0, 1, max(n_samples, 10)))
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 9.5))
+    ax_mass_conc = axes[0, 0]
+    ax_mass_bias = axes[0, 1]
+    ax_mis_plane = axes[0, 2]
+    ax_conc_fmis = axes[1, 0]
+    ax_conc_sigmar = axes[1, 1]
+    ax_legend = axes[1, 2]
+
+    handles = []
+    catalog_names = []
 
     for i, lbl in enumerate(labels):
         row = summaries[lbl][0]  # First bin for 1-bin mode
         c = colors[i % len(colors)]
+        m = markers[i % len(markers)]
+        name = display_names.get(lbl, lbl)
+        catalog_names.append(name)
 
-        # 1. Scatter
-        ax_scatter.errorbar(
-            i,
-            float(row["scatter"]),
-            yerr=_clean_err(row["scatter_err"]),
-            fmt="o",
+        logm = float(row["mean_logm"])
+        alpha_c = float(row["alpha_c"])
+        alpha_c_err = _clean_err(row["alpha_c_err"])
+        alpha_b = float(row["alpha_b"])
+        alpha_b_err = _clean_err(row["alpha_b_err"])
+        f_mis = float(row["f_mis"])
+        f_mis_err = _clean_err(row["f_mis_err"])
+        sigma_r = float(row["sigma_R"])
+        sigma_r_err = _clean_err(row["sigma_R_err"])
+
+        # 1. Mass - Concentration
+        h = ax_mass_conc.errorbar(
+            logm,
+            alpha_c,
+            yerr=alpha_c_err,
+            fmt=m,
             color=c,
-            capsize=4,
+            ecolor=c,
+            capsize=3,
+            elinewidth=1.2,
+            markersize=7,
+            label=name,
+        )
+        handles.append(h)
+
+        # 2. Mass - Bias
+        ax_mass_bias.errorbar(
+            logm,
+            alpha_b,
+            yerr=alpha_b_err,
+            fmt=m,
+            color=c,
+            ecolor=c,
+            capsize=3,
+            elinewidth=1.2,
             markersize=7,
         )
 
-        # 2. Mean Halo Mass
-        ax_mass.scatter(i, float(row["mean_logm"]), color=c, s=60)
-
-        # 3. Reduced Chi2
-        ax_chi2.scatter(i, float(row["chi2_reduced"]), color=c, s=60)
-
-        # 4. Concentration alpha_c
-        ax_conc.errorbar(
-            i,
-            float(row["alpha_c"]),
-            yerr=_clean_err(row["alpha_c_err"]),
-            fmt="s",
+        # 3. Miscentering Parameters (f_mis vs sigma_R)
+        ax_mis_plane.errorbar(
+            f_mis,
+            sigma_r,
+            xerr=f_mis_err,
+            yerr=sigma_r_err,
+            fmt=m,
             color=c,
-            capsize=4,
+            ecolor=c,
+            capsize=3,
+            elinewidth=1.2,
             markersize=7,
         )
 
-        # 5. Bias alpha_b
-        ax_bias.errorbar(
-            i,
-            float(row["alpha_b"]),
-            yerr=_clean_err(row["alpha_b_err"]),
-            fmt="^",
+        # 4. Concentration vs Miscentering Fraction (f_mis vs alpha_c)
+        ax_conc_fmis.errorbar(
+            f_mis,
+            alpha_c,
+            xerr=f_mis_err,
+            yerr=alpha_c_err,
+            fmt=m,
             color=c,
-            capsize=4,
+            ecolor=c,
+            capsize=3,
+            elinewidth=1.2,
             markersize=7,
         )
 
-        # 6. Miscentering f_mis
-        ax_mis.errorbar(
-            i,
-            float(row["f_mis"]),
-            yerr=_clean_err(row["f_mis_err"]),
-            fmt="d",
+        # 5. Concentration vs Miscentering Radius (sigma_R vs alpha_c)
+        ax_conc_sigmar.errorbar(
+            sigma_r,
+            alpha_c,
+            xerr=sigma_r_err,
+            yerr=alpha_c_err,
+            fmt=m,
             color=c,
-            capsize=4,
+            ecolor=c,
+            capsize=3,
+            elinewidth=1.2,
             markersize=7,
         )
 
-    # Styling panel 1: Scatter
-    ax_scatter.set_ylabel(r"Scatter $\sigma_{\ln M}$", fontweight="normal")
-    ax_scatter.set_title("Mass-Observable Scatter", fontweight="normal")
-    ax_scatter.grid(True, linestyle=":", alpha=0.5)
-
-    # Styling panel 2: Mass
-    ax_mass.set_ylabel(
+    # Reference lines and styling
+    # Panel 1: Mass - Concentration
+    ax_mass_conc.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
+    ax_mass_conc.set_xlabel(
         r"$\langle \log M_{200m} \rangle\ [M_\odot/h]$", fontweight="normal"
     )
-    ax_mass.set_title("Derived Mean Halo Mass", fontweight="normal")
-    ax_mass.grid(True, linestyle=":", alpha=0.5)
+    ax_mass_conc.set_ylabel(r"$\alpha_c = c / c_{\rm Diemer19}$", fontweight="normal")
+    ax_mass_conc.set_title("Mass – Concentration", fontweight="normal")
+    ax_mass_conc.grid(True, linestyle=":", alpha=0.5)
 
-    # Styling panel 3: Reduced Chi2
-    ax_chi2.axhline(1.0, color="red", linestyle="--", linewidth=1.2, alpha=0.8)
-    ax_chi2.set_ylabel(r"Reduced $\chi^2 / \nu$", fontweight="normal")
-    ax_chi2.set_title(r"Fit Goodness ($\chi^2 / \nu \sim 1$)", fontweight="normal")
-    ax_chi2.grid(True, linestyle=":", alpha=0.5)
+    # Panel 2: Mass - Bias
+    ax_mass_bias.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
+    ax_mass_bias.set_xlabel(
+        r"$\langle \log M_{200m} \rangle\ [M_\odot/h]$", fontweight="normal"
+    )
+    ax_mass_bias.set_ylabel(r"$\alpha_b = b / b_{\rm Tinker10}$", fontweight="normal")
+    ax_mass_bias.set_title("Mass – Bias", fontweight="normal")
+    ax_mass_bias.grid(True, linestyle=":", alpha=0.5)
 
-    # Styling panel 4: Concentration
-    ax_conc.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
-    ax_conc.set_ylabel(r"$\alpha_c = c / c_{\rm Diemer19}$", fontweight="normal")
-    ax_conc.set_title("Concentration Scaling", fontweight="normal")
-    ax_conc.grid(True, linestyle=":", alpha=0.5)
+    # Panel 3: Miscentering parameters
+    ax_mis_plane.set_xlabel(r"Miscentering Fraction $f_{\rm mis}$", fontweight="normal")
+    ax_mis_plane.set_ylabel(r"$\sigma_R\ [\mathrm{kpc}/h]$", fontweight="normal")
+    ax_mis_plane.set_title("Miscentering Parameters", fontweight="normal")
+    ax_mis_plane.grid(True, linestyle=":", alpha=0.5)
 
-    # Styling panel 5: Bias
-    ax_bias.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
-    ax_bias.set_ylabel(r"$\alpha_b = b / b_{\rm Tinker10}$", fontweight="normal")
-    ax_bias.set_title("Halo Bias Scaling", fontweight="normal")
-    ax_bias.grid(True, linestyle=":", alpha=0.5)
+    # Panel 4: Concentration - f_mis
+    ax_conc_fmis.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
+    ax_conc_fmis.set_xlabel(r"Miscentering Fraction $f_{\rm mis}$", fontweight="normal")
+    ax_conc_fmis.set_ylabel(r"$\alpha_c = c / c_{\rm Diemer19}$", fontweight="normal")
+    ax_conc_fmis.set_title("Concentration – Miscentering Fraction", fontweight="normal")
+    ax_conc_fmis.grid(True, linestyle=":", alpha=0.5)
 
-    # Styling panel 6: Miscentering
-    ax_mis.set_ylabel(r"Miscentering Fraction $f_{\rm mis}$", fontweight="normal")
-    ax_mis.set_title("Miscentered Fraction", fontweight="normal")
-    ax_mis.grid(True, linestyle=":", alpha=0.5)
+    # Panel 5: Concentration - sigma_R
+    ax_conc_sigmar.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
+    ax_conc_sigmar.set_xlabel(r"$\sigma_R\ [\mathrm{kpc}/h]$", fontweight="normal")
+    ax_conc_sigmar.set_ylabel(r"$\alpha_c = c / c_{\rm Diemer19}$", fontweight="normal")
+    ax_conc_sigmar.set_title("Concentration – Miscentering Radius", fontweight="normal")
+    ax_conc_sigmar.grid(True, linestyle=":", alpha=0.5)
 
-    for ax in axes[1, :]:
-        ax.set_xticks(x_indices)
-        ax.set_xticklabels(names, rotation=35, ha="right", fontsize=9.5)
+    # Panel 6: Dedicated legend panel
+    ax_legend.axis("off")
+    ax_legend.legend(
+        handles,
+        catalog_names,
+        loc="center",
+        frameon=True,
+        fontsize=10,
+        title="Configurations",
+        title_fontsize=11,
+    )
+
+    data_axes = [
+        ax_mass_conc,
+        ax_mass_bias,
+        ax_mis_plane,
+        ax_conc_fmis,
+        ax_conc_sigmar,
+    ]
+    for ax in data_axes:
+        ax.margins(0.08)
 
     plt.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
