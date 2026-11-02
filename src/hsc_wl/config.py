@@ -22,13 +22,12 @@ Run labels follow the convention ``{catalog_id}_{nbins}`` where:
 
 - ``catalog_id`` encodes both the lens catalog and its sky footprint.
   Catalogs that naturally cover the full survey area (e.g. s16a redMapper,
-  CAMIRA, SDSS r16 redMaPPer) have an optional ``_hectomap`` suffix for the
+  CAMIRA, SDSS r16 redMaPPer, AMICO) have an optional ``_hectomap`` suffix for the
   HectoMAP sub-region (RA 210-250 / Dec 42-44.5). Catalogs that are
-  inherently confined to a single footprint (pdr3 redMapper, COSINE, AMICO,
-  PLS, regression, CCA) or span the full survey without cuts (rz_diff,
-  rz_diff_lum, rz_diff_preset, rz_diff_preset_lum, rz_diff_single_box,
-  rz_diff_single_box_lum, rz_diff_two_box_red,
-  rz_diff_two_box_red_lum) carry no footprint suffix.
+  inherently confined to a single footprint (pdr3 redMapper, COSINE,
+  PLS, regression, CCA) or span the full survey without cuts (rz_diff variants,
+  external Legacy Surveys catalogs: WH20, WH24, Zou21, CluMPR, Yang21)
+  carry no footprint suffix.
 - ``nbins`` is either ``1bin`` (single top-N bin, ``top_n`` mode) or
   ``4bin`` (four richness/mass bins, ``top_counts`` mode).
 
@@ -689,37 +688,54 @@ def _make_pair(
 # Output convention: output/{catalog_id}/{nbins}/
 #
 # Catalog IDs
-#   redm_pdr3_3band_fixed        – redMapper PDR3, 3-band colours, fixed off-diag cov
-#   redm_pdr3_5band_free         – redMapper PDR3, 5-band colours, free off-diag cov
-#   redm_pdr3_3band_free         – redMapper PDR3, 3-band colours, free off-diag cov
-#   redm_s16a                    – redMapper S16a, full footprint
-#   redm_s16a_hectomap           – redMapper S16a, HectoMap sub-region
-#   logm_s16a                    – S16a massive galaxies ranked by log stellar mass
-#   logm_s16a_hectomap           – same, HectoMap sub-region
-#   forced                       – S16a massive galaxies with forced redMapper richness
-#   forced_hectomap              – same, HectoMap sub-region
-#   camira                       – CAMIRA S23b wide, full footprint
-#   camira_hectomap              – CAMIRA S23b wide, HectoMap sub-region
-#   redm_r16                     – redMapper SDSS R16, full footprint (Y3 mask)
-#   redm_r16_hectomap            – redMapper SDSS R16, HectoMap sub-region (RA 210-250)
-#   cosine                       – COSINE cluster finder (natural HectoMap footprint)
-#   pls                          – PLS cluster finder (natural HectoMap footprint)
-#   amico                        – AMICO cluster finder (natural HectoMap footprint)
-#   regression                   – Linear regression against WL mass (natural HectoMap footprint)
-#   cca1                         – CCA1 cluster finder (Primary WL mass mode, cca1 ranking)
-#   cca1_specz                   – same, with spectroscopic redshift
-#   cca2                         – CCA2 cluster finder (Morphology mode, cca2 ranking)
-#   cca2_specz                   – same, with spectroscopic redshift
-#   rz_diff                      – Direct 2D r-z profile subtraction richness (full Y3 footprint)
-#   rz_diff_lum                  – Direct 2D r-z profile subtraction total luminosity (full Y3 footprint)
-#   rz_diff_preset               – Direct 2D r-z profile subtraction preset-aperture richness (full Y3 footprint)
-#   rz_diff_preset_lum           – Direct 2D r-z profile subtraction preset-aperture total luminosity (full Y3 footprint)
-#   rz_diff_single_box           – Positive-box single-aperture richness (full Y3 footprint)
-#   rz_diff_single_box_lum       – Positive-box single-aperture total luminosity (full Y3 footprint)
-#   rz_diff_two_box_red          – Direct 2D r-z profile subtraction two-box red-galaxy richness (full Y3 footprint)
-#   rz_diff_two_box_red_lum      – Direct 2D r-z profile subtraction two-box red-galaxy total luminosity (full Y3 footprint)
-#   ideal_mdpl2                  – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
-#   ideal_colossus               – Theoretical upper limit (Colossus analytical halo model, sigma=0)
+#   redm_pdr3_3band_fixed                   – redMapper PDR3, 3-band colours, fixed off-diag cov
+#   redm_pdr3_5band_free                    – redMapper PDR3, 5-band colours, free off-diag cov
+#   redm_pdr3_3band_free                    – redMapper PDR3, 3-band colours, free off-diag cov
+#   redm_s16a                               – redMapper S16a, full footprint
+#   redm_s16a_hectomap                      – redMapper S16a, HectoMap sub-region
+#   logm_s16a                               – S16a massive galaxies ranked by log stellar mass
+#   logm_s16a_hectomap                      – same, HectoMap sub-region
+#   forced                                  – S16a massive galaxies with forced redMapper richness
+#   forced_hectomap                         – same, HectoMap sub-region
+#   camira                                  – CAMIRA S23b wide, full footprint
+#   camira_hectomap                         – CAMIRA S23b wide, HectoMap sub-region
+#   redm_r16                                – redMapper SDSS R16, full footprint (Y3 mask)
+#   redm_r16_hectomap                       – redMapper SDSS R16, HectoMap sub-region (RA 210-250)
+#   cosine                                  – COSINE cluster finder (natural HectoMap footprint)
+#   pls                                     – PLS cluster finder (natural HectoMap footprint)
+#   amico                                   – AMICO cluster finder (full Y3 footprint)
+#   amico_hectomap                          – AMICO cluster finder (HectoMap sub-region)
+#   regression                              – Linear regression against WL mass (natural HectoMap footprint)
+#   cca1                                    – CCA1 cluster finder (Primary WL mass mode, cca1 ranking)
+#   cca1_specz                              – same, with spectroscopic redshift
+#   cca2                                    – CCA2 cluster finder (Morphology mode, cca2 ranking)
+#   cca2_specz                              – same, with spectroscopic redshift
+#   rz_diff                                 – Direct 2D r-z profile subtraction richness (baseline two-box, full Y3 footprint)
+#   rz_diff_lum                             – Direct 2D r-z profile subtraction total luminosity (baseline two-box, full Y3 footprint)
+#   rz_diff_preset                          – Direct 2D r-z profile subtraction preset-aperture richness (full Y3 footprint)
+#   rz_diff_preset_lum                      – Direct 2D r-z profile subtraction preset-aperture total luminosity (full Y3 footprint)
+#   rz_diff_two_box_match_recovery          – Two-box aperture richness optimized for external cluster recovery
+#   rz_diff_single_box                      – Positive-box single-aperture richness (full Y3 footprint)
+#   rz_diff_single_box_lum                  – Positive-box single-aperture total luminosity (full Y3 footprint)
+#   rz_diff_single_box_match_recovery       – Single-box aperture richness optimized for external cluster recovery
+#   rz_diff_two_box_red                     – Direct 2D r-z profile subtraction two-box red-galaxy richness (full Y3 footprint)
+#   rz_diff_two_box_red_lum                 – Direct 2D r-z profile subtraction two-box red-galaxy total luminosity (full Y3 footprint)
+#   rz_diff_two_box_red_match_recovery      – Two-box red-galaxy richness optimized for external cluster recovery
+#   rz_diff_two_box_red_redmapper_matching  – Two-box red-galaxy richness matched to redMaPPer
+#   rz_diff_two_box_red_camira_matching     – Two-box red-galaxy richness matched to CAMIRA
+#   rz_diff_six_param                       – Six-parameter aperture richness (WL-optimized, full Y3 footprint)
+#   rz_diff_six_param_match_recovery        – Six-parameter aperture richness optimized for external cluster recovery
+#   rz_diff_mag_2_p_5                       – Direct 2D r-z profile subtraction richness with mag cut 2.5
+#   rz_diff_mag_3_p_0                       – Direct 2D r-z profile subtraction richness with mag cut 3.0
+#   ideal_mdpl2                             – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
+#   ideal_colossus                          – Theoretical upper limit (Colossus analytical halo model, sigma=0)
+#   wh20                                    – Wen & Han (2020/2021) cluster catalog (richness ranking)
+#   wh24                                    – Wen & Han (2024) cluster catalog (lam500 ranking)
+#   zou21                                   – Zou et al. (2021) cluster catalog (richness ranking)
+#   clumpr_mass                             – CluMPR cluster catalog (mass ranking)
+#   clumpr_richness                         – CluMPR cluster catalog (richness ranking)
+#   yang21_mass                             – Yang et al. (2021) group catalog (halo mass log_m_h ranking)
+#   yang21_richness                         – Yang et al. (2021) group catalog (richness ranking)
 # ---------------------------------------------------------------------------
 
 RUN_REGISTRY: dict[str, WLConfig] = {
