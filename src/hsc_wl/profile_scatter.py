@@ -518,8 +518,10 @@ def fit_profile_scatter_map(
     ds_obs_colossus: np.ndarray,
     cov_inv_colossus: np.ndarray,
     bin_index: int,
+    f_mis_prior: tuple[float, float] | None = (0.25, 0.10),
+    sigma_r_prior: tuple[float, float] | None = (100.0, 40.0),
 ) -> dict[str, Any]:
-    """Run multi-start MAP optimization of 5 parameters and calculate uncertainties.
+    """Run multi-start MAP optimization with miscentering priors and calculate uncertainties.
 
     Parameters
     ----------
@@ -531,6 +533,10 @@ def fit_profile_scatter_map(
         Inverse covariance matrix in Colossus units.
     bin_index : int
         Index of the bin being fitted.
+    f_mis_prior : tuple of float or None, default=(0.25, 0.10)
+        Gaussian prior (mean, std) on miscentered cluster fraction f_mis.
+    sigma_r_prior : tuple of float or None, default=(100.0, 40.0)
+        Gaussian prior (mean, std) on miscentering scale sigma_R in kpc/h.
 
     Returns
     -------
@@ -543,13 +549,13 @@ def fit_profile_scatter_map(
 
     bounds = [
         (0.05, 1.5),  # scatter
-        (0.3, 4.0),  # alpha_c
-        (0.2, 4.0),  # alpha_b
-        (0.01, 0.95),  # f_mis
-        (10.0, 800.0),  # sigma_R
+        (0.2, 5.0),  # alpha_c (broad bounds, no prior)
+        (0.1, 5.0),  # alpha_b (broad bounds, no prior)
+        (0.01, 0.90),  # f_mis
+        (10.0, 500.0),  # sigma_R
     ]
 
-    def neg_log_likelihood(theta: np.ndarray) -> float:
+    def neg_log_posterior(theta: np.ndarray) -> float:
         scatter, alpha_c, alpha_b, f_mis, sigma_r = theta
         try:
             model = compute_stacked_profile_dsigma(
@@ -562,15 +568,25 @@ def fit_profile_scatter_map(
                 model_state=model_state,
             )
             residual = ds_obs_colossus - model
-            return 0.5 * float(residual @ cov_inv_colossus @ residual)
+            chi2_data = float(residual @ cov_inv_colossus @ residual)
+
+            chi2_prior = 0.0
+            if f_mis_prior is not None:
+                mu_f, sig_f = f_mis_prior
+                chi2_prior += ((f_mis - mu_f) / sig_f) ** 2
+            if sigma_r_prior is not None:
+                mu_r, sig_r = sigma_r_prior
+                chi2_prior += ((sigma_r - mu_r) / sig_r) ** 2
+
+            return 0.5 * (chi2_data + chi2_prior)
         except Exception:
             return 1e30
 
     starting_points = [
-        [0.35, 1.2, 0.8, 0.4, 100.0],
-        [0.25, 1.6, 1.0, 0.2, 50.0],
-        [0.45, 1.0, 0.7, 0.6, 200.0],
-        [0.55, 1.8, 1.1, 0.5, 150.0],
+        [0.35, 1.0, 1.0, 0.25, 100.0],
+        [0.30, 1.2, 0.8, 0.30, 120.0],
+        [0.40, 0.9, 0.7, 0.20, 80.0],
+        [0.25, 1.1, 1.1, 0.35, 110.0],
     ]
 
     best_result = None
@@ -579,7 +595,7 @@ def fit_profile_scatter_map(
     for x0 in starting_points:
         try:
             res = optimize.minimize(
-                neg_log_likelihood,
+                neg_log_posterior,
                 x0,
                 method="L-BFGS-B",
                 bounds=bounds,
@@ -606,6 +622,7 @@ def fit_profile_scatter_map(
             "sigma_R_err": np.nan,
             "chi2": np.nan,
             "chi2_reduced": np.nan,
+            "chi2_prior": np.nan,
             "n_dof": n_dof,
             "mean_logm": np.nan,
             "mean_c": np.nan,
@@ -614,12 +631,30 @@ def fit_profile_scatter_map(
         }
 
     p_best = best_result.x
-    chi2 = 2.0 * best_fun
+
+    # Compute pure data chi2 and prior penalty
+    model_best = compute_stacked_profile_dsigma(
+        scatter=p_best[0],
+        alpha_c=p_best[1],
+        alpha_b=p_best[2],
+        f_mis=p_best[3],
+        sigma_R=p_best[4],
+        bin_index=bin_index,
+        model_state=model_state,
+    )
+    res_best = ds_obs_colossus - model_best
+    chi2 = float(res_best @ cov_inv_colossus @ res_best)
     chi2_red = chi2 / n_dof if n_dof > 0 else np.nan
 
-    # Calculate parameter errors via numerical Hessian
+    chi2_prior = 0.0
+    if f_mis_prior is not None:
+        chi2_prior += float(((p_best[3] - f_mis_prior[0]) / f_mis_prior[1]) ** 2)
+    if sigma_r_prior is not None:
+        chi2_prior += float(((p_best[4] - sigma_r_prior[0]) / sigma_r_prior[1]) ** 2)
+
+    # Calculate parameter errors via numerical Hessian of posterior
     try:
-        hess = compute_numerical_hessian(neg_log_likelihood, p_best)
+        hess = compute_numerical_hessian(neg_log_posterior, p_best)
         cov_params = np.linalg.pinv(hess)
         diag = np.diag(cov_params)
         errors = np.where(diag > 0, np.sqrt(diag), np.nan)
@@ -653,6 +688,7 @@ def fit_profile_scatter_map(
         "sigma_R_err": float(errors[4]),
         "chi2": float(chi2),
         "chi2_reduced": float(chi2_red),
+        "chi2_prior": float(chi2_prior),
         "n_dof": int(n_dof),
         "mean_logm": mean_logm,
         "mean_c": mean_c,

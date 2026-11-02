@@ -85,6 +85,8 @@ def fit_label_profile_scatter(
     root_path: Path,
     cosmology_name: str = "planck18",
     mass_def: str = "200m",
+    f_mis_prior: tuple[float, float] | None = (0.25, 0.10),
+    sigma_r_prior: tuple[float, float] | None = (100.0, 40.0),
 ) -> tuple[Table, dict]:
     """Fit all bins of a given run label with flexible profile scatter model.
 
@@ -100,6 +102,10 @@ def fit_label_profile_scatter(
         Colossus cosmology.
     mass_def : str
         Halo mass definition.
+    f_mis_prior : tuple of float or None
+        Gaussian prior (mean, std) on f_mis.
+    sigma_r_prior : tuple of float or None
+        Gaussian prior (mean, std) on sigma_R in kpc/h.
 
     Returns
     -------
@@ -164,6 +170,8 @@ def fit_label_profile_scatter(
             ds_obs_colossus=ds_obs_colossus,
             cov_inv_colossus=cov_inv_colossus,
             bin_index=b_idx,
+            f_mis_prior=f_mis_prior,
+            sigma_r_prior=sigma_r_prior,
         )
 
         # Compute best fit components for visualization and storage
@@ -339,6 +347,11 @@ VERSION = "Y3"  # "Y1" or "Y3"
 COSMOLOGY_NAME = "planck18"
 MASS_DEF = "200m"
 
+# Miscentering priors: (mean, std) based on optical cluster centering literature
+# Keeps miscentering parameters bounded to physical ranges while allowing finder-specific variations
+F_MIS_PRIOR = (0.25, 0.10)
+SIGMA_R_PRIOR = (100.0, 40.0)  # kpc/h
+
 OUTPUT_PLOT_DIR = project_root / "output/plots_for_agents"
 
 # %% [Stage 1: Process and fit all configured labels]
@@ -351,6 +364,8 @@ for lbl in LABELS:
             root_path=project_root,
             cosmology_name=COSMOLOGY_NAME,
             mass_def=MASS_DEF,
+            f_mis_prior=F_MIS_PRIOR,
+            sigma_r_prior=SIGMA_R_PRIOR,
         )
         all_summaries[lbl] = tbl_summary
     except Exception as e:
