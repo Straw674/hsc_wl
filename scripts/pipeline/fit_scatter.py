@@ -1,6 +1,7 @@
 # %% [Initialization]
 import sys
 from pathlib import Path
+from typing import Any
 
 # Dynamically locate the project root using pyproject.toml as a marker
 project_root = Path(__file__).resolve().parent
@@ -238,15 +239,30 @@ def fit_label_profile_scatter(
     return summary_tbl, model_state
 
 
-def plot_profile_fit_decomposition(
+def _format_fit_val_err(
+    val: Any, err: Any, val_fmt: str = ".2f", err_fmt: str = ".2f"
+) -> str:
+    """Safely format value +/- error, handling masked constants or NaNs gracefully."""
+    if val is None or np.ma.is_masked(val) or not np.isfinite(val):
+        v_str = r"\mathrm{N/A}"
+    else:
+        v_str = f"{float(val):{val_fmt}}"
+
+    if err is None or np.ma.is_masked(err) or not np.isfinite(err):
+        return v_str
+    return rf"{v_str} \pm {float(err):{err_fmt}}"
+
+
+def plot_profile_fit_panel(
+    ax: plt.Axes,
     rp_mpc: np.ndarray,
     row: dict,
-    label: str,
-    out_plot_path: Path,
+    panel_title: str,
+    is_multi_bin: bool = False,
+    show_ylabel: bool = True,
+    show_xlabel: bool = True,
 ) -> None:
-    """Plot data, total model, 1-halo centered, 1-halo miscentered, and 2-halo."""
-    fig, ax = plt.subplots(figsize=(7, 6))
-
+    """Plot profile fit decomposition for a single bin onto the given Axes."""
     ds_data = row["dsigma"]
     ds_err = row["dsig_err_jk"]
     ds_mod = row["dsigma_mod"]
@@ -261,16 +277,28 @@ def plot_profile_fit_decomposition(
         fmt="o",
         color="black",
         label="Data",
-        capsize=3,
+        capsize=2.5,
+        markersize=4.5,
+        elinewidth=1.0,
+        zorder=3,
     )
-    ax.plot(rp_mpc, ds_mod, "-", color="red", linewidth=2.2, label="Total Model")
+    ax.plot(
+        rp_mpc,
+        ds_mod,
+        "-",
+        color="red",
+        linewidth=2.0,
+        label="Total Model",
+        zorder=4,
+    )
     ax.plot(
         rp_mpc,
         ds_1h_cen,
         "--",
         color="blue",
-        linewidth=1.5,
+        linewidth=1.4,
         label="1-halo (Centered)",
+        zorder=2,
     )
     if row["f_mis"] > 0.0:
         ax.plot(
@@ -278,24 +306,38 @@ def plot_profile_fit_decomposition(
             ds_1h_mis,
             "--",
             color="orange",
-            linewidth=1.5,
+            linewidth=1.4,
             label="1-halo (Miscentered)",
+            zorder=2,
         )
-    ax.plot(rp_mpc, ds_2h, ":", color="green", linewidth=1.5, label="2-halo Term")
+    ax.plot(
+        rp_mpc,
+        ds_2h,
+        ":",
+        color="green",
+        linewidth=1.5,
+        label="2-halo Term",
+        zorder=2,
+    )
 
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_ylim(bottom=np.maximum(1e-1, np.nanmin(ds_data) * 0.4))
-    ax.set_xlabel(r"$R_p\ [\mathrm{Mpc}]$")
-    ax.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot / pc^2}]$")
+    if show_xlabel:
+        ax.set_xlabel(r"$R_p\ [\mathrm{Mpc}]$")
+    if show_ylabel:
+        ax.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot / pc^2}]$")
 
+    ax.grid(True, which="both", linestyle=":", alpha=0.35)
+
+    fontsize = 8.5 if is_multi_bin else 9.5
     summary_text = "\n".join(
         [
-            rf"$\sigma = {row['scatter']:.3f} \pm {row['scatter_err']:.3f}$",
-            rf"$\alpha_c = {row['alpha_c']:.2f} \pm {row['alpha_c_err']:.2f}$ ($\langle c \rangle = {row['mean_c']:.1f}$)",
-            rf"$\alpha_b = {row['alpha_b']:.2f} \pm {row['alpha_b_err']:.2f}$ ($\langle b \rangle = {row['mean_b']:.2f}$)",
-            rf"$f_{{\rm mis}} = {row['f_mis']:.2f} \pm {row['f_mis_err']:.2f}$",
-            rf"$\sigma_R = {row['sigma_R']:.1f} \pm {row['sigma_R_err']:.1f}\ \mathrm{{kpc}}/h$",
+            rf"$\sigma = {_format_fit_val_err(row['scatter'], row['scatter_err'], '.3f', '.3f')}$",
+            rf"$\alpha_c = {_format_fit_val_err(row['alpha_c'], row['alpha_c_err'], '.2f', '.2f')}$ ($\langle c \rangle = {row['mean_c']:.1f}$)",
+            rf"$\alpha_b = {_format_fit_val_err(row['alpha_b'], row['alpha_b_err'], '.2f', '.2f')}$ ($\langle b \rangle = {row['mean_b']:.2f}$)",
+            rf"$f_{{\rm mis}} = {_format_fit_val_err(row['f_mis'], row['f_mis_err'], '.2f', '.2f')}$",
+            rf"$\sigma_R = {_format_fit_val_err(row['sigma_R'], row['sigma_R_err'], '.1f', '.1f')}\ \mathrm{{kpc}}/h$",
             rf"$\chi^2/\nu = {row['chi2_reduced']:.3f}\ (\chi^2={row['chi2']:.1f}, \nu={row['n_dof']})$",
             rf"$\langle \log M_{{200m}} \rangle = {row['mean_logm']:.3f}$",
         ]
@@ -305,21 +347,91 @@ def plot_profile_fit_decomposition(
         0.05,
         summary_text,
         transform=ax.transAxes,
-        fontsize=9.5,
+        fontsize=fontsize,
         va="bottom",
         ha="left",
         bbox=dict(
-            boxstyle="round,pad=0.4", facecolor="white", alpha=0.9, edgecolor="0.7"
+            boxstyle="round,pad=0.35",
+            facecolor="white",
+            alpha=0.88,
+            edgecolor="0.75",
         ),
     )
 
-    bin_num = row["bin_id"]
     ax.set_title(
-        f"{label} - Bin {bin_num} Profile Fit Decomposition", fontweight="normal"
+        panel_title,
+        fontweight="normal",
+        fontsize=10.5 if is_multi_bin else 11.5,
     )
-    ax.legend(loc="upper right", fontsize=9.5)
-    plt.tight_layout()
+    ax.legend(loc="upper right", fontsize=fontsize)
 
+
+def plot_profile_fit_decomposition(
+    summary: Table,
+    label: str,
+    out_plot_path: Path,
+) -> None:
+    """Plot profile fit decomposition for all bins in a single figure.
+
+    For 1-bin data, produces a single-panel plot. For 4-bin (or multi-bin) data,
+    arranges bins into a multi-panel grid (e.g. 2x2 for 4 bins).
+    """
+    n_bins = len(summary)
+    rp_mpc = (
+        summary["r_mpc"][0] if "r_mpc" in summary.colnames else summary.meta["r_mpc"]
+    )
+
+    if n_bins == 1:
+        fig, ax = plt.subplots(figsize=(7, 6))
+        row = summary[0]
+        bin_num = row["bin_id"]
+        panel_title = f"{label} - Bin {bin_num} Profile Fit Decomposition"
+        plot_profile_fit_panel(
+            ax=ax,
+            rp_mpc=rp_mpc,
+            row=row,
+            panel_title=panel_title,
+            is_multi_bin=False,
+            show_ylabel=True,
+            show_xlabel=True,
+        )
+    else:
+        ncols = 2
+        nrows = int(np.ceil(n_bins / ncols))
+        fig, axes = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(12, 5.0 * nrows),
+            sharex=True,
+            sharey=False,
+        )
+        axes_flat = axes.flatten()
+
+        for b_idx in range(n_bins):
+            ax = axes_flat[b_idx]
+            row = summary[b_idx]
+            bin_num = row["bin_id"]
+            row_idx = b_idx // ncols
+            col_idx = b_idx % ncols
+
+            show_ylabel = col_idx == 0
+            show_xlabel = (row_idx == nrows - 1) or (b_idx + ncols >= n_bins)
+
+            panel_title = f"{label} - Bin {bin_num}"
+            plot_profile_fit_panel(
+                ax=ax,
+                rp_mpc=rp_mpc,
+                row=row,
+                panel_title=panel_title,
+                is_multi_bin=True,
+                show_ylabel=show_ylabel,
+                show_xlabel=show_xlabel,
+            )
+
+        for b_idx in range(n_bins, len(axes_flat)):
+            axes_flat[b_idx].set_visible(False)
+
+    plt.tight_layout()
     out_plot_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_plot_path, dpi=300, bbox_inches="tight")
     logging.info(f"Saved plot to: {out_plot_path}")
@@ -376,15 +488,9 @@ for lbl in LABELS:
 
 # %% [Stage 2: Visualize fit decompositions]
 for lbl, summary in all_summaries.items():
-    rp_mpc = (
-        summary["r_mpc"][0] if "r_mpc" in summary.colnames else summary.meta["r_mpc"]
+    out_plot = OUTPUT_PLOT_DIR / f"fit_profile_{lbl}_{VERSION}.png"
+    plot_profile_fit_decomposition(
+        summary=summary,
+        label=lbl,
+        out_plot_path=out_plot,
     )
-    for row in summary:
-        b_id = row["bin_id"]
-        out_plot = OUTPUT_PLOT_DIR / f"fit_profile_{lbl}_{VERSION}_bin{b_id}.png"
-        plot_profile_fit_decomposition(
-            rp_mpc=rp_mpc,
-            row=row,
-            label=lbl,
-            out_plot_path=out_plot,
-        )
