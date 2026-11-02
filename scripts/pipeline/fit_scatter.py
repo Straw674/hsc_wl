@@ -18,12 +18,10 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-import pickle  # noqa: E402
-
 from astropy.table import Table  # noqa: E402
 from colossus.cosmology import cosmology  # noqa: E402
 
-from hsc_wl.config import RUN_REGISTRY, resolve_config  # noqa: E402
+from hsc_wl.config import RUN_REGISTRY, resolve_config, resolve_run_dir  # noqa: E402
 from hsc_wl.profile_scatter import (  # noqa: E402
     build_profile_scatter_model,
     compute_stacked_profile_dsigma,
@@ -63,8 +61,8 @@ def load_label_metadata(label: str, root_path: Path):
 
     catalog_id, nbins = label.rsplit("_", 1)
     lenses_path = (
-        root_path
-        / f"output/{catalog_id}/{nbins}/prepare/{catalog_id}_{nbins}_lenses.fits"
+        resolve_run_dir(label, "prepare", root=root_path)
+        / f"{catalog_id}_{nbins}_lenses.fits"
     )
 
     if lenses_path.exists():
@@ -111,7 +109,7 @@ def fit_label_profile_scatter(
         Precomputed background model state.
     """
     catalog_id, nbins = label.rsplit("_", 1)
-    dsigma_dir = root_path / f"output/{catalog_id}/{nbins}/{version}/dsigma"
+    dsigma_dir = resolve_run_dir(label, "dsigma", root=root_path, version=version)
 
     fits_files = sorted(
         list(dsigma_dir.glob("hsc_hsc_bin*.fits")),
@@ -219,17 +217,16 @@ def fit_label_profile_scatter(
         summary_rows.append(row)
 
     summary_tbl = Table(summary_rows)
-    summary_tbl.meta["r_mpc"] = rp_mpc_ref
+    summary_tbl["r_mpc"] = [rp_mpc_ref] * len(summary_tbl)
     summary_tbl.meta["label"] = label
     summary_tbl.meta["version"] = version
 
-    # Save summary pickle
-    pkl_dir = root_path / f"output/{catalog_id}/{nbins}/{version}/pkl"
-    pkl_dir.mkdir(parents=True, exist_ok=True)
-    out_pkl = pkl_dir / f"{catalog_id}_{nbins}_{version}_profile_sum.pkl"
-    with open(out_pkl, "wb") as f:
-        pickle.dump({"custom_sample": summary_tbl}, f)
-    logging.info(f"Saved summary results to: {out_pkl}")
+    # Save summary FITS table
+    fit_dir = resolve_run_dir(label, "fit", root=root_path, version=version)
+    fit_dir.mkdir(parents=True, exist_ok=True)
+    out_fits = fit_dir / f"{catalog_id}_{nbins}_profile_fit.fits"
+    summary_tbl.write(out_fits, format="fits", overwrite=True)
+    logging.info(f"Saved summary results to: {out_fits}")
 
     return summary_tbl, model_state
 
@@ -366,7 +363,9 @@ for lbl in LABELS:
 
 # %% [Stage 2: Visualize fit decompositions]
 for lbl, summary in all_summaries.items():
-    rp_mpc = summary.meta["r_mpc"]
+    rp_mpc = (
+        summary["r_mpc"][0] if "r_mpc" in summary.colnames else summary.meta["r_mpc"]
+    )
     for row in summary:
         b_id = row["bin_id"]
         out_plot = OUTPUT_PLOT_DIR / f"fit_profile_{lbl}_{VERSION}_bin{b_id}.png"

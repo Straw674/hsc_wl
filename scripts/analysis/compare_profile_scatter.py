@@ -18,10 +18,9 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-import pickle  # noqa: E402
-
 from astropy.table import Table  # noqa: E402
 
+from hsc_wl.config import resolve_run_dir  # noqa: E402
 from initial import *  # noqa: F401, F403
 
 # %% Local Functions
@@ -30,7 +29,7 @@ from initial import *  # noqa: F401, F403
 def load_profile_summaries(
     labels: list[str], version: str, root_path: Path
 ) -> dict[str, Table]:
-    """Load profile scatter summary pickles for configured labels.
+    """Load profile scatter summary FITS tables for configured labels.
 
     Parameters
     ----------
@@ -49,16 +48,14 @@ def load_profile_summaries(
     data = {}
     for lbl in labels:
         catalog_id, nbins = lbl.rsplit("_", 1)
-        pkl_path = (
-            root_path
-            / f"output/{catalog_id}/{nbins}/{version}/pkl/{catalog_id}_{nbins}_{version}_profile_sum.pkl"
+        fits_path = (
+            resolve_run_dir(lbl, "fit", root=root_path, version=version)
+            / f"{catalog_id}_{nbins}_profile_fit.fits"
         )
-        if not pkl_path.exists():
-            print(f"Warning: Summary pkl not found for {lbl} at {pkl_path}")
+        if not fits_path.exists():
+            print(f"Warning: Summary FITS not found for {lbl} at {fits_path}")
             continue
-        with open(pkl_path, "rb") as f:
-            obj = pickle.load(f)
-            data[lbl] = obj["custom_sample"]
+        data[lbl] = Table.read(fits_path)
     return data
 
 

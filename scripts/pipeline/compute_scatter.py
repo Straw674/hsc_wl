@@ -22,6 +22,7 @@ import pickle  # noqa: E402
 
 from jianbing import scatter, visual  # noqa: E402
 
+from hsc_wl.config import resolve_run_dir  # noqa: E402
 from initial import *  # noqa: F401, F403
 
 # %% Local Functions
@@ -134,7 +135,7 @@ def process_scatter_for_label(
             f"Scatter fitting requires a 3bin or 4bin configuration, got {nbins}"
         )
 
-    dsigma_dir = root_path / f"output/{catalog_id}/{nbins}/{version}/dsigma"
+    dsigma_dir = resolve_run_dir(label, "dsigma", root=root_path, version=version)
     fits_files = sorted(
         [str(p.relative_to(root_path)) for p in dsigma_dir.glob("hsc_hsc_bin*.fits")],
         key=lambda s: int(Path(s).stem.replace("hsc_hsc_bin", "")),
@@ -154,8 +155,8 @@ def process_scatter_for_label(
         )
 
     output_pkl = (
-        root_path
-        / f"output/{catalog_id}/{nbins}/{version}/pkl/{catalog_id}_{nbins}_{version}_sum.pkl"
+        resolve_run_dir(label, "pkl", root=root_path, version=version)
+        / f"{catalog_id}_{nbins}_{version}_sum.pkl"
     )
 
     print(f"\n{'=' * 60}")
@@ -191,8 +192,8 @@ def visualize_scatter_summaries(
 LABELS = [
     # "wh24_4bin",
     # "zou21_4bin",
-    "clumpr_mass_4bin",
-    "clumpr_richness_4bin",
+    "camira_4bin",
+    "rz_diff_4bin",
     # "yang21_mass_4bin",
     # "yang21_richness_4bin",
 ]
