@@ -19,7 +19,7 @@ def get_complete_bin_indices(base_dir: Path | str) -> list[int] | None:
     """
     base_dir = Path(base_dir)
     prep_dir = None
-    for candidate in [base_dir.parent.parent / "prepare", base_dir.parent / "prepare"]:
+    for candidate in [base_dir.parent / "prepare", base_dir.parent.parent / "prepare"]:
         if candidate.exists():
             prep_dir = candidate
             break

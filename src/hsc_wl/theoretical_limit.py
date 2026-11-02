@@ -19,6 +19,7 @@ import numpy as np
 from astropy.table import Table
 from scipy.interpolate import interp1d
 
+from hsc_wl.config import resolve_run_dir
 from hsc_wl.scatter_fit import (
     build_scatter_model,
     compute_2halo_base_dsigma,
@@ -436,7 +437,9 @@ def export_theoretical_limit_outputs(
         area_deg2=area_deg2,
     )
 
-    out_dir = Path(root_path) / f"output/{catalog_id}/{nbins}/{version}/dsigma"
+    out_dir = resolve_run_dir(
+        f"{catalog_id}_{nbins}", "dsigma", root=root_path, version=version
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
 
     written_paths = []
@@ -522,7 +525,9 @@ def ensure_theoretical_limit_outputs(root_path: Path, overwrite: bool = False) -
 
             # 2. Ensure dsigma outputs exist
             for ver in ["Y3", "Y1"]:
-                out_dir = Path(root_path) / f"output/{cat_id}/{nbins}/{ver}/dsigma"
+                out_dir = resolve_run_dir(
+                    f"{cat_id}_{nbins}", "dsigma", root=root_path, version=ver
+                )
                 if overwrite or not (out_dir / "hsc_hsc_bin0.fits").exists():
                     export_theoretical_limit_outputs(
                         root_path=root_path,

@@ -687,9 +687,9 @@ def load_source(cfg: WLConfig, root: Path | None = None) -> SourceData:
 def load_prepared_tables(cfg: WLConfig, root: Path | None = None) -> PreparedTables:
     """Stage 2: read the unified lens/random FITS written by the prepare stage."""
     root = _find_root(root)
-    save_root = cfg.resolved_save_root(root)
-    lens_file = save_root / "prepare" / f"{cfg.label}_lenses.fits"
-    random_file = save_root / "prepare" / f"{cfg.label}_randoms.fits"
+    prep_dir = cfg.prepare_dir(root)
+    lens_file = prep_dir / f"{cfg.label}_lenses.fits"
+    random_file = prep_dir / f"{cfg.label}_randoms.fits"
 
     if not lens_file.exists():
         raise FileNotFoundError(f"Unified lens file not found: {lens_file}")
@@ -883,8 +883,7 @@ def save_profiles(
 ) -> list[Path]:
     """Stage 5: write one FITS per bin under ``<save_root>/<source_version>/dsigma/``."""
     root = _find_root(root)
-    save_root = cfg.resolved_save_root(root)
-    savepath = save_root / cfg.source.version / "dsigma"
+    savepath = cfg.dsigma_dir(root)
     savepath.mkdir(parents=True, exist_ok=True)
 
     prefix = f"{cfg.source.survey.lower()}_{cfg.lens_survey}_"

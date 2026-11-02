@@ -1,38 +1,14 @@
-"""Configuration objects for the HSC weak-lensing pipeline.
+"""Configuration objects and registries for the HSC weak-lensing pipeline.
 
-All run-time configuration is expressed as :class:`~dataclasses.dataclass`
-objects (``frozen=True`` so they are immutable value objects).  A single
-:data:`RUN_REGISTRY` maps a run label to a fully-specified
-:class:`WLConfig`, replacing the previous pair of parallel dicts
-(``CATALOG_SOURCES`` and ``RUN_PROFILES``).
+All run-time configuration is expressed as immutable :class:`~dataclasses.dataclass`
+objects (``frozen=True``).
 
-Typical usage::
-
-    from hsc_wl.config import RUN_REGISTRY
-    cfg = RUN_REGISTRY["cosine_4bin"]
-    run_pipeline(cfg)
-
-To override a single parameter without mutating the registry, use
-:func:`dataclasses.replace`::
-
-    from dataclasses import replace
-    cfg = replace(RUN_REGISTRY["cosine_1bin"], n_jackknife=50)
-
-Run labels follow the convention ``{catalog_id}_{nbins}`` where:
-
-- ``catalog_id`` encodes both the lens catalog and its sky footprint.
-  Catalogs that naturally cover the full survey area (e.g. s16a redMapper,
-  CAMIRA, SDSS r16 redMaPPer, AMICO) have an optional ``_hectomap`` suffix for the
-  HectoMAP sub-region (RA 210-250 / Dec 42-44.5). Catalogs that are
-  inherently confined to a single footprint (pdr3 redMapper, COSINE,
-  PLS, regression, CCA) or span the full survey without cuts (rz_diff variants,
-  external Legacy Surveys catalogs: WH20, WH24, Zou21, CluMPR, Yang21)
-  carry no footprint suffix.
-- ``nbins`` is either ``1bin`` (single top-N bin, ``top_n`` mode) or
-  ``4bin`` (four richness/mass bins, ``top_counts`` mode).
-
-Output is written to ``output/{catalog_id}/{nbins}/``.
+- :data:`LENS_REGISTRY` maps catalog identifiers to :class:`LensCatalogConfig` objects.
+- :data:`RUN_REGISTRY` maps run labels (e.g. ``"cosine_4bin"``, ``"rz_diff_1bin"``)
+  to fully-specified :class:`WLConfig` objects.
 """
+
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, replace
@@ -49,9 +25,11 @@ __all__ = [
     "CorrectionConfig",
     "RPConfig",
     "WLConfig",
+    "LENS_REGISTRY",
     "RUN_REGISTRY",
     "resolve_binning",
     "resolve_config",
+    "resolve_run_dir",
     "get_latest_cluster_catalog",
     "replace",
 ]
@@ -63,8 +41,8 @@ __all__ = [
 
 
 def get_latest_cluster_catalog(
-    cluster_dir="/Users/xinq/cluster_finder/output/cluster",
-):
+    cluster_dir: str | Path = "/Users/xinq/cluster_finder/output/cluster",
+) -> str:
     """Find the latest timestamped cluster catalog parquet file."""
     import glob
 
@@ -76,7 +54,7 @@ def get_latest_cluster_catalog(
 
 
 # ---------------------------------------------------------------------------
-# Sub-configs
+# Configuration Dataclasses
 # ---------------------------------------------------------------------------
 
 
@@ -93,12 +71,7 @@ class ColumnMapping:
 
 @dataclass(frozen=True, slots=True)
 class LensCatalogConfig:
-    """Where to find a lens catalog and how to interpret it.
-
-    The ``lens_path`` may be absolute or relative to the
-    project root (resolved at run time).  ``lens_format`` selects a reader;
-    ``None`` lets ``astropy`` auto-detect.
-    """
+    """Specification of where to find a lens catalog and how to interpret it."""
 
     label: str
     lens_path: str
@@ -117,11 +90,7 @@ class LensCatalogConfig:
 
 @dataclass(frozen=True, slots=True)
 class SourceConfig:
-    """Source (background galaxy) catalog configuration.
-
-    When ``file`` is ``None`` the default path for the chosen ``version``
-    is resolved at run time (see :func:`hsc_wl.wl_compute.default_source_path`).
-    """
+    """Source (background galaxy) catalog configuration."""
 
     version: Literal["Y1", "Y3"] = "Y3"
     survey: str = "hsc"
@@ -132,13 +101,7 @@ class SourceConfig:
 
 @dataclass(frozen=True, slots=True)
 class BinningConfig:
-    """How lenses are partitioned into bins.
-
-    ``mode`` is one of ``"edges"``, ``"top_counts"``, ``"top_n"``.
-    The ``top_counts`` / ``top_n`` fields hold the *raw* user-specified
-    values; the per-catalog ``top_counts_factor`` is applied separately by
-    :func:`resolve_binning`.
-    """
+    """How lenses are partitioned into bins."""
 
     mode: Literal["edges", "top_counts", "top_n"] = "top_counts"
     top_counts: tuple[int, ...] = (53, 196, 660, 1159)
@@ -160,7 +123,7 @@ class CorrectionConfig:
     random_subtraction: bool = True
     selection_bias: bool = True
 
-    def to_dsigma_kwargs(self) -> dict:
+    def to_dsigma_kwargs(self) -> dict[str, bool]:
         """Return the dict of long-form flag names expected by dsigma."""
         return {
             "photo_z_dilution_correction": self.photo_z_dilution,
@@ -175,7 +138,7 @@ class CorrectionConfig:
 
 @dataclass(frozen=True, slots=True)
 class RPConfig:
-    """Projected-radius binning."""
+    """Projected-radius binning configuration."""
 
     rp_min: float = 0.10
     rp_max: float = 20.0
@@ -185,12 +148,7 @@ class RPConfig:
 
 @dataclass(frozen=True, slots=True)
 class WLConfig:
-    """A fully-specified weak-lensing run.
-
-    One object per run label; collected in :data:`RUN_REGISTRY`.  Pass it
-    to :func:`hsc_wl.wl_compute.run_pipeline` (full pipeline) or
-    :func:`hsc_wl.prepare.run_prepare_pipeline` (prepare stage only).
-    """
+    """A fully-specified weak-lensing run."""
 
     label: str
     lens: LensCatalogConfig
@@ -209,26 +167,70 @@ class WLConfig:
     make_plots: bool = True
     redshift_type: Literal["photoz", "specz"] = "photoz"
 
-    def resolved_save_root(self, root: Path) -> Path:
+    def resolved_save_root(self, root: Path | str | None = None) -> Path:
         """Return ``save_root`` as an absolute path under *root*."""
         rendered = self.save_root.format(label=self.label)
-        if Path(rendered).is_absolute():
-            return Path(rendered)
-        return Path(root) / rendered
+        base = Path(root) if root is not None else Path.cwd()
+        return base / rendered if not Path(rendered).is_absolute() else Path(rendered)
+
+    def prepare_dir(self, root: Path | str | None = None) -> Path:
+        """Return directory for lens/random prepare outputs."""
+        return self.resolved_save_root(root) / "prepare"
+
+    def dsigma_dir(self, root: Path | str | None = None) -> Path:
+        """Return directory for dsigma profile outputs."""
+        base = self.resolved_save_root(root)
+        return (
+            base / "y1" / "dsigma" if self.source.version == "Y1" else base / "dsigma"
+        )
+
+    def fit_dir(self, root: Path | str | None = None) -> Path:
+        """Return directory for scatter fit products."""
+        base = self.resolved_save_root(root)
+        return base / "y1" / "fit" if self.source.version == "Y1" else base / "fit"
+
+    def pkl_dir(self, root: Path | str | None = None) -> Path:
+        """Return directory for pickled summary products."""
+        base = self.resolved_save_root(root)
+        return base / "y1" / "pkl" if self.source.version == "Y1" else base / "pkl"
 
 
 # ---------------------------------------------------------------------------
-# Binning resolution (apply top_counts_factor)
+# Path & Binning Resolution Helpers
 # ---------------------------------------------------------------------------
+
+
+def resolve_run_dir(
+    label: str,
+    sub: Literal["prepare", "dsigma", "fit", "pkl"] = "dsigma",
+    root: Path | str | None = None,
+    version: str = "Y3",
+) -> Path:
+    """Resolve standard output subdirectory for a run label."""
+    if label in RUN_REGISTRY:
+        cfg = RUN_REGISTRY[label]
+        if version != "Y3" or cfg.source.version != version:
+            cfg = replace(cfg, source=replace(cfg.source, version=version))
+        if sub == "prepare":
+            return cfg.prepare_dir(root)
+        if sub == "dsigma":
+            return cfg.dsigma_dir(root)
+        if sub == "fit":
+            return cfg.fit_dir(root)
+        if sub == "pkl":
+            return cfg.pkl_dir(root)
+        return cfg.resolved_save_root(root)
+
+    # Fallback parsing for ad-hoc "{catalog_id}_{nbins}" labels
+    catalog_id, nbins = label.rsplit("_", 1)
+    base = (Path(root) if root else Path.cwd()) / f"output/{catalog_id}/{nbins}"
+    if version == "Y1" and sub != "prepare":
+        return base / "y1" / sub
+    return base / sub
 
 
 def resolve_binning(binning: BinningConfig, factor: float) -> BinningConfig:
-    """Apply the per-catalog ``top_counts_factor`` scaling.
-
-    Returns a new :class:`BinningConfig` with the *effective* (scaled)
-    ``top_counts`` (for ``top_counts`` mode) or ``top_n`` (for ``top_n``
-    mode).  No-op for ``edges`` mode or when ``factor`` is ``1.0``.
-    """
+    """Apply the per-catalog ``top_counts_factor`` scaling."""
     if factor == 1.0:
         return binning
     if binning.mode == "top_counts":
@@ -246,16 +248,7 @@ def resolve_binning(binning: BinningConfig, factor: float) -> BinningConfig:
 
 
 def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
-    """Resolve ``area_deg2``, ``top_counts_factor``, and ``redshift_type``.
-
-    Computes the effective area (lens-random footprint ∩ Y3 FDFC mask) and
-    the volume factor relative to the s16a reference (z 0.19–0.52,
-    s16a-random ∩ Y3 area).  Returns a **new** :class:`WLConfig` with the
-    resolved ``LensCatalogConfig``; the original registry entry is unchanged.
-
-    Falls back to the static ``top_counts_factor`` (default 1.0) if the
-    mask or random files are unavailable.
-    """
+    """Resolve effective survey coverage, area, and volume factor."""
     effective_redshift_type = (
         cfg.redshift_type if cfg.redshift_type != "photoz" else cfg.lens.redshift_type
     )
@@ -272,8 +265,7 @@ def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
         return replace(cfg, lens=new_lens, redshift_type=effective_redshift_type)
     except (FileNotFoundError, ImportError) as exc:
         logger.warning(
-            "Could not resolve area/factor for %s (%s); "
-            "falling back to static top_counts_factor=%.6f",
+            "Could not resolve area/factor for %s (%s); falling back to static factor=%.6f",
             cfg.label,
             exc,
             cfg.lens.top_counts_factor,
@@ -283,280 +275,25 @@ def resolve_config(cfg: WLConfig, root: Path | None = None) -> WLConfig:
 
 
 # ---------------------------------------------------------------------------
-# Run registry – shared constants
+# Footprint Inference & Binning Presets
 # ---------------------------------------------------------------------------
 
-_EDGES_RICHNESS = (6.0, 10.0, 20.0, 35.0, 120.0)
-_EDGES_MASS = (10.63, 10.8, 11.0, 11.2, 11.6)
-_TOP_COUNTS_4BIN = (53, 196, 660, 1159)
-
-# 4-bin mode: lenses are split into four richness/mass bins by top_counts.
-_DEFAULT_BINNING_4BIN = BinningConfig(
-    mode="top_counts",
-    top_counts=_TOP_COUNTS_4BIN,
-    edges_richness=_EDGES_RICHNESS,
-    edges_mass=_EDGES_MASS,
-)
-# 1-bin mode: all lenses treated as a single top-N sample.
-# top_n=320 in reference volume corresponds to exactly top_n=100 in the HectoMAP volume.
-_DEFAULT_BINNING_1BIN = BinningConfig(
-    mode="top_n",
-    top_counts=_TOP_COUNTS_4BIN,
-    top_n=320,
-    edges_richness=_EDGES_RICHNESS,
-    edges_mass=_EDGES_MASS,
-)
-
-# ---------------------------------------------------------------------------
-# Lens catalog paths
-# ---------------------------------------------------------------------------
-
-# redMapper PDR3 – three photometric variants
-_PATH_REDM_PDR3_3BAND_FIXED = (
-    "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_no_mask/run/"
-    "hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit"
-)
-_PATH_REDM_PDR3_5BAND_FREE = (
-    "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_5bands_offdiag/run/"
-    "hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit"
-)
-_PATH_REDM_PDR3_3BAND_FREE = (
-    "/Users/xinq/redmapper_HSC/output/redmapper_run/new_run_free_offdiag/run/"
-    "hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit"
-)
-
-# redMapper S16a
-_PATH_REDM_S16A = (
-    "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/"
-    "redmapper_hsc_s16a_cluster_bsm.fits"
-)
-
-# Stellar-mass selected S16a galaxies
-_PATH_LOGM_S16A = "/Users/xinq/research/HSC_massive/s16a_massive_logm_11.2.fits"
-
-# Forced-richness S16a massive galaxies
-_PATH_FORCED = (
-    "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits"
-)
-
-# CAMIRA S23b wide
-_PATH_CAMIRA = "data/camira_s23b_wide_sm_v3.dat"
-
-# AMICO cluster finder (Fall, HectoMAP, Spring Y3 survey)
-_PATH_AMICO = get_latest_cluster_catalog(
-    "/Users/xinq/cluster_finder/output/fall_hectomap_spring/amico/cluster"
-)
-
-# PLS cluster finder (2D CoG PLS decomposition)
-_PATH_PLS = "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog.parquet"
-
-# Direct 2D r-z profile subtraction cluster catalogs (Baseline Richness, Baseline Luminosity, Preset, Single-Box)
-_PATH_RZ_DIFF = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/baseline/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/baseline/rz_diff_lum_cluster_catalog.parquet"
-_PATH_RZ_DIFF_PRESET = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/preset/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_PRESET_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/preset/rz_diff_lum_cluster_catalog.parquet"
-_PATH_RZ_DIFF_SINGLE_BOX = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/single_box_wl/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_SINGLE_BOX_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/single_box_wl/rz_diff_lum_cluster_catalog.parquet"
-_PATH_RZ_DIFF_TWO_BOX_RED = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_wl/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_TWO_BOX_RED_LUM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_wl/rz_diff_lum_cluster_catalog.parquet"
-_PATH_RZ_DIFF_MAG_2_P_5 = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/mag_2_p_5/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_MAG_3_P_0 = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/mag_3_p_0/rz_diff_cluster_catalog.parquet"
-
-_PATH_RZ_DIFF_SIX_PARAM = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/six_param_wl/rz_diff_cluster_catalog.parquet"
-
-# Apertures optimized for external catalog match recovery.
-_PATH_RZ_DIFF_TWO_BOX_MATCH_RECOVERY = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_match_recovery/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_SINGLE_BOX_MATCH_RECOVERY = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/single_box_match_recovery/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_TWO_BOX_RED_MATCH_RECOVERY = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_match_recovery/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_SIX_PARAM_MATCH_RECOVERY = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/six_param_match_recovery/rz_diff_cluster_catalog.parquet"
-
-_PATH_RZ_DIFF_TWO_BOX_RED_REDMAPPER_MATCHING = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_redmapper_matching/rz_diff_cluster_catalog.parquet"
-_PATH_RZ_DIFF_TWO_BOX_RED_CAMIRA_MATCHING = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff/two_box_red_camira_matching/rz_diff_cluster_catalog.parquet"
-
-# Linear regression against WL mass (ElasticNet on 2D differential profiles, no NMS)
-_PATH_REGRESSION = (
-    "/Users/xinq/cluster_finder/output/regression/regression_cluster_catalog.parquet"
-)
-
-# CCA cluster finders (2D CoG CCA decomposition, cca1 & cca2 ranking, no NMS)
-_PATH_CCA1 = "/Users/xinq/cluster_finder/output/cca/cca1_cluster_catalog.parquet"
-_PATH_CCA2 = "/Users/xinq/cluster_finder/output/cca/cca2_cluster_catalog.parquet"
-
-# redMapper SDSS R16 cluster catalog
-_PATH_R16 = "data/R16/R16_cluster_catalog_bin.fit"
-
-# External DESI Legacy Surveys cluster catalogs (full Y3 footprint)
-_PATH_WH20 = "data/external_clusters/wh20.parquet"
-_PATH_WH24 = "data/external_clusters/wh24.parquet"
-_PATH_ZOU21 = "data/external_clusters/zou21.parquet"
-_PATH_CLUMPR = "data/external_clusters/clumpr.parquet"
-_PATH_YANG21 = "data/external_clusters/yang21.parquet"
-
-# Ideal theoretical upper limit catalog paths (MDPL2 simulation and Colossus halo model)
-_PATH_IDEAL_MDPL2_1BIN = "output/ideal_mdpl2/1bin/prepare/ideal_mdpl2_1bin_lenses.fits"
-_PATH_IDEAL_MDPL2_4BIN = "output/ideal_mdpl2/4bin/prepare/ideal_mdpl2_4bin_lenses.fits"
-_PATH_IDEAL_COLOSSUS_1BIN = (
-    "output/ideal_colossus/1bin/prepare/ideal_colossus_1bin_lenses.fits"
-)
-_PATH_IDEAL_COLOSSUS_4BIN = (
-    "output/ideal_colossus/4bin/prepare/ideal_colossus_4bin_lenses.fits"
-)
-
-# ---------------------------------------------------------------------------
-# Random catalog paths
-# ---------------------------------------------------------------------------
-
-_RAND_HECTOMAP = "data/random_hectomap.fits"
-_RAND_S16A = "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits"
-_RAND_Y3 = "data/random_y3_mask.fits"
-
-# ---------------------------------------------------------------------------
-# Column mappings
-# ---------------------------------------------------------------------------
-
-_COLS_REDM = {
-    "col_rank": "lambda",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_lambda",
-    "z_spec": "z_spec",
-}
-_COLS_R16 = {
-    "col_rank": "lambda",
-    "ra": "RAJ2000",
-    "dec": "DEJ2000",
-    "z": "zlambda",
-    "z_spec": "zspec",
-}
-_COLS_LOGM = {
-    "col_rank": "logm_50_100",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_best",
-    "z_spec": "z_spec",
-}
-_COLS_FORCED = {
-    "col_rank": "lam",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_best",
-    "z_spec": "z_spec",
-}
-_COLS_CAMIRA = {
-    "col_rank": "N_mem",
-    "ra": "RA",
-    "dec": "Dec",
-    "z": "z_cl",
-    "z_spec": "z_spec",
-}
-_COLS_COSINE = {
-    "col_rank": "true_richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_cl",
-    "z_spec": "specz",
-}
-_COLS_AMICO = {
-    "col_rank": "true_richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_cl",
-    "z_spec": "specz",
-}
-_COLS_PLS = {
-    "col_rank": "true_richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_cl",
-    "z_spec": "specz",
-}
-_COLS_RZ_DIFF = {
-    "col_rank": "true_richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_cl",
-    "z_spec": "specz",
-}
-_COLS_REGRESSION = {
-    "col_rank": "true_richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_cl",
-    "z_spec": "specz",
-}
-_COLS_CCA1 = {
-    "col_rank": "cca1",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_cl",
-    "z_spec": "specz",
-}
-_COLS_CCA2 = {
-    "col_rank": "cca2",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z_cl",
-    "z_spec": "specz",
-}
-
-# External DESI Legacy Surveys cluster column mappings
-_COLS_WH20 = {
-    "col_rank": "richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z",
-}
-_COLS_WH24 = {
-    "col_rank": "lam500",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z",
-}
-_COLS_ZOU21 = {
-    "col_rank": "richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z",
-}
-_COLS_CLUMPR_MASS = {
-    "col_rank": "mass",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z",
-}
-_COLS_CLUMPR_RICH = {
-    "col_rank": "richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z",
-}
-_COLS_YANG21_MASS = {
-    "col_rank": "log_m_h",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z",
-}
-_COLS_YANG21_RICH = {
-    "col_rank": "richness",
-    "ra": "ra",
-    "dec": "dec",
-    "z": "z",
-}
-
-# ---------------------------------------------------------------------------
-# Sky footprint boxes  (unpacked as **kwargs into _cfg / _make_pair)
-# ---------------------------------------------------------------------------
-
-# HectoMap sub-region: RA 210-250 deg, Dec 42-44.5 deg
-_BOX_HECTOMAP = {"ra_range": (210, 250), "dec_range": (42, 44.5)}
-
-# Reference redshift range shared by all catalogs
+_BOX_HECTOMAP = {"ra_range": (210.0, 250.0), "dec_range": (42.0, 44.5)}
 _Z_RANGE = (0.19, 0.52)
 
-
-# ---------------------------------------------------------------------------
-# Compact WLConfig constructor
-# ---------------------------------------------------------------------------
+_DEFAULT_BINNING_4BIN = BinningConfig(
+    mode="top_counts",
+    top_counts=(53, 196, 660, 1159),
+    edges_richness=(6.0, 10.0, 20.0, 35.0, 120.0),
+    edges_mass=(10.63, 10.8, 11.0, 11.2, 11.6),
+)
+_DEFAULT_BINNING_1BIN = BinningConfig(
+    mode="top_n",
+    top_counts=(53, 196, 660, 1159),
+    top_n=320,
+    edges_richness=(6.0, 10.0, 20.0, 35.0, 120.0),
+    edges_mass=(10.63, 10.8, 11.0, 11.2, 11.6),
+)
 
 
 def _infer_footprint(
@@ -564,20 +301,13 @@ def _infer_footprint(
     fields: Optional[tuple[str, ...]],
     survey_overlap: Optional[str],
 ) -> tuple[Optional[tuple[str, ...]], Optional[str]]:
-    """Determine effective fields and survey overlap for a run label."""
+    """Determine effective survey field and overlap for a catalog label."""
     if fields is not None or survey_overlap is not None:
         return fields, survey_overlap
     label_lower = label.lower()
     is_s16a = label_lower.startswith(("logm_s16a", "redm_s16a", "forced"))
     is_hecto = "hecto" in label_lower or label_lower.startswith(
-        (
-            "redm_pdr3",
-            "cosine",
-            "pls",
-            "cca",
-            "regression",
-            "ideal",
-        )
+        ("redm_pdr3", "cosine", "pls", "cca", "regression", "ideal")
     )
     if is_hecto and is_s16a:
         return ("HECTOMAP",), "s16a"
@@ -588,505 +318,470 @@ def _infer_footprint(
     return None, None
 
 
-def _cfg(
+# ---------------------------------------------------------------------------
+# Reusable Column Mappings & Random Catalogs
+# ---------------------------------------------------------------------------
+
+_RAND_HECTOMAP = "data/random_hectomap.fits"
+_RAND_S16A = "data/s16a_weak_lensing_hdf/s16a_weak_lensing_medium_random.fits"
+_RAND_Y3 = "data/random_y3_mask.fits"
+
+_COLS_REDM = ColumnMapping(
+    col_rank="lambda", ra="ra", dec="dec", z="z_lambda", z_spec="z_spec"
+)
+_COLS_R16 = ColumnMapping(
+    col_rank="lambda", ra="RAJ2000", dec="DEJ2000", z="zlambda", z_spec="zspec"
+)
+_COLS_LOGM = ColumnMapping(
+    col_rank="logm_50_100", ra="ra", dec="dec", z="z_best", z_spec="z_spec"
+)
+_COLS_FORCED = ColumnMapping(
+    col_rank="lam", ra="ra", dec="dec", z="z_best", z_spec="z_spec"
+)
+_COLS_CAMIRA = ColumnMapping(
+    col_rank="N_mem", ra="RA", dec="Dec", z="z_cl", z_spec="z_spec"
+)
+_COLS_CF_STANDARD = ColumnMapping(
+    col_rank="true_richness",
+    ra="ra",
+    dec="dec",
+    z="z_cl",
+    z_spec="specz",
+)
+_COLS_CCA1 = ColumnMapping(
+    col_rank="cca1", ra="ra", dec="dec", z="z_cl", z_spec="specz"
+)
+_COLS_CCA2 = ColumnMapping(
+    col_rank="cca2", ra="ra", dec="dec", z="z_cl", z_spec="specz"
+)
+_COLS_RICHNESS_Z = ColumnMapping(col_rank="richness", ra="ra", dec="dec", z="z")
+_COLS_WH24 = ColumnMapping(col_rank="lam500", ra="ra", dec="dec", z="z")
+_COLS_MASS_Z = ColumnMapping(col_rank="mass", ra="ra", dec="dec", z="z")
+_COLS_YANG21_MASS = ColumnMapping(col_rank="log_m_h", ra="ra", dec="dec", z="z")
+
+
+def _lens(
     label: str,
     lens_path: str,
+    columns: ColumnMapping,
     random_path: Optional[str] = None,
     *,
-    columns: dict[str, str],
     redshift_range: tuple[float, float] = _Z_RANGE,
+    lens_format: Optional[str] = None,
     fields: Optional[tuple[str, ...]] = None,
     survey_overlap: Optional[str] = None,
-    top_counts_factor: float = 1.0,
-    lens_format: Optional[str] = None,
     ra_range: Optional[tuple[float, float]] = None,
     dec_range: Optional[tuple[float, float]] = None,
-    source: Optional[SourceConfig] = None,
-    binning: Optional[BinningConfig] = None,
-    save_root: Optional[str] = None,
     redshift_type: Literal["photoz", "specz"] = "photoz",
-) -> WLConfig:
-    """Compact constructor for :class:`WLConfig` registry entries.
-
-    ``save_root`` defaults to ``output/{catalog_id}/{nbins}`` where
-    ``catalog_id`` and ``nbins`` are derived by splitting *label* at its
-    last underscore (e.g. ``"redm_s16a_4bin"`` → ``"redm_s16a"`` /
-    ``"4bin"``).
-    """
+    top_counts_factor: float = 1.0,
+) -> LensCatalogConfig:
     eff_fields, eff_overlap = _infer_footprint(label, fields, survey_overlap)
-    if save_root is None:
-        catalog_id, nbins = label.rsplit("_", 1)
-        save_root = f"output/{catalog_id}/{nbins}"
-    return WLConfig(
+    return LensCatalogConfig(
         label=label,
-        lens=LensCatalogConfig(
-            label=label,
-            lens_path=lens_path,
-            columns=ColumnMapping(**columns),
-            redshift_range=tuple(redshift_range),
-            fields=eff_fields,
-            survey_overlap=eff_overlap,
-            top_counts_factor=top_counts_factor,
-            lens_format=lens_format,
-            ra_range=tuple(ra_range) if ra_range else None,
-            dec_range=tuple(dec_range) if dec_range else None,
-            redshift_type=redshift_type,
-            random_path=random_path,
-        ),
-        source=source or SourceConfig(),
-        binning=binning or _DEFAULT_BINNING_4BIN,
-        save_root=save_root,
+        lens_path=lens_path,
+        columns=columns,
+        redshift_range=redshift_range,
+        fields=eff_fields,
+        survey_overlap=eff_overlap,
+        top_counts_factor=top_counts_factor,
+        lens_format=lens_format,
+        ra_range=ra_range,
+        dec_range=dec_range,
         redshift_type=redshift_type,
+        random_path=random_path,
     )
 
 
-def _make_pair(
-    prefix: str,
-    lens_path: str,
-    random_path: Optional[str] = None,
-    *,
-    columns: dict[str, str],
-    redshift_range: tuple[float, float] = _Z_RANGE,
-    lens_format: Optional[str] = None,
-    ra_range: Optional[tuple[float, float]] = None,
-    dec_range: Optional[tuple[float, float]] = None,
-    redshift_type: Literal["photoz", "specz"] = "photoz",
-) -> dict[str, WLConfig]:
-    """Generate paired 4bin and 1bin configurations for a catalog prefix."""
-    return {
-        f"{prefix}_4bin": _cfg(
-            f"{prefix}_4bin",
-            lens_path,
-            random_path,
-            columns=columns,
-            redshift_range=redshift_range,
-            lens_format=lens_format,
-            ra_range=ra_range,
-            dec_range=dec_range,
-            binning=_DEFAULT_BINNING_4BIN,
-            redshift_type=redshift_type,
-        ),
-        f"{prefix}_1bin": _cfg(
-            f"{prefix}_1bin",
-            lens_path,
-            random_path,
-            columns=columns,
-            redshift_range=redshift_range,
-            lens_format=lens_format,
-            ra_range=ra_range,
-            dec_range=dec_range,
-            binning=_DEFAULT_BINNING_1BIN,
-            redshift_type=redshift_type,
-        ),
-    }
-
-
 # ---------------------------------------------------------------------------
-# Run registry
-#
-# Label convention : {catalog_id}_{nbins}
-# Output convention: output/{catalog_id}/{nbins}/
-#
-# Catalog IDs
-#   redm_pdr3_3band_fixed                   – redMapper PDR3, 3-band colours, fixed off-diag cov
-#   redm_pdr3_5band_free                    – redMapper PDR3, 5-band colours, free off-diag cov
-#   redm_pdr3_3band_free                    – redMapper PDR3, 3-band colours, free off-diag cov
-#   redm_s16a                               – redMapper S16a, full footprint
-#   redm_s16a_hectomap                      – redMapper S16a, HectoMap sub-region
-#   logm_s16a                               – S16a massive galaxies ranked by log stellar mass
-#   logm_s16a_hectomap                      – same, HectoMap sub-region
-#   forced                                  – S16a massive galaxies with forced redMapper richness
-#   forced_hectomap                         – same, HectoMap sub-region
-#   camira                                  – CAMIRA S23b wide, full footprint
-#   camira_hectomap                         – CAMIRA S23b wide, HectoMap sub-region
-#   redm_r16                                – redMapper SDSS R16, full footprint (Y3 mask)
-#   redm_r16_hectomap                       – redMapper SDSS R16, HectoMap sub-region (RA 210-250)
-#   cosine                                  – COSINE cluster finder (natural HectoMap footprint)
-#   pls                                     – PLS cluster finder (natural HectoMap footprint)
-#   amico                                   – AMICO cluster finder (full Y3 footprint)
-#   amico_hectomap                          – AMICO cluster finder (HectoMap sub-region)
-#   regression                              – Linear regression against WL mass (natural HectoMap footprint)
-#   cca1                                    – CCA1 cluster finder (Primary WL mass mode, cca1 ranking)
-#   cca1_specz                              – same, with spectroscopic redshift
-#   cca2                                    – CCA2 cluster finder (Morphology mode, cca2 ranking)
-#   cca2_specz                              – same, with spectroscopic redshift
-#   rz_diff                                 – Direct 2D r-z profile subtraction richness (baseline two-box, full Y3 footprint)
-#   rz_diff_lum                             – Direct 2D r-z profile subtraction total luminosity (baseline two-box, full Y3 footprint)
-#   rz_diff_preset                          – Direct 2D r-z profile subtraction preset-aperture richness (full Y3 footprint)
-#   rz_diff_preset_lum                      – Direct 2D r-z profile subtraction preset-aperture total luminosity (full Y3 footprint)
-#   rz_diff_two_box_match_recovery          – Two-box aperture richness optimized for external cluster recovery
-#   rz_diff_single_box                      – Positive-box single-aperture richness (full Y3 footprint)
-#   rz_diff_single_box_lum                  – Positive-box single-aperture total luminosity (full Y3 footprint)
-#   rz_diff_single_box_match_recovery       – Single-box aperture richness optimized for external cluster recovery
-#   rz_diff_two_box_red                     – Direct 2D r-z profile subtraction two-box red-galaxy richness (full Y3 footprint)
-#   rz_diff_two_box_red_lum                 – Direct 2D r-z profile subtraction two-box red-galaxy total luminosity (full Y3 footprint)
-#   rz_diff_two_box_red_match_recovery      – Two-box red-galaxy richness optimized for external cluster recovery
-#   rz_diff_two_box_red_redmapper_matching  – Two-box red-galaxy richness matched to redMaPPer
-#   rz_diff_two_box_red_camira_matching     – Two-box red-galaxy richness matched to CAMIRA
-#   rz_diff_six_param                       – Six-parameter aperture richness (WL-optimized, full Y3 footprint)
-#   rz_diff_six_param_match_recovery        – Six-parameter aperture richness optimized for external cluster recovery
-#   rz_diff_mag_2_p_5                       – Direct 2D r-z profile subtraction richness with mag cut 2.5
-#   rz_diff_mag_3_p_0                       – Direct 2D r-z profile subtraction richness with mag cut 3.0
-#   ideal_mdpl2                             – Theoretical upper limit (MDPL2 simulation central halos, sigma=0)
-#   ideal_colossus                          – Theoretical upper limit (Colossus analytical halo model, sigma=0)
-#   wh20                                    – Wen & Han (2020/2021) cluster catalog (richness ranking)
-#   wh24                                    – Wen & Han (2024) cluster catalog (lam500 ranking)
-#   zou21                                   – Zou et al. (2021) cluster catalog (richness ranking)
-#   clumpr_mass                             – CluMPR cluster catalog (mass ranking)
-#   clumpr_richness                         – CluMPR cluster catalog (richness ranking)
-#   yang21_mass                             – Yang et al. (2021) group catalog (halo mass log_m_h ranking)
-#   yang21_richness                         – Yang et al. (2021) group catalog (richness ranking)
+# Lens Catalog Definitions (LENS_REGISTRY)
 # ---------------------------------------------------------------------------
 
-RUN_REGISTRY: dict[str, WLConfig] = {
-    # -----------------------------------------------------------------------
-    # redMapper PDR3 – three photometric variants (natural HectoMap footprint)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+_PATH_REDM_RUN = "/Users/xinq/redmapper_HSC/output/redmapper_run"
+_PATH_CF_FALL = "/Users/xinq/cluster_finder/output/fall_hectomap_spring/rz_diff"
+
+LENS_REGISTRY: dict[str, LensCatalogConfig] = {
+    # RedMapper PDR3 variants (HectoMap)
+    "redm_pdr3_3band_fixed": _lens(
         "redm_pdr3_3band_fixed",
-        _PATH_REDM_PDR3_3BAND_FIXED,
+        f"{_PATH_REDM_RUN}/new_run_no_mask/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit",
+        _COLS_REDM,
         _RAND_HECTOMAP,
-        columns=_COLS_REDM,
     ),
-    **_make_pair(
+    "redm_pdr3_5band_free": _lens(
         "redm_pdr3_5band_free",
-        _PATH_REDM_PDR3_5BAND_FREE,
+        f"{_PATH_REDM_RUN}/new_run_5bands_offdiag/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit",
+        _COLS_REDM,
         _RAND_HECTOMAP,
-        columns=_COLS_REDM,
     ),
-    **_make_pair(
+    "redm_pdr3_3band_free": _lens(
         "redm_pdr3_3band_free",
-        _PATH_REDM_PDR3_3BAND_FREE,
+        f"{_PATH_REDM_RUN}/new_run_free_offdiag/run/hsc_run_redmapper_v0.9.1.dev2+g030802198.d20260617_lgt05_catalog.fit",
+        _COLS_REDM,
         _RAND_HECTOMAP,
-        columns=_COLS_REDM,
     ),
-    # -----------------------------------------------------------------------
-    # redMapper S16a – full footprint and HectoMap sub-region
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    # RedMapper S16a (Full & HectoMap)
+    "redm_s16a": _lens(
         "redm_s16a",
-        _PATH_REDM_S16A,
+        "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
+        _COLS_REDM,
         _RAND_S16A,
-        columns=_COLS_REDM,
     ),
-    **_make_pair(
+    "redm_s16a_hectomap": _lens(
         "redm_s16a_hectomap",
-        _PATH_REDM_S16A,
-        _RAND_S16A,
-        columns=_COLS_REDM,
+        "/Users/xinq/redmapper_HSC/data/reference/redmapper_s16a/redmapper_hsc_s16a_cluster_bsm.fits",
+        _COLS_REDM,
+        _RAND_HECTOMAP,
         **_BOX_HECTOMAP,
     ),
-    # -----------------------------------------------------------------------
-    # Stellar-mass selected S16a galaxies (log M ranking)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    # S16a Stellar Mass Selection
+    "logm_s16a": _lens(
         "logm_s16a",
-        _PATH_LOGM_S16A,
+        "/Users/xinq/research/HSC_massive/s16a_massive_logm_11.2.fits",
+        _COLS_LOGM,
         _RAND_S16A,
-        columns=_COLS_LOGM,
     ),
-    **_make_pair(
+    "logm_s16a_hectomap": _lens(
         "logm_s16a_hectomap",
-        _PATH_LOGM_S16A,
-        _RAND_S16A,
-        columns=_COLS_LOGM,
+        "/Users/xinq/research/HSC_massive/s16a_massive_logm_11.2.fits",
+        _COLS_LOGM,
+        _RAND_HECTOMAP,
         **_BOX_HECTOMAP,
     ),
-    # -----------------------------------------------------------------------
-    # Forced-richness S16a massive galaxies
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    # Forced-Richness S16a
+    "forced": _lens(
         "forced",
-        _PATH_FORCED,
+        "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits",
+        _COLS_FORCED,
         _RAND_S16A,
-        columns=_COLS_FORCED,
     ),
-    **_make_pair(
+    "forced_hectomap": _lens(
         "forced_hectomap",
-        _PATH_FORCED,
-        _RAND_S16A,
-        columns=_COLS_FORCED,
+        "/Users/xinq/redmapper_HSC/output/s16a_massive_logm_11.2_forced_results.fits",
+        _COLS_FORCED,
+        _RAND_HECTOMAP,
         **_BOX_HECTOMAP,
     ),
-    # -----------------------------------------------------------------------
-    # CAMIRA S23b wide – full footprint and HectoMap sub-region
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    # CAMIRA S23b Wide
+    "camira": _lens(
         "camira",
-        _PATH_CAMIRA,
+        "data/camira_s23b_wide_sm_v3.dat",
+        _COLS_CAMIRA,
         _RAND_Y3,
-        columns=_COLS_CAMIRA,
-        lens_format="pandas_dat",
+        lens_format="ascii",
     ),
-    **_make_pair(
+    "camira_hectomap": _lens(
         "camira_hectomap",
-        _PATH_CAMIRA,
+        "data/camira_s23b_wide_sm_v3.dat",
+        _COLS_CAMIRA,
         _RAND_HECTOMAP,
-        columns=_COLS_CAMIRA,
-        lens_format="pandas_dat",
+        lens_format="ascii",
         **_BOX_HECTOMAP,
     ),
-    # -----------------------------------------------------------------------
-    # redMapper SDSS R16 – full footprint (Y3 mask) and HectoMap sub-regions
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    # RedMapper SDSS R16
+    "redm_r16": _lens(
         "redm_r16",
-        _PATH_R16,
+        "data/R16/R16_cluster_catalog_bin.fit",
+        _COLS_R16,
         _RAND_Y3,
-        columns=_COLS_R16,
     ),
-    **_make_pair(
+    "redm_r16_hectomap": _lens(
         "redm_r16_hectomap",
-        _PATH_R16,
+        "data/R16/R16_cluster_catalog_bin.fit",
+        _COLS_R16,
         _RAND_HECTOMAP,
-        columns=_COLS_R16,
         **_BOX_HECTOMAP,
     ),
-    # -----------------------------------------------------------------------
-    # COSINE cluster finder (natural HectoMap footprint)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    # Cluster Finders (HectoMap & Full Y3)
+    "cosine": _lens(
         "cosine",
         get_latest_cluster_catalog(),
+        _COLS_CF_STANDARD,
         _RAND_HECTOMAP,
-        columns=_COLS_COSINE,
         lens_format="parquet",
     ),
-    # -----------------------------------------------------------------------
-    # PLS cluster finder (natural HectoMap footprint)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    "pls": _lens(
         "pls",
-        _PATH_PLS,
+        "/Users/xinq/cluster_finder/output/pls/pls_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_HECTOMAP,
-        columns=_COLS_PLS,
         lens_format="parquet",
     ),
-    # -----------------------------------------------------------------------
-    # AMICO cluster finder (full Y3 footprint and HectoMap sub-region)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    "amico": _lens(
         "amico",
-        _PATH_AMICO,
+        get_latest_cluster_catalog(
+            "/Users/xinq/cluster_finder/output/fall_hectomap_spring/amico/cluster"
+        ),
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_AMICO,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "amico_hectomap": _lens(
         "amico_hectomap",
-        _PATH_AMICO,
+        get_latest_cluster_catalog(
+            "/Users/xinq/cluster_finder/output/fall_hectomap_spring/amico/cluster"
+        ),
+        _COLS_CF_STANDARD,
         _RAND_HECTOMAP,
-        columns=_COLS_AMICO,
         lens_format="parquet",
         **_BOX_HECTOMAP,
     ),
-    # -----------------------------------------------------------------------
-    # Linear regression against WL mass (natural HectoMap footprint)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    "regression": _lens(
         "regression",
-        _PATH_REGRESSION,
+        "/Users/xinq/cluster_finder/output/regression/regression_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_HECTOMAP,
-        columns=_COLS_REGRESSION,
         lens_format="parquet",
     ),
-    # -----------------------------------------------------------------------
-    # CCA1 cluster finder (natural HectoMap footprint, photoz & specz)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    "cca1": _lens(
         "cca1",
-        _PATH_CCA1,
+        "/Users/xinq/cluster_finder/output/cca/cca1_cluster_catalog.parquet",
+        _COLS_CCA1,
         _RAND_HECTOMAP,
-        columns=_COLS_CCA1,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "cca1_specz": _lens(
         "cca1_specz",
-        _PATH_CCA1,
+        "/Users/xinq/cluster_finder/output/cca/cca1_cluster_catalog.parquet",
+        _COLS_CCA1,
         _RAND_HECTOMAP,
-        columns=_COLS_CCA1,
         lens_format="parquet",
         redshift_type="specz",
     ),
-    # -----------------------------------------------------------------------
-    # CCA2 cluster finder (natural HectoMap footprint, photoz & specz)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    "cca2": _lens(
         "cca2",
-        _PATH_CCA2,
+        "/Users/xinq/cluster_finder/output/cca/cca2_cluster_catalog.parquet",
+        _COLS_CCA2,
         _RAND_HECTOMAP,
-        columns=_COLS_CCA2,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "cca2_specz": _lens(
         "cca2_specz",
-        _PATH_CCA2,
+        "/Users/xinq/cluster_finder/output/cca/cca2_cluster_catalog.parquet",
+        _COLS_CCA2,
         _RAND_HECTOMAP,
-        columns=_COLS_CCA2,
         lens_format="parquet",
         redshift_type="specz",
     ),
-    # -----------------------------------------------------------------------
-    # Direct 2D r-z profile subtraction cluster catalogs (full footprint)
-    # -----------------------------------------------------------------------
-    **_make_pair(
+    # 2D r-z Difference Profiles
+    "rz_diff_preset": _lens(
         "rz_diff_preset",
-        _PATH_RZ_DIFF_PRESET,
+        f"{_PATH_CF_FALL}/preset/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_preset_lum": _lens(
         "rz_diff_preset_lum",
-        _PATH_RZ_DIFF_PRESET_LUM,
+        f"{_PATH_CF_FALL}/preset/rz_diff_lum_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff": _lens(
         "rz_diff",
-        _PATH_RZ_DIFF,
+        f"{_PATH_CF_FALL}/baseline/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_lum": _lens(
         "rz_diff_lum",
-        _PATH_RZ_DIFF_LUM,
+        f"{_PATH_CF_FALL}/baseline/rz_diff_lum_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_two_box_match_recovery": _lens(
         "rz_diff_two_box_match_recovery",
-        _PATH_RZ_DIFF_TWO_BOX_MATCH_RECOVERY,
+        f"{_PATH_CF_FALL}/two_box_match_recovery/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_single_box": _lens(
         "rz_diff_single_box",
-        _PATH_RZ_DIFF_SINGLE_BOX,
+        f"{_PATH_CF_FALL}/single_box_wl/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_single_box_lum": _lens(
         "rz_diff_single_box_lum",
-        _PATH_RZ_DIFF_SINGLE_BOX_LUM,
+        f"{_PATH_CF_FALL}/single_box_wl/rz_diff_lum_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_single_box_match_recovery": _lens(
         "rz_diff_single_box_match_recovery",
-        _PATH_RZ_DIFF_SINGLE_BOX_MATCH_RECOVERY,
+        f"{_PATH_CF_FALL}/single_box_match_recovery/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_two_box_red": _lens(
         "rz_diff_two_box_red",
-        _PATH_RZ_DIFF_TWO_BOX_RED,
+        f"{_PATH_CF_FALL}/two_box_red_wl/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_two_box_red_lum": _lens(
         "rz_diff_two_box_red_lum",
-        _PATH_RZ_DIFF_TWO_BOX_RED_LUM,
+        f"{_PATH_CF_FALL}/two_box_red_wl/rz_diff_lum_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_two_box_red_match_recovery": _lens(
         "rz_diff_two_box_red_match_recovery",
-        _PATH_RZ_DIFF_TWO_BOX_RED_MATCH_RECOVERY,
+        f"{_PATH_CF_FALL}/two_box_red_match_recovery/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_two_box_red_redmapper_matching": _lens(
         "rz_diff_two_box_red_redmapper_matching",
-        _PATH_RZ_DIFF_TWO_BOX_RED_REDMAPPER_MATCHING,
+        f"{_PATH_CF_FALL}/two_box_red_redmapper_matching/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_two_box_red_camira_matching": _lens(
         "rz_diff_two_box_red_camira_matching",
-        _PATH_RZ_DIFF_TWO_BOX_RED_CAMIRA_MATCHING,
+        f"{_PATH_CF_FALL}/two_box_red_camira_matching/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_six_param": _lens(
         "rz_diff_six_param",
-        _PATH_RZ_DIFF_SIX_PARAM,
+        f"{_PATH_CF_FALL}/six_param_wl/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_six_param_match_recovery": _lens(
         "rz_diff_six_param_match_recovery",
-        _PATH_RZ_DIFF_SIX_PARAM_MATCH_RECOVERY,
+        f"{_PATH_CF_FALL}/six_param_match_recovery/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_mag_2_p_5": _lens(
         "rz_diff_mag_2_p_5",
-        _PATH_RZ_DIFF_MAG_2_P_5,
+        f"{_PATH_CF_FALL}/mag_2_p_5/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    **_make_pair(
+    "rz_diff_mag_3_p_0": _lens(
         "rz_diff_mag_3_p_0",
-        _PATH_RZ_DIFF_MAG_3_P_0,
+        f"{_PATH_CF_FALL}/mag_3_p_0/rz_diff_cluster_catalog.parquet",
+        _COLS_CF_STANDARD,
         _RAND_Y3,
-        columns=_COLS_RZ_DIFF,
         lens_format="parquet",
     ),
-    # -----------------------------------------------------------------------
-    # Ideal theoretical limits
-    # -----------------------------------------------------------------------
-    "ideal_mdpl2_1bin": _cfg(
-        "ideal_mdpl2_1bin",
-        _PATH_IDEAL_MDPL2_1BIN,
-        _RAND_HECTOMAP,
-        columns=_COLS_COSINE,
-        binning=_DEFAULT_BINNING_1BIN,
+    # External DESI Legacy Surveys
+    "wh20": _lens(
+        "wh20", "data/external_clusters/wh20.parquet", _COLS_RICHNESS_Z, _RAND_Y3
     ),
-    "ideal_mdpl2_4bin": _cfg(
-        "ideal_mdpl2_4bin",
-        _PATH_IDEAL_MDPL2_4BIN,
-        _RAND_HECTOMAP,
-        columns=_COLS_COSINE,
-        binning=_DEFAULT_BINNING_4BIN,
+    "wh24": _lens("wh24", "data/external_clusters/wh24.parquet", _COLS_WH24, _RAND_Y3),
+    "zou21": _lens(
+        "zou21", "data/external_clusters/zou21.parquet", _COLS_RICHNESS_Z, _RAND_Y3
     ),
-    "ideal_colossus_1bin": _cfg(
-        "ideal_colossus_1bin",
-        _PATH_IDEAL_COLOSSUS_1BIN,
-        _RAND_HECTOMAP,
-        columns=_COLS_COSINE,
-        binning=_DEFAULT_BINNING_1BIN,
+    "clumpr_mass": _lens(
+        "clumpr_mass",
+        "data/external_clusters/clumpr.parquet",
+        _COLS_MASS_Z,
+        _RAND_Y3,
     ),
-    "ideal_colossus_4bin": _cfg(
-        "ideal_colossus_4bin",
-        _PATH_IDEAL_COLOSSUS_4BIN,
-        _RAND_HECTOMAP,
-        columns=_COLS_COSINE,
-        binning=_DEFAULT_BINNING_4BIN,
+    "clumpr_richness": _lens(
+        "clumpr_richness",
+        "data/external_clusters/clumpr.parquet",
+        _COLS_RICHNESS_Z,
+        _RAND_Y3,
     ),
-    # -----------------------------------------------------------------------
-    # External DESI Legacy Surveys cluster catalogs (full Y3 footprint)
-    # -----------------------------------------------------------------------
-    **_make_pair("wh20", _PATH_WH20, _RAND_Y3, columns=_COLS_WH20),
-    **_make_pair("wh24", _PATH_WH24, _RAND_Y3, columns=_COLS_WH24),
-    **_make_pair("zou21", _PATH_ZOU21, _RAND_Y3, columns=_COLS_ZOU21),
-    **_make_pair("clumpr_mass", _PATH_CLUMPR, _RAND_Y3, columns=_COLS_CLUMPR_MASS),
-    **_make_pair("clumpr_richness", _PATH_CLUMPR, _RAND_Y3, columns=_COLS_CLUMPR_RICH),
-    **_make_pair("yang21_mass", _PATH_YANG21, _RAND_Y3, columns=_COLS_YANG21_MASS),
-    **_make_pair("yang21_richness", _PATH_YANG21, _RAND_Y3, columns=_COLS_YANG21_RICH),
+    "yang21_mass": _lens(
+        "yang21_mass",
+        "data/external_clusters/yang21.parquet",
+        _COLS_YANG21_MASS,
+        _RAND_Y3,
+    ),
+    "yang21_richness": _lens(
+        "yang21_richness",
+        "data/external_clusters/yang21.parquet",
+        _COLS_RICHNESS_Z,
+        _RAND_Y3,
+    ),
 }
+
+# ---------------------------------------------------------------------------
+# Construct RUN_REGISTRY from LENS_REGISTRY
+# ---------------------------------------------------------------------------
+
+
+def _make_wl_config(
+    label: str,
+    lens_cfg: LensCatalogConfig,
+    binning: BinningConfig,
+    save_root: str,
+) -> WLConfig:
+    return WLConfig(
+        label=label,
+        lens=replace(lens_cfg, label=label),
+        source=SourceConfig(),
+        binning=binning,
+        save_root=save_root,
+        redshift_type=lens_cfg.redshift_type,
+    )
+
+
+RUN_REGISTRY: dict[str, WLConfig] = {}
+
+# Programmatically generate paired 4bin and 1bin configurations
+for cat_id, lens_cfg in LENS_REGISTRY.items():
+    RUN_REGISTRY[f"{cat_id}_4bin"] = _make_wl_config(
+        f"{cat_id}_4bin",
+        lens_cfg,
+        _DEFAULT_BINNING_4BIN,
+        f"output/{cat_id}/4bin",
+    )
+    RUN_REGISTRY[f"{cat_id}_1bin"] = _make_wl_config(
+        f"{cat_id}_1bin",
+        lens_cfg,
+        _DEFAULT_BINNING_1BIN,
+        f"output/{cat_id}/1bin",
+    )
+
+# Theoretical upper limits (MDPL2 simulation and Colossus halo model)
+_IDEAL_SPECS = [
+    (
+        "ideal_mdpl2_1bin",
+        "output/ideal_mdpl2/1bin/prepare/ideal_mdpl2_1bin_lenses.fits",
+        _DEFAULT_BINNING_1BIN,
+        "output/ideal_mdpl2/1bin",
+    ),
+    (
+        "ideal_mdpl2_4bin",
+        "output/ideal_mdpl2/4bin/prepare/ideal_mdpl2_4bin_lenses.fits",
+        _DEFAULT_BINNING_4BIN,
+        "output/ideal_mdpl2/4bin",
+    ),
+    (
+        "ideal_colossus_1bin",
+        "output/ideal_colossus/1bin/prepare/ideal_colossus_1bin_lenses.fits",
+        _DEFAULT_BINNING_1BIN,
+        "output/ideal_colossus/1bin",
+    ),
+    (
+        "ideal_colossus_4bin",
+        "output/ideal_colossus/4bin/prepare/ideal_colossus_4bin_lenses.fits",
+        _DEFAULT_BINNING_4BIN,
+        "output/ideal_colossus/4bin",
+    ),
+]
+
+for label, pth, bin_cfg, sroot in _IDEAL_SPECS:
+    ideal_lens = _lens(label, pth, _COLS_CF_STANDARD, _RAND_HECTOMAP)
+    RUN_REGISTRY[label] = _make_wl_config(label, ideal_lens, bin_cfg, sroot)
