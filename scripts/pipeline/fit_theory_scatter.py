@@ -339,7 +339,6 @@ def plot_bin_column(
         "--",
         color="blue",
         linewidth=1.3,
-        label="1-halo (Centered)",
         zorder=2,
     )
     if row["f_mis"] > 0.0:
@@ -349,7 +348,6 @@ def plot_bin_column(
             "--",
             color="orange",
             linewidth=1.3,
-            label="1-halo (Miscentered)",
             zorder=2,
         )
     ax_log.plot(
@@ -358,7 +356,6 @@ def plot_bin_column(
         ":",
         color="green",
         linewidth=1.4,
-        label="2-halo Term",
         zorder=2,
     )
 
@@ -370,7 +367,6 @@ def plot_bin_column(
             linewidth=1.1,
             alpha=0.85,
             zorder=1,
-            label=rf"$R_{{\rm 200m}} = {r200m:.2f}\ \mathrm{{Mpc}}$",
         )
         ax_log.text(
             r200m * 1.05,
@@ -451,10 +447,34 @@ def plot_bin_column(
         zorder=3,
     )
     ax_lin.plot(rp_mpc, rds_mod, "-", color="red", linewidth=1.8, zorder=4)
-    ax_lin.plot(rp_mpc, rds_1h_cen, "--", color="blue", linewidth=1.3, zorder=2)
+    ax_lin.plot(
+        rp_mpc,
+        rds_1h_cen,
+        "--",
+        color="blue",
+        linewidth=1.3,
+        label="1-halo (Centered)",
+        zorder=2,
+    )
     if row["f_mis"] > 0.0:
-        ax_lin.plot(rp_mpc, rds_1h_mis, "--", color="orange", linewidth=1.3, zorder=2)
-    ax_lin.plot(rp_mpc, rds_2h, ":", color="green", linewidth=1.4, zorder=2)
+        ax_lin.plot(
+            rp_mpc,
+            rds_1h_mis,
+            "--",
+            color="orange",
+            linewidth=1.3,
+            label="1-halo (Miscentered)",
+            zorder=2,
+        )
+    ax_lin.plot(
+        rp_mpc,
+        rds_2h,
+        ":",
+        color="green",
+        linewidth=1.4,
+        label="2-halo Term",
+        zorder=2,
+    )
 
     ax_lin.axhline(
         0.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.6, zorder=1
@@ -487,6 +507,13 @@ def plot_bin_column(
     if show_ylabel:
         ax_lin.set_ylabel(r"$R_p\,\Delta\Sigma\ [10^6\,\mathrm{M_\odot / pc}]$")
     ax_lin.set_xlabel(r"$R_p\ [\mathrm{Mpc}]$")
+
+    if show_legend:
+        ax_lin.legend(
+            loc="upper right",
+            fontsize=6.8 if is_multi_bin else 8.0,
+            framealpha=0.85,
+        )
 
 
 def plot_profile_fit_decomposition(
