@@ -387,7 +387,7 @@ def plot_bin_column(
     ax_log.set_ylim(bottom=np.maximum(1e-1, np.nanmin(ds_data) * 0.4))
     ax_log.grid(True, which="both", linestyle=":", alpha=0.35)
     if show_ylabel:
-        ax_log.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot / pc^2}]$ (log)")
+        ax_log.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot / pc^2}]$")
     ax_log.set_title(
         bin_title,
         fontweight="normal",
@@ -431,11 +431,18 @@ def plot_bin_column(
             framealpha=0.85,
         )
 
-    # ---------------- Bottom panel: Linear scale ----------------
+    # ---------------- Bottom panel: Linear scale of R * DeltaSigma ----------------
+    rds_data = rp_mpc * ds_data
+    rds_err = rp_mpc * ds_err
+    rds_mod = rp_mpc * ds_mod
+    rds_1h_cen = rp_mpc * ds_1h_cen
+    rds_1h_mis = rp_mpc * ds_1h_mis
+    rds_2h = rp_mpc * ds_2h
+
     ax_lin.errorbar(
         rp_mpc,
-        ds_data,
-        yerr=ds_err,
+        rds_data,
+        yerr=rds_err,
         fmt="o",
         color="black",
         capsize=2.0,
@@ -443,11 +450,11 @@ def plot_bin_column(
         elinewidth=0.9,
         zorder=3,
     )
-    ax_lin.plot(rp_mpc, ds_mod, "-", color="red", linewidth=1.8, zorder=4)
-    ax_lin.plot(rp_mpc, ds_1h_cen, "--", color="blue", linewidth=1.3, zorder=2)
+    ax_lin.plot(rp_mpc, rds_mod, "-", color="red", linewidth=1.8, zorder=4)
+    ax_lin.plot(rp_mpc, rds_1h_cen, "--", color="blue", linewidth=1.3, zorder=2)
     if row["f_mis"] > 0.0:
-        ax_lin.plot(rp_mpc, ds_1h_mis, "--", color="orange", linewidth=1.3, zorder=2)
-    ax_lin.plot(rp_mpc, ds_2h, ":", color="green", linewidth=1.4, zorder=2)
+        ax_lin.plot(rp_mpc, rds_1h_mis, "--", color="orange", linewidth=1.3, zorder=2)
+    ax_lin.plot(rp_mpc, rds_2h, ":", color="green", linewidth=1.4, zorder=2)
 
     ax_lin.axhline(
         0.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.6, zorder=1
@@ -473,12 +480,12 @@ def plot_bin_column(
 
     ax_lin.set_xscale("log")
     ax_lin.set_yscale("linear")
-    y_max = max(float(np.nanmax(ds_data + ds_err)), float(np.nanmax(ds_mod))) * 1.08
-    y_min = min(-0.04 * y_max, float(np.nanmin(ds_data - ds_err)) * 1.1)
+    y_max = max(float(np.nanmax(rds_data + rds_err)), float(np.nanmax(rds_mod))) * 1.10
+    y_min = min(-0.04 * y_max, float(np.nanmin(rds_data - rds_err)) * 1.1)
     ax_lin.set_ylim(bottom=y_min, top=y_max)
     ax_lin.grid(True, which="both", linestyle=":", alpha=0.35)
     if show_ylabel:
-        ax_lin.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot / pc^2}]$ (linear)")
+        ax_lin.set_ylabel(r"$R_p\,\Delta\Sigma\ [10^6\,\mathrm{M_\odot / pc}]$")
     ax_lin.set_xlabel(r"$R_p\ [\mathrm{Mpc}]$")
 
 
@@ -489,7 +496,7 @@ def plot_profile_fit_decomposition(
 ) -> None:
     """Plot profile fit decomposition in a 2xN grid (2x1 for 1bin, 2x4 for 4bin).
 
-    Top row displays log-scale DeltaSigma; bottom row displays linear-scale DeltaSigma.
+    Top row displays log-scale DeltaSigma; bottom row displays linear-scale Rp * DeltaSigma.
     """
     n_bins = len(summary)
     rp_mpc = (
