@@ -123,13 +123,13 @@ def plot_profile_parameter_comparison(
     markers = ["o", "s", "^", "D", "v", "P", "X", "*", "<", ">"]
     colors = plt.cm.tab10(np.linspace(0, 1, max(n_samples, 10)))
 
-    fig, axes = plt.subplots(2, 3, figsize=(15, 9.5))
+    fig, axes = plt.subplots(2, 3, figsize=(15, 9.8))
     ax_mass_conc = axes[0, 0]
     ax_mass_bias = axes[0, 1]
     ax_mis_plane = axes[0, 2]
     ax_conc_fmis = axes[1, 0]
     ax_conc_sigmar = axes[1, 1]
-    ax_legend = axes[1, 2]
+    ax_mass_chi2 = axes[1, 2]
 
     handles = []
     catalog_names = []
@@ -150,6 +150,7 @@ def plot_profile_parameter_comparison(
         f_mis_err = _clean_err(row["f_mis_err"])
         sigma_r = float(row["sigma_R"])
         sigma_r_err = _clean_err(row["sigma_R_err"])
+        chi2_red = float(row["chi2_reduced"])
 
         # 1. Mass - Concentration
         h = ax_mass_conc.errorbar(
@@ -221,6 +222,18 @@ def plot_profile_parameter_comparison(
             markersize=7,
         )
 
+        # 6. Mass - Reduced Chi2
+        ax_mass_chi2.errorbar(
+            logm,
+            chi2_red,
+            fmt=m,
+            color=c,
+            ecolor=c,
+            capsize=3,
+            elinewidth=1.2,
+            markersize=7,
+        )
+
     # Reference lines and styling
     # Panel 1: Mass - Concentration
     ax_mass_conc.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
@@ -260,17 +273,14 @@ def plot_profile_parameter_comparison(
     ax_conc_sigmar.set_title("Concentration – Miscentering Radius", fontweight="normal")
     ax_conc_sigmar.grid(True, linestyle=":", alpha=0.5)
 
-    # Panel 6: Dedicated legend panel
-    ax_legend.axis("off")
-    ax_legend.legend(
-        handles,
-        catalog_names,
-        loc="center",
-        frameon=True,
-        fontsize=10,
-        title="Configurations",
-        title_fontsize=11,
+    # Panel 6: Mass - Reduced Chi2
+    ax_mass_chi2.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
+    ax_mass_chi2.set_xlabel(
+        r"$\langle \log M_{200m} \rangle\ [M_\odot/h]$", fontweight="normal"
     )
+    ax_mass_chi2.set_ylabel(r"Reduced $\chi^2 / \nu$", fontweight="normal")
+    ax_mass_chi2.set_title(r"Mass – Reduced $\chi^2$", fontweight="normal")
+    ax_mass_chi2.grid(True, linestyle=":", alpha=0.5)
 
     data_axes = [
         ax_mass_conc,
@@ -278,11 +288,22 @@ def plot_profile_parameter_comparison(
         ax_mis_plane,
         ax_conc_fmis,
         ax_conc_sigmar,
+        ax_mass_chi2,
     ]
     for ax in data_axes:
         ax.margins(0.08)
 
-    plt.tight_layout()
+    fig.legend(
+        handles,
+        catalog_names,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.995),
+        ncol=4,
+        frameon=True,
+        fontsize=9.5,
+    )
+
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     print(f"Saved comparison figure to: {output_path}")
