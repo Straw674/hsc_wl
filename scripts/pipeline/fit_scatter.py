@@ -333,7 +333,6 @@ LABELS = [
     "rz_diff_single_box_1bin",
     "rz_diff_two_box_red_match_recovery_1bin",
     "wh24_1bin",
-    "zou21_1bin",
 ]
 
 VERSION = "Y3"  # "Y1" or "Y3"
