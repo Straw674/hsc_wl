@@ -330,9 +330,14 @@ def plot_profile_fit_decomposition(
 # "rz_diff_lum_1bin", "rz_diff_1bin", "rz_diff_4bin", "rz_diff_lum_4bin",
 # "camira_1bin", "camira_4bin", "redm_s16a_1bin", etc.
 LABELS = [
-    "rz_diff_lum_1bin",
-    "rz_diff_4bin",
-    "camira_4bin",
+    "redm_r16_1bin",
+    "camira_1bin",
+    "rz_diff_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_single_box_1bin",
+    "rz_diff_two_box_red_match_recovery_1bin",
+    "wh24_1bin",
+    "zou21_1bin",
 ]
 
 VERSION = "Y3"  # "Y1" or "Y3"
