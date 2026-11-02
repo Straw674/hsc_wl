@@ -23,6 +23,7 @@ import scipy.optimize as optimize  # noqa: E402
 from colossus.cosmology import cosmology  # noqa: E402
 from colossus.halo import profile_nfw, profile_outer  # noqa: E402
 
+from hsc_wl.config import resolve_run_dir  # noqa: E402
 from initial import *  # noqa: F401,F403
 
 # %% Local Functions
@@ -209,11 +210,9 @@ BIN_INDEX = 0  # Index of the lens bin to fit (0, 1, 2, 3...)
 COSMOLOGY_NAME = "planck18"
 MASS_DEF = "200m"
 
-# Parse catalog_id and nbins from the unified run label
-catalog_id, nbins = LABEL.rsplit("_", 1)
-
 DSIGMA_FITS = (
-    f"output/{catalog_id}/{nbins}/{VERSION}/dsigma/hsc_hsc_bin{BIN_INDEX}.fits"
+    resolve_run_dir(LABEL, "dsigma", root=project_root, version=VERSION)
+    / f"hsc_hsc_bin{BIN_INDEX}.fits"
 )
 
 OUTPUT_FIG = project_root / "output/plots_for_agents/explore_colossus.png"

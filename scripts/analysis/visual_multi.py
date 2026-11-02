@@ -19,6 +19,7 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from hsc_wl.config import resolve_run_dir
 from initial import *  # noqa: F401,F403
 
 # %% Local Functions
@@ -44,7 +45,7 @@ def _get_result_time_text(base_dir: Path) -> str:
 
 
 def load_comparison_data(configs_to_compare, root_path, display_names=None):
-    """Load dsigma result tables for all (catalog_id, nbins, version) configurations.
+    """Load dsigma result tables for configured run labels.
 
     Returns
     -------
@@ -60,16 +61,14 @@ def load_comparison_data(configs_to_compare, root_path, display_names=None):
     loaded_tables = []
     label_time_texts = []
 
-    for catalog_id, nbins, version_name in configs_to_compare:
-        current_dir = root_path / f"output/{catalog_id}/{nbins}/{version_name}/dsigma"
+    for label in configs_to_compare:
+        current_dir = resolve_run_dir(label, "dsigma", root=root_path)
         if not current_dir.exists():
             print(f"Warning: {current_dir} does not exist. Skipping.")
             continue
         time_text = _get_result_time_text(current_dir)
-        key = f"{catalog_id}_{nbins}"
-        display_name = display_names.get(
-            key, display_names.get(catalog_id, f"{catalog_id} ({nbins})")
-        )
+        catalog_id = label.removesuffix("_4bin").removesuffix("_1bin")
+        display_name = display_names.get(label, display_names.get(catalog_id, label))
         current_tables = load_result_tables(current_dir, only_complete=True)
         print(
             f"Loading data for {display_name} ({len(current_tables)} complete bins) | "
@@ -91,7 +90,6 @@ def load_comparison_data(configs_to_compare, root_path, display_names=None):
             f"Comparing first {min_bins} common complete bins."
         )
         loaded_tables = [tables[:min_bins] for tables in loaded_tables]
-    n_bins = min_bins
 
     return present_labels, loaded_tables, label_time_texts
 
@@ -107,11 +105,9 @@ def resolve_comparison_styles(
     """Resolve distinct colors and markers for each loaded configuration."""
     display_names = display_names or {}
     config_by_display = {}
-    for catalog_id, nbins, _ in configs_to_compare:
-        key = f"{catalog_id}_{nbins}"
-        dname = display_names.get(
-            key, display_names.get(catalog_id, f"{catalog_id} ({nbins})")
-        )
+    for label in configs_to_compare:
+        catalog_id = label.removesuffix("_4bin").removesuffix("_1bin")
+        dname = display_names.get(label, display_names.get(catalog_id, label))
         config_by_display[dname] = catalog_id
 
     resolved_palette = []
@@ -397,108 +393,109 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 # If an ideal catalog is placed first, the ratio plot directly shows DeltaSigma_obs / DeltaSigma_ideal.
 
 CONFIGS_TO_COMPARE = [
-    ("ideal_mdpl2", "1bin", "Y3"),
-    ("wh24", "1bin", "Y3"),
-    ("wh20", "1bin", "Y3"),
+    "ideal_mdpl2_1bin",
+    "wh24_1bin",
+    "wh20_1bin",
 ]
 
 # CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "4bin", "Y3"),
-#     ("wh24", "4bin", "Y3"),
-#     ("wh20", "4bin", "Y3"),
-#     ("camira", "4bin", "Y3"),
-#     ("rz_diff", "4bin", "Y3"),
+#     "ideal_mdpl2_4bin",
+#     "wh24_4bin",
+#     "wh20_4bin",
+#     "camira_4bin",
+#     "rz_diff_4bin",
 # ]
 
 CONFIGS_TO_COMPARE = [
-    ("ideal_mdpl2", "1bin", "Y3"),
-    ("redm_r16", "1bin", "Y3"),
-    ("camira", "1bin", "Y3"),
-    ("rz_diff", "1bin", "Y3"),
-    ("rz_diff_mag_2_p_5", "1bin", "Y3"),
-    ("rz_diff_mag_3_p_0", "1bin", "Y3"),
-    ("rz_diff_two_box_red", "1bin", "Y3"),
+    "ideal_mdpl2_1bin",
+    "redm_r16_1bin",
+    "camira_1bin",
+    "yang21_richness_1bin",
+    "rz_diff_1bin",
+    # "rz_diff_mag_2_p_5_1bin",
+    # "rz_diff_mag_3_p_0_1bin",
+    "rz_diff_two_box_red_1bin",
 ]
 
 # CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "1bin", "Y3"),
-#     # ("redm_pdr3_5band_free", "1bin", "Y3"),
-#     # ("logm_s16a", "1bin", "Y3"),
-#     ("redm_r16", "1bin", "Y3"),
-#     ("camira", "1bin", "Y3"),
-#     # ("wh24", "1bin", "Y3"),
-#     # ("wh20", "1bin", "Y3"),
-#     # ("amico", "1bin", "Y3"),
-#     # ("cosine", "1bin", "Y3"),
-#     # ("pls", "1bin", "Y3"),
-#     # ("regression", "1bin", "Y3"),
-#     ("rz_diff", "1bin", "Y3"),
-#     # ("rz_diff_lum", "1bin", "Y3"),
-#     ("rz_diff_preset", "1bin", "Y3"),
-#     # ("rz_diff_preset_lum", "1bin", "Y3"),
-#     ("rz_diff_single_box", "1bin", "Y3"),
-#     # ("rz_diff_single_box_lum", "1bin", "Y3"),
-#     ("rz_diff_two_box_red", "1bin", "Y3"),
-#     # ("cca1", "1bin", "Y3"),
-#     # ("cca2", "1bin", "Y3"),
+#     "ideal_mdpl2_1bin",
+#     # "redm_pdr3_5band_free_1bin",
+#     # "logm_s16a_1bin",
+#     "redm_r16_1bin",
+#     "camira_1bin",
+#     # "wh24_1bin",
+#     # "wh20_1bin",
+#     # "amico_1bin",
+#     # "cosine_1bin",
+#     # "pls_1bin",
+#     # "regression_1bin",
+#     "rz_diff_1bin",
+#     # "rz_diff_lum_1bin",
+#     "rz_diff_preset_1bin",
+#     # "rz_diff_preset_lum_1bin",
+#     "rz_diff_single_box_1bin",
+#     # "rz_diff_single_box_lum_1bin",
+#     "rz_diff_two_box_red_1bin",
+#     # "cca1_1bin",
+#     # "cca2_1bin",
 # ]
 
 # CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "4bin", "Y3"),
-#     # ("redm_pdr3_5band_free", "1bin", "Y3"),
-#     # ("logm_s16a", "1bin", "Y3"),
-#     # ("redm_r16", "4bin", "Y3"),  # Only has 3 bins (lambda >= 20 cut exhausts catalog before bin3)
-#     ("camira", "4bin", "Y3"),
-#     # ("wh24", "4bin", "Y3"),
-#     # ("wh20", "4bin", "Y3"),
-#     # ("amico", "1bin", "Y3"),
-#     # ("cosine", "1bin", "Y3"),
-#     # ("pls", "1bin", "Y3"),
-#     # ("regression", "1bin", "Y3"),
-#     ("rz_diff", "4bin", "Y3"),
-#     ("rz_diff_lum", "4bin", "Y3"),
-#     ("rz_diff_preset", "4bin", "Y3"),
-#     ("rz_diff_preset_lum", "4bin", "Y3"),
-#     # ("cca1", "1bin", "Y3"),
-#     # ("cca2", "1bin", "Y3"),
+#     "ideal_mdpl2_4bin",
+#     # "redm_pdr3_5band_free_1bin",
+#     # "logm_s16a_1bin",
+#     # "redm_r16_4bin",  # Only has 3 bins (lambda >= 20 cut exhausts catalog before bin3)
+#     "camira_4bin",
+#     # "wh24_4bin",
+#     # "wh20_4bin",
+#     # "amico_1bin",
+#     # "cosine_1bin",
+#     # "pls_1bin",
+#     # "regression_1bin",
+#     "rz_diff_4bin",
+#     "rz_diff_lum_4bin",
+#     "rz_diff_preset_4bin",
+#     "rz_diff_preset_lum_4bin",
+#     # "cca1_1bin",
+#     # "cca2_1bin",
 # ]
 
 # CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "1bin", "Y3"),
-#     ("rz_diff", "1bin", "Y3"),
+#     "ideal_mdpl2_1bin",
+#     "rz_diff_1bin",
 # ]
 
 
 # CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "1bin", "Y3"),
-#     ("cca1", "1bin", "Y3"),
-#     ("cca1_specz", "1bin", "Y3"),
-#     ("cca2", "1bin", "Y3"),
-#     ("cca2_specz", "1bin", "Y3"),
+#     "ideal_mdpl2_1bin",
+#     "cca1_1bin",
+#     "cca1_specz_1bin",
+#     "cca2_1bin",
+#     "cca2_specz_1bin",
 # ]
 
 # CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "1bin", "Y3"),
-#     # ("redm_r16", "1bin", "Y3"),
-#     ("redm_r16_hectomap", "1bin", "Y3"),
-#     ("redm_pdr3_5band_free", "1bin", "Y3"),
+#     "ideal_mdpl2_1bin",
+#     # "redm_r16_1bin",
+#     "redm_r16_hectomap_1bin",
+#     "redm_pdr3_5band_free_1bin",
 # ]
 
 # CONFIGS_TO_COMPARE = [
-#     ("ideal_mdpl2", "4bin", "Y3"),
-#     ("camira", "4bin", "Y3"),
-#     # ("redm_r16", "4bin", "Y3"),
-#     ("wh24", "4bin", "Y3"),
-#     ("wh20", "4bin", "Y3"),
-#     ("zou21", "4bin", "Y3"),
-#     # ("yang21_mass", "4bin", "Y3"),
-#     ("yang21_richness", "4bin", "Y3"),
-#     # ("clumpr_mass", "4bin", "Y3"),
-#     ("clumpr_richness", "4bin", "Y3"),
-#     ("rz_diff", "4bin", "Y3"),
-#     # ("rz_diff_preset", "4bin", "Y3"),
-#     # ("rz_diff_single_box", "4bin", "Y3"),
-#     # ("rz_diff_two_box_red", "4bin", "Y3"),
+#     "ideal_mdpl2_4bin",
+#     "camira_4bin",
+#     # "redm_r16_4bin",
+#     "wh24_4bin",
+#     "wh20_4bin",
+#     "zou21_4bin",
+#     # "yang21_mass_4bin",
+#     "yang21_richness_4bin",
+#     # "clumpr_mass_4bin",
+#     "clumpr_richness_4bin",
+#     "rz_diff_4bin",
+#     # "rz_diff_preset_4bin",
+#     # "rz_diff_single_box_4bin",
+#     # "rz_diff_two_box_red_4bin",
 # ]
 
 DISPLAY_NAMES = {

@@ -19,6 +19,7 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from hsc_wl.config import resolve_run_dir
 from hsc_wl.prepare import gaussian_kde_1d, load_stratified_candidates
 from initial import *  # noqa: F401,F403
 from src.data import read_catalog_frame
@@ -50,15 +51,9 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
         else:
             label = str(item)
 
-        if label in RUN_REGISTRY:
-            cfg = RUN_REGISTRY[label]
-            save_root = cfg.resolved_save_root(root)
-            file_path = save_root / f"prepare/{label}_lenses.fits"
-        else:
-            catalog_id, nbins = label.rsplit("_", 1)
-            file_path = (
-                root / f"output/{catalog_id}/{nbins}/prepare/{label}_lenses.fits"
-            )
+        file_path = (
+            resolve_run_dir(label, "prepare", root=root) / f"{label}_lenses.fits"
+        )
 
         if not file_path.exists():
             raise FileNotFoundError(f"Prepared lens catalog not found at {file_path}")

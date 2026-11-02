@@ -45,7 +45,7 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
     dict
         Dictionary mapping run label to the loaded astropy Table.
     """
-    from hsc_wl.config import RUN_REGISTRY
+    from hsc_wl.config import resolve_run_dir
 
     dfs = {}
     for item in labels:
@@ -54,15 +54,9 @@ def load_lens_data(labels: list[str | tuple], root: Path) -> dict[str, Table]:
         else:
             label = str(item)
 
-        if label in RUN_REGISTRY:
-            cfg = RUN_REGISTRY[label]
-            save_root = cfg.resolved_save_root(root)
-            file_path = save_root / f"prepare/{label}_lenses.fits"
-        else:
-            catalog_id, nbins = label.rsplit("_", 1)
-            file_path = (
-                root / f"output/{catalog_id}/{nbins}/prepare/{label}_lenses.fits"
-            )
+        file_path = (
+            resolve_run_dir(label, "prepare", root=root) / f"{label}_lenses.fits"
+        )
 
         if not file_path.exists():
             raise FileNotFoundError(f"Prepared lens catalog not found at {file_path}")

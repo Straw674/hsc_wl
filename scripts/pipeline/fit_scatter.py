@@ -155,7 +155,6 @@ def fit_label_profile_scatter(
 
     for b_idx, f_path in enumerate(fits_files):
         rp_mpc, ds_data, ds_err, cov_data, _ = load_dsigma_profile(str(f_path))
-        rp_kpc_h = rp_mpc * 1000.0 * h
         ds_obs_colossus = ds_data * factor
         cov_colossus = cov_data * factor**2
         cov_inv_colossus = np.linalg.pinv(cov_colossus)

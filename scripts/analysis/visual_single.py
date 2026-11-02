@@ -18,15 +18,15 @@ if not (project_root / "pyproject.toml").exists():
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from hsc_wl.config import resolve_run_dir
 from initial import *  # noqa: F401,F403
 
 # %% Local Functions
 
 
-def load_profile_tables(root_path, label, version):
+def load_profile_tables(root_path, label, version="Y3"):
     """Load dsigma result tables for a given (label, version) configuration."""
-    catalog_id, nbins = label.rsplit("_", 1)
-    result_dir = root_path / f"output/{catalog_id}/{nbins}/{version}/dsigma"
+    result_dir = resolve_run_dir(label, "dsigma", root=root_path, version=version)
     return load_result_tables(result_dir), result_dir
 
 

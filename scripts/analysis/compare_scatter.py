@@ -20,27 +20,27 @@ if str(project_root) not in sys.path:
 
 import pickle  # noqa: E402
 
+from hsc_wl.config import resolve_run_dir  # noqa: E402
 from initial import *  # noqa: F401,F403
 
 # %% Local Functions
 
 
-def load_scatter_summaries(labels, root_path):
-    """Load scatter summary pickles for each (run_label, version) pair.
+def load_scatter_summaries(labels, root_path, version: str = "Y3"):
+    """Load scatter summary pickles for each run label.
 
     Returns
     -------
     dict
-        Mapping from label tuple -> "custom_sample" summary table.
+        Mapping from label -> "custom_sample" summary table.
     """
     data_dict = {}
     for label in labels:
-        run_label, version = label
-        catalog_id, nbins = run_label.rsplit("_", 1)
-        pkl_path = (
-            root_path
-            / f"output/{catalog_id}/{nbins}/{version}/pkl/{catalog_id}_{nbins}_{version}_sum.pkl"
-        )
+        catalog_id, nbins = label.rsplit("_", 1)
+        pkl_dir = resolve_run_dir(label, "pkl", root=root_path, version=version)
+        pkl_path = pkl_dir / f"{catalog_id}_{nbins}_{version}_sum.pkl"
+        if not pkl_path.exists():
+            pkl_path = pkl_dir / f"{catalog_id}_{nbins}_sum.pkl"
         if not pkl_path.exists():
             print(f"Warning: {pkl_path} does not exist. Skipping.")
             continue
@@ -107,21 +107,21 @@ def plot_scatter_comparison(
     available_labels = [label for label in labels if label in data_dict]
     for i, label in enumerate(available_labels):
         sum_tab = data_dict[label]
-        x_val = rho_bins
-        y_val = sum_tab["sig_med_bt"]
-        y_err = sum_tab["sig_err_bt"]
+        y_val = np.asarray(sum_tab["sig_med_bt"])
+        y_err = np.asarray(sum_tab["sig_err_bt"])
+        x_val = rho_bins[: len(y_val)]
 
         style = styles[label]
         color = style["color"]
         marker = style["marker"]
 
-        lens_label, source_label = label
-        catalog_id = lens_label.removesuffix("_4bin")
+        lens_label = label
+        catalog_id = lens_label.removesuffix("_4bin").removesuffix("_1bin")
         display_name = (
             display_names.get(label)
             or display_names.get(lens_label)
             or display_names.get(catalog_id)
-            or f"{catalog_id} ({source_label})"
+            or catalog_id
         )
 
         offset = 1.0 + 0.05 * (i - (len(data_dict) - 1) / 2.0)
@@ -216,16 +216,17 @@ def plot_grouped_scatter_comparison(
                 color = colors[idx % len(colors)]
                 marker = MARKERS[idx % len(MARKERS)]
 
-            run_label, version = label
-            catalog_id = run_label.removesuffix("_4bin")
+            run_label = label
+            catalog_id = run_label.removesuffix("_4bin").removesuffix("_1bin")
             display_name = (
                 display_names.get(label)
                 or display_names.get(run_label)
                 or display_names.get(catalog_id)
-                or f"{catalog_id} ({version})"
+                or catalog_id
             )
+            n_b = len(summary["sig_med_bt"])
             ax.errorbar(
-                bin_positions + offset,
+                bin_positions[:n_b] + offset,
                 np.asarray(summary["sig_med_bt"]),
                 yerr=np.asarray(summary["sig_err_bt"]),
                 fmt=marker,
@@ -265,9 +266,8 @@ def plot_panel_scatter_comparison(
     available_labels = [label for label in labels if label in data_dict]
     sample_names = [
         display_names.get(label)
-        or display_names.get(label[0])
-        or display_names.get(label[0].removesuffix("_4bin"))
-        or f"{label[0].removesuffix('_4bin')} ({label[1]})"
+        or display_names.get(label.removesuffix("_4bin").removesuffix("_1bin"))
+        or label
         for label in available_labels
     ]
     with plt.rc_context({"font.size": 12, "font.weight": "normal"}):
@@ -285,6 +285,8 @@ def plot_panel_scatter_comparison(
         ):
             for sample_index, label in enumerate(available_labels):
                 summary = data_dict[label]
+                if bin_index >= len(summary["sig_med_bt"]):
+                    continue
                 idx = labels.index(label)
                 if isinstance(colors, dict):
                     style_entry = colors.get(label, {})
@@ -333,45 +335,45 @@ def plot_panel_scatter_comparison(
 
 # %% Global Configuration
 
-# Labels to compare (must be 4bin configurations, e.g. ("amico_4bin", "Y3")).
+# Labels to compare (must be 4bin configurations, e.g. "amico_4bin").
 # For all available labels, refer to `RUN_REGISTRY` in `src/hsc_wl/config.py`.
 LABELS = [
-    ("rz_diff_4bin", "Y3"),
-    # ("rz_diff_preset_4bin", "Y3"),
-    # ("rz_diff_single_box_4bin", "Y3"),
-    # ("rz_diff_two_box_red_4bin", "Y3"),
-    ("camira_4bin", "Y3"),
-    ("wh24_4bin", "Y3"),
-    ("zou21_4bin", "Y3"),
-    ("yang21_mass_4bin", "Y3"),
-    ("yang21_richness_4bin", "Y3"),
-    ("clumpr_mass_4bin", "Y3"),
-    ("clumpr_richness_4bin", "Y3"),
+    "rz_diff_4bin",
+    # "rz_diff_preset_4bin",
+    # "rz_diff_single_box_4bin",
+    # "rz_diff_two_box_red_4bin",
+    "camira_4bin",
+    "wh24_4bin",
+    "zou21_4bin",
+    "yang21_mass_4bin",
+    "yang21_richness_4bin",
+    "clumpr_mass_4bin",
+    "clumpr_richness_4bin",
 ]
 
 # Display names for labels in the legend
 DISPLAY_NAMES = {
-    ("camira_4bin", "Y3"): "CAMIRA",
-    ("wh24_4bin", "Y3"): "WH24",
-    ("zou21_4bin", "Y3"): "Zou21",
-    ("yang21_mass_4bin", "Y3"): "Yang21 (Halo Mass)",
-    ("yang21_richness_4bin", "Y3"): "Yang21 (Richness)",
-    ("clumpr_mass_4bin", "Y3"): "CluMPR (Mass)",
-    ("clumpr_richness_4bin", "Y3"): "CluMPR (Richness)",
-    ("rz_diff_4bin", "Y3"): "r-z Diff",
-    ("rz_diff_preset_4bin", "Y3"): "r-z Diff (Preset)",
-    ("rz_diff_single_box_4bin", "Y3"): "r-z Diff (Single Box)",
-    ("rz_diff_two_box_red_4bin", "Y3"): "r-z Diff (Two Box Red)",
-    ("rz_diff_six_param_4bin", "Y3"): "r-z Diff (Six Param)",
-    ("redm_r16_4bin", "Y3"): "redMaPPer R16",
-    ("amico_4bin", "Y3"): "AMICO",
-    ("cosine_4bin", "Y3"): "COSINE",
-    ("pls_4bin", "Y3"): "PLS",
-    ("regression_4bin", "Y3"): "Regression",
-    ("cca1_4bin", "Y3"): "CCA1",
-    ("cca2_4bin", "Y3"): "CCA2",
-    ("ideal_mdpl2_4bin", "Y3"): "Ideal MDPL2",
-    ("ideal_colossus_4bin", "Y3"): "Ideal Colossus",
+    "camira_4bin": "CAMIRA",
+    "wh24_4bin": "WH24",
+    "zou21_4bin": "Zou21",
+    "yang21_mass_4bin": "Yang21 (Halo Mass)",
+    "yang21_richness_4bin": "Yang21 (Richness)",
+    "clumpr_mass_4bin": "CluMPR (Mass)",
+    "clumpr_richness_4bin": "CluMPR (Richness)",
+    "rz_diff_4bin": "r-z Diff",
+    "rz_diff_preset_4bin": "r-z Diff (Preset)",
+    "rz_diff_single_box_4bin": "r-z Diff (Single Box)",
+    "rz_diff_two_box_red_4bin": "r-z Diff (Two Box Red)",
+    "rz_diff_six_param_4bin": "r-z Diff (Six Param)",
+    "redm_r16_4bin": "redMaPPer R16",
+    "amico_4bin": "AMICO",
+    "cosine_4bin": "COSINE",
+    "pls_4bin": "PLS",
+    "regression_4bin": "Regression",
+    "cca1_4bin": "CCA1",
+    "cca2_4bin": "CCA2",
+    "ideal_mdpl2_4bin": "Ideal MDPL2",
+    "ideal_colossus_4bin": "Ideal Colossus",
 }
 
 # Bind first-figure styles to catalog families across run and source versions.
