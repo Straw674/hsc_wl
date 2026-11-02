@@ -260,7 +260,7 @@ DISPLAY_NAMES = {
     "zou21_1bin": "Zou et al. (2021)",
 }
 
-OUTPUT_FIG = project_root / "output/plots_for_agents/compare_profile_scatter_1bin.png"
+OUTPUT_FIG = project_root / "output/plots_for_agents/compare_theory_scatter_1bin.png"
 
 # %% [Stage 1: Load summaries and display table]
 summaries = load_profile_summaries(LABELS, version=VERSION, root_path=project_root)

@@ -473,7 +473,7 @@ RHO_BINS = np.array(
 )
 
 # Output destination for the saved figure
-OUTPUT_FIG = project_root / "output/plots_for_agents/compare_scatter.png"
+OUTPUT_FIG = project_root / "output/plots_for_agents/compare_mdpl2_scatter.png"
 
 
 # %% [Stage 1: Load data]
@@ -507,7 +507,7 @@ else:
 # %% [Stage 3: Plot grouped comparison]
 GROUPED_OFFSET_WIDTH = 0.15
 GROUPED_OUTPUT_FIG = (
-    project_root / "output/plots_for_agents/compare_scatter_grouped.png"
+    project_root / "output/plots_for_agents/compare_mdpl2_scatter_grouped.png"
 )
 
 if data_dict:
@@ -525,7 +525,9 @@ else:
 
 
 # %% [Stage 4: Plot panel comparison]
-PANEL_OUTPUT_FIG = project_root / "output/plots_for_agents/compare_scatter_panels.png"
+PANEL_OUTPUT_FIG = (
+    project_root / "output/plots_for_agents/compare_mdpl2_scatter_panels.png"
+)
 
 if data_dict:
     plot_panel_scatter_comparison(

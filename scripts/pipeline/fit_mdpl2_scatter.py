@@ -160,7 +160,7 @@ def process_scatter_for_label(
     )
 
     print(f"\n{'=' * 60}")
-    print(f"Processing scatter fitting for: {label} ({version})")
+    print(f"Processing MDPL2 simulation scatter fitting for: {label} ({version})")
     print(f"{'=' * 60}")
 
     obs = load_observed_profiles(root_path, fits_files)
