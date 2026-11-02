@@ -1,6 +1,7 @@
 # %% [Initialization]
 import sys
 from pathlib import Path
+from typing import Any
 
 # Dynamically locate the project root using pyproject.toml as a marker
 project_root = Path(__file__).resolve().parent
@@ -59,6 +60,25 @@ def load_profile_summaries(
     return data
 
 
+def _clean_err(err_val: Any) -> float:
+    """Return standard float or np.nan, safely handling MaskedConstant."""
+    if err_val is None or np.ma.is_masked(err_val) or not np.isfinite(err_val):
+        return np.nan
+    return float(err_val)
+
+
+def _fmt_val_err(val: Any, err: Any, val_fmt: str = ".2f", err_fmt: str = ".2f") -> str:
+    """Format value +/- error for markdown table."""
+    v_str = (
+        f"{float(val):{val_fmt}}"
+        if (val is not None and not np.ma.is_masked(val) and np.isfinite(val))
+        else "N/A"
+    )
+    if err is None or np.ma.is_masked(err) or not np.isfinite(err):
+        return f"{v_str} ± --"
+    return f"{v_str} ± {float(err):{err_fmt}}"
+
+
 def format_comparison_table(summaries: dict[str, Table]) -> str:
     """Format a clean markdown table summarizing parameters across all catalogs."""
     header = (
@@ -74,15 +94,15 @@ def format_comparison_table(summaries: dict[str, Table]) -> str:
             b_suffix = f" (bin {row['bin_id']})" if len(tbl) > 1 else ""
             line = (
                 f"| `{lbl}{b_suffix}` "
-                f"| {row['scatter']:.3f} ± {row['scatter_err']:.3f} "
-                f"| {row['alpha_c']:.2f} ± {row['alpha_c_err']:.2f} "
-                f"| {row['mean_c']:.1f} "
-                f"| {row['alpha_b']:.2f} ± {row['alpha_b_err']:.2f} "
-                f"| {row['mean_b']:.2f} "
-                f"| {row['f_mis']:.2f} ± {row['f_mis_err']:.2f} "
-                f"| {row['sigma_R']:.1f} ± {row['sigma_R_err']:.1f} "
-                f"| {row['mean_logm']:.3f} "
-                f"| {row['chi2_reduced']:.3f} |"
+                f"| {_fmt_val_err(row['scatter'], row['scatter_err'], '.3f', '.3f')} "
+                f"| {_fmt_val_err(row['alpha_c'], row['alpha_c_err'], '.2f', '.2f')} "
+                f"| {float(row['mean_c']):.1f} "
+                f"| {_fmt_val_err(row['alpha_b'], row['alpha_b_err'], '.2f', '.2f')} "
+                f"| {float(row['mean_b']):.2f} "
+                f"| {_fmt_val_err(row['f_mis'], row['f_mis_err'], '.2f', '.2f')} "
+                f"| {_fmt_val_err(row['sigma_R'], row['sigma_R_err'], '.1f', '.1f')} "
+                f"| {float(row['mean_logm']):.3f} "
+                f"| {float(row['chi2_reduced']):.3f} |"
             )
             rows.append(line)
     return "\n".join(rows)
@@ -121,8 +141,8 @@ def plot_profile_parameter_comparison(
         # 1. Scatter
         ax_scatter.errorbar(
             i,
-            row["scatter"],
-            yerr=row["scatter_err"],
+            float(row["scatter"]),
+            yerr=_clean_err(row["scatter_err"]),
             fmt="o",
             color=c,
             capsize=4,
@@ -130,16 +150,16 @@ def plot_profile_parameter_comparison(
         )
 
         # 2. Mean Halo Mass
-        ax_mass.scatter(i, row["mean_logm"], color=c, s=60)
+        ax_mass.scatter(i, float(row["mean_logm"]), color=c, s=60)
 
         # 3. Reduced Chi2
-        ax_chi2.scatter(i, row["chi2_reduced"], color=c, s=60)
+        ax_chi2.scatter(i, float(row["chi2_reduced"]), color=c, s=60)
 
         # 4. Concentration alpha_c
         ax_conc.errorbar(
             i,
-            row["alpha_c"],
-            yerr=row["alpha_c_err"],
+            float(row["alpha_c"]),
+            yerr=_clean_err(row["alpha_c_err"]),
             fmt="s",
             color=c,
             capsize=4,
@@ -149,8 +169,8 @@ def plot_profile_parameter_comparison(
         # 5. Bias alpha_b
         ax_bias.errorbar(
             i,
-            row["alpha_b"],
-            yerr=row["alpha_b_err"],
+            float(row["alpha_b"]),
+            yerr=_clean_err(row["alpha_b_err"]),
             fmt="^",
             color=c,
             capsize=4,
@@ -160,8 +180,8 @@ def plot_profile_parameter_comparison(
         # 6. Miscentering f_mis
         ax_mis.errorbar(
             i,
-            row["f_mis"],
-            yerr=row["f_mis_err"],
+            float(row["f_mis"]),
+            yerr=_clean_err(row["f_mis_err"]),
             fmt="d",
             color=c,
             capsize=4,
