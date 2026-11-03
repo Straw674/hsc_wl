@@ -206,7 +206,9 @@ def fit_label_profile_scatter(
             f"Scatter={p_scatter:.3f} +/- {fit_res['scatter_err']:.3f}, "
             f"alpha_c={p_ac:.3f} +/- {fit_res['alpha_c_err']:.3f}, "
             f"alpha_b={p_ab:.3f} +/- {fit_res['alpha_b_err']:.3f} | "
-            f"<logM>={fit_res['mean_logm']:.3f}, <c>={fit_res['mean_c']:.2f}, <b>={fit_res['mean_b']:.2f} | "
+            f"<logM>={fit_res['mean_logm']:.3f} +/- {fit_res['mean_logm_err']:.3f}, "
+            f"<c>={fit_res['mean_c']:.2f} +/- {fit_res['mean_c_err']:.2f}, "
+            f"<b>={fit_res['mean_b']:.2f} +/- {fit_res['mean_b_err']:.2f} | "
             f"Chi2/dof={fit_res['chi2_reduced']:.3f} (Chi2={fit_res['chi2']:.2f}, dof={fit_res['n_dof']})"
         )
 
@@ -571,13 +573,12 @@ def plot_profile_fit_decomposition(
 # "rz_diff_lum_1bin", "rz_diff_1bin", "rz_diff_4bin", "rz_diff_lum_4bin",
 # "camira_1bin", "camira_4bin", "redm_s16a_1bin", etc.
 LABELS = [
-    "redm_r16_1bin",
-    "camira_1bin",
-    "rz_diff_1bin",
-    "rz_diff_preset_1bin",
-    "rz_diff_single_box_1bin",
-    "rz_diff_two_box_red_match_recovery_1bin",
-    "wh24_1bin",
+    "redm_r16_4bin",
+    "camira_4bin",
+    "rz_diff_4bin",
+    "rz_diff_preset_4bin",
+    "rz_diff_single_box_4bin",
+    "wh24_4bin",
 ]
 
 VERSION = "Y3"  # "Y1" or "Y3"

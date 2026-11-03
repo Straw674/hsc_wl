@@ -513,6 +513,119 @@ def compute_numerical_hessian(
     return hessian
 
 
+def compute_derived_quantities_and_errors(
+    scatter: float,
+    alpha_c: float,
+    alpha_b: float,
+    cov_params: np.ndarray,
+    bin_index: int,
+    model_state: dict[str, Any],
+    step_sigma: float = 1e-4,
+) -> tuple[dict[str, float], np.ndarray]:
+    """Compute derived physical quantities (<logM>, <c>, <b>) and propagate errors via Delta method.
+
+    The primary model parameters are theta = [scatter, alpha_c, alpha_b].
+    The derived quantities y = [mean_logm, mean_c, mean_b] are non-linear functions of theta.
+    The covariance matrix of y is propagated via the Jacobian J = dy / dtheta:
+        Sigma_y = J @ Sigma_theta @ J.T
+
+    Parameters
+    ----------
+    scatter : float
+        Fitted mass-observable scatter sigma_lnM.
+    alpha_c : float
+        Fitted concentration scaling factor.
+    alpha_b : float
+        Fitted bias scaling factor.
+    cov_params : ndarray of shape (3, 3)
+        Parameter covariance matrix Sigma_theta.
+    bin_index : int
+        Index of the bin being evaluated.
+    model_state : dict
+        Precomputed background model state.
+    step_sigma : float, default=1e-4
+        Finite difference step for d/dscatter.
+
+    Returns
+    -------
+    derived : dict of {str: float}
+        mean_logm, mean_logm_err, mean_c, mean_c_err, mean_b, mean_b_err.
+    cov_derived : ndarray of shape (3, 3)
+        Covariance matrix of [mean_logm, mean_c, mean_b].
+    """
+    w0 = compute_mass_weights(
+        scatter=scatter,
+        bin_index=bin_index,
+        th_splines=model_state["th_splines"],
+        m_dense=model_state["m_dense"],
+        dndlnm_dense=model_state["dndlnm_dense"],
+        dlogm=model_state["dlogm"],
+    )
+    mean_logm = float(np.sum(model_state["m_dense"] * w0))
+    c_base = float(np.sum(model_state["c_base_dense"] * w0))
+    b_base = float(np.sum(model_state["b_base_dense"] * w0))
+    mean_c = float(alpha_c * c_base)
+    mean_b = float(alpha_b * b_base)
+
+    wp = compute_mass_weights(
+        scatter=scatter + step_sigma,
+        bin_index=bin_index,
+        th_splines=model_state["th_splines"],
+        m_dense=model_state["m_dense"],
+        dndlnm_dense=model_state["dndlnm_dense"],
+        dlogm=model_state["dlogm"],
+    )
+    wm = compute_mass_weights(
+        scatter=scatter - step_sigma,
+        bin_index=bin_index,
+        th_splines=model_state["th_splines"],
+        m_dense=model_state["m_dense"],
+        dndlnm_dense=model_state["dndlnm_dense"],
+        dlogm=model_state["dlogm"],
+    )
+
+    dlogm_ds = (
+        np.sum(model_state["m_dense"] * wp) - np.sum(model_state["m_dense"] * wm)
+    ) / (2.0 * step_sigma)
+    dcbase_ds = (
+        np.sum(model_state["c_base_dense"] * wp)
+        - np.sum(model_state["c_base_dense"] * wm)
+    ) / (2.0 * step_sigma)
+    dbbase_ds = (
+        np.sum(model_state["b_base_dense"] * wp)
+        - np.sum(model_state["b_base_dense"] * wm)
+    ) / (2.0 * step_sigma)
+
+    # Jacobian matrix J of shape (3, 3)
+    # y = [mean_logm, mean_c, mean_b], theta = [scatter, alpha_c, alpha_b]
+    J = np.array(
+        [
+            [dlogm_ds, 0.0, 0.0],
+            [alpha_c * dcbase_ds, c_base, 0.0],
+            [alpha_b * dbbase_ds, 0.0, b_base],
+        ]
+    )
+
+    try:
+        cov_derived = J @ cov_params @ J.T
+        diag = np.diag(cov_derived)
+        errs = np.where(diag > 0, np.sqrt(diag), np.nan)
+    except Exception as e:
+        logger.warning("Error propagating derived covariance: %s", e)
+        cov_derived = np.full((3, 3), np.nan)
+        errs = np.full(3, np.nan)
+
+    res = {
+        "mean_logm": mean_logm,
+        "mean_logm_err": float(errs[0]),
+        "mean_c": mean_c,
+        "mean_c_err": float(errs[1]),
+        "mean_b": mean_b,
+        "mean_b_err": float(errs[2]),
+    }
+    return res, cov_derived
+
+
 def fit_profile_scatter_map(
     model_state: dict[str, Any],
     ds_obs_colossus: np.ndarray,
@@ -610,8 +723,13 @@ def fit_profile_scatter_map(
             "chi2_reduced": np.nan,
             "n_dof": n_dof,
             "mean_logm": np.nan,
+            "mean_logm_err": np.nan,
             "mean_c": np.nan,
+            "mean_c_err": np.nan,
             "mean_b": np.nan,
+            "mean_b_err": np.nan,
+            "cov_params": np.full((3, 3), np.nan),
+            "cov_derived": np.full((3, 3), np.nan),
             "success": False,
         }
 
@@ -640,20 +758,18 @@ def fit_profile_scatter_map(
         errors = np.where(diag > 0, np.sqrt(diag), np.nan)
     except Exception as e:
         logger.warning("Hessian inversion failed: %s", e)
+        cov_params = np.full((3, 3), np.nan)
         errors = np.full(3, np.nan)
 
-    # Compute derived physical quantities <logM>, <c>, <b>
-    weights = compute_mass_weights(
+    # Compute derived physical quantities <logM>, <c>, <b> and propagate errors
+    derived_res, cov_derived = compute_derived_quantities_and_errors(
         scatter=scatter_best,
+        alpha_c=ac_best,
+        alpha_b=ab_best,
+        cov_params=cov_params,
         bin_index=bin_index,
-        th_splines=model_state["th_splines"],
-        m_dense=model_state["m_dense"],
-        dndlnm_dense=model_state["dndlnm_dense"],
-        dlogm=model_state["dlogm"],
+        model_state=model_state,
     )
-    mean_logm = float(np.sum(model_state["m_dense"] * weights))
-    mean_c = float(ac_best * np.sum(model_state["c_base_dense"] * weights))
-    mean_b = float(ab_best * np.sum(model_state["b_base_dense"] * weights))
 
     return {
         "scatter": float(scatter_best),
@@ -667,9 +783,9 @@ def fit_profile_scatter_map(
         "chi2": float(chi2),
         "chi2_reduced": float(chi2_red),
         "n_dof": int(n_dof),
-        "mean_logm": mean_logm,
-        "mean_c": mean_c,
-        "mean_b": mean_b,
+        "cov_params": cov_params,
+        "cov_derived": cov_derived,
+        **derived_res,
         "success": bool(best_result.success),
     }
 

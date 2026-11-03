@@ -91,14 +91,23 @@ def format_comparison_table(summaries: dict[str, Table]) -> str:
     for lbl, tbl in summaries.items():
         for row in tbl:
             b_suffix = f" (bin {row['bin_id']})" if len(tbl) > 1 else ""
+            mean_c_err = (
+                row["mean_c_err"] if "mean_c_err" in row.colnames else None
+            )
+            mean_b_err = (
+                row["mean_b_err"] if "mean_b_err" in row.colnames else None
+            )
+            mean_logm_err = (
+                row["mean_logm_err"] if "mean_logm_err" in row.colnames else None
+            )
             line = (
                 f"| `{lbl}{b_suffix}` "
                 f"| {_fmt_val_err(row['scatter'], row['scatter_err'], '.3f', '.3f')} "
                 f"| {_fmt_val_err(row['alpha_c'], row['alpha_c_err'], '.2f', '.2f')} "
-                f"| {float(row['mean_c']):.1f} "
+                f"| {_fmt_val_err(row['mean_c'], mean_c_err, '.1f', '.2f')} "
                 f"| {_fmt_val_err(row['alpha_b'], row['alpha_b_err'], '.2f', '.2f')} "
-                f"| {float(row['mean_b']):.2f} "
-                f"| {float(row['mean_logm']):.3f} "
+                f"| {_fmt_val_err(row['mean_b'], mean_b_err, '.2f', '.2f')} "
+                f"| {_fmt_val_err(row['mean_logm'], mean_logm_err, '.3f', '.3f')} "
                 f"| {float(row['chi2_reduced']):.3f} |"
             )
             rows.append(line)
@@ -130,72 +139,116 @@ def plot_profile_parameter_comparison(
     catalog_names = []
 
     for i, lbl in enumerate(labels):
-        row = summaries[lbl][0]  # First bin for 1-bin mode
+        tbl = summaries[lbl]
         c = colors[i % len(colors)]
         m = markers[i % len(markers)]
         name = display_names.get(lbl, lbl)
         catalog_names.append(name)
 
-        logm = float(row["mean_logm"])
-        scatter = float(row["scatter"])
-        scatter_err = _clean_err(row["scatter_err"])
-        alpha_c = float(row["alpha_c"])
-        alpha_c_err = _clean_err(row["alpha_c_err"])
-        alpha_b = float(row["alpha_b"])
-        alpha_b_err = _clean_err(row["alpha_b_err"])
-        chi2_red = float(row["chi2_reduced"])
+        logm_arr = np.array([float(r["mean_logm"]) for r in tbl])
+        sc_arr = np.array([float(r["scatter"]) for r in tbl])
+        sc_err_arr = np.array([_clean_err(r["scatter_err"]) for r in tbl])
+        ac_arr = np.array([float(r["alpha_c"]) for r in tbl])
+        ac_err_arr = np.array([_clean_err(r["alpha_c_err"]) for r in tbl])
+        ab_arr = np.array([float(r["alpha_b"]) for r in tbl])
+        ab_err_arr = np.array([_clean_err(r["alpha_b_err"]) for r in tbl])
+        chi2_arr = np.array([float(r["chi2_reduced"]) for r in tbl])
+
+        # Connect multi-bin with trajectory line
+        if len(tbl) > 1:
+            sort_idx = np.argsort(logm_arr)
+            ax_mass_scatter.plot(
+                logm_arr[sort_idx],
+                sc_arr[sort_idx],
+                linestyle="--",
+                color=c,
+                alpha=0.45,
+                linewidth=1.2,
+                zorder=1,
+            )
+            ax_mass_conc.plot(
+                logm_arr[sort_idx],
+                ac_arr[sort_idx],
+                linestyle="--",
+                color=c,
+                alpha=0.45,
+                linewidth=1.2,
+                zorder=1,
+            )
+            ax_mass_bias.plot(
+                logm_arr[sort_idx],
+                ab_arr[sort_idx],
+                linestyle="--",
+                color=c,
+                alpha=0.45,
+                linewidth=1.2,
+                zorder=1,
+            )
+            ax_mass_chi2.plot(
+                logm_arr[sort_idx],
+                chi2_arr[sort_idx],
+                linestyle="--",
+                color=c,
+                alpha=0.45,
+                linewidth=1.2,
+                zorder=1,
+            )
 
         # 1. Mass - Scatter
         h = ax_mass_scatter.errorbar(
-            logm,
-            scatter,
-            yerr=scatter_err,
+            logm_arr,
+            sc_arr,
+            yerr=sc_err_arr,
             fmt=m,
             color=c,
             ecolor=c,
             capsize=3,
             elinewidth=1.2,
-            markersize=7,
+            markersize=6.5,
             label=name,
+            zorder=2,
         )
         handles.append(h)
 
         # 2. Mass - Concentration
         ax_mass_conc.errorbar(
-            logm,
-            alpha_c,
-            yerr=alpha_c_err,
+            logm_arr,
+            ac_arr,
+            yerr=ac_err_arr,
             fmt=m,
             color=c,
             ecolor=c,
             capsize=3,
             elinewidth=1.2,
-            markersize=7,
+            markersize=6.5,
+            zorder=2,
         )
 
         # 3. Mass - Bias
         ax_mass_bias.errorbar(
-            logm,
-            alpha_b,
-            yerr=alpha_b_err,
+            logm_arr,
+            ab_arr,
+            yerr=ab_err_arr,
             fmt=m,
             color=c,
             ecolor=c,
             capsize=3,
             elinewidth=1.2,
-            markersize=7,
+            markersize=6.5,
+            zorder=2,
         )
 
         # 4. Mass - Reduced Chi2
         ax_mass_chi2.errorbar(
-            logm,
-            chi2_red,
+            logm_arr,
+            chi2_arr,
             fmt=m,
             color=c,
             ecolor=c,
             capsize=3,
             elinewidth=1.2,
-            markersize=7,
+            markersize=6.5,
+            zorder=2,
         )
 
     # Reference lines and styling
@@ -264,29 +317,32 @@ def plot_profile_parameter_comparison(
 # %% Global Configuration
 
 LABELS = [
-    "redm_r16_1bin",
-    "camira_1bin",
-    "rz_diff_1bin",
-    "rz_diff_preset_1bin",
-    "rz_diff_single_box_1bin",
-    "rz_diff_two_box_red_match_recovery_1bin",
-    "wh24_1bin",
+    "redm_r16_4bin",
+    "camira_4bin",
+    "rz_diff_4bin",
+    "rz_diff_preset_4bin",
+    "rz_diff_single_box_4bin",
+    "wh24_4bin",
 ]
 
 VERSION = "Y3"
 
 DISPLAY_NAMES = {
+    "redm_r16_4bin": "redMaPPer (R16)",
+    "camira_4bin": "CAMIRA",
+    "rz_diff_4bin": "rz_diff (Baseline)",
+    "rz_diff_preset_4bin": "rz_diff (Preset)",
+    "rz_diff_single_box_4bin": "rz_diff (Single Box)",
+    "wh24_4bin": "Wen & Han (2024)",
     "redm_r16_1bin": "redMaPPer (R16)",
     "camira_1bin": "CAMIRA",
     "rz_diff_1bin": "rz_diff (Baseline)",
     "rz_diff_preset_1bin": "rz_diff (Preset)",
     "rz_diff_single_box_1bin": "rz_diff (Single Box)",
-    "rz_diff_two_box_red_match_recovery_1bin": "rz_diff (Two Box Recovery)",
     "wh24_1bin": "Wen & Han (2024)",
-    "zou21_1bin": "Zou et al. (2021)",
 }
 
-OUTPUT_FIG = project_root / "output/plots_for_agents/compare_theory_scatter_1bin.png"
+OUTPUT_FIG = project_root / "output/plots_for_agents/compare_theory_scatter_4bin.png"
 
 # %% [Stage 1: Load summaries and display table]
 summaries = load_profile_summaries(LABELS, version=VERSION, root_path=project_root)
