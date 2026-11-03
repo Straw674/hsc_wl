@@ -89,6 +89,7 @@ def fit_label_profile_scatter(
     mass_def: str = "200m",
     f_mis: float = 0.25,
     sigma_r: float = 100.0,
+    max_valid_bins: int | None = None,
 ) -> tuple[Table, dict]:
     """Fit all bins of a given run label with flexible profile scatter model.
 
@@ -108,6 +109,9 @@ def fit_label_profile_scatter(
         Fixed miscentered cluster fraction.
     sigma_r : float, default=100.0
         Fixed miscentering scale sigma_R in kpc/h.
+    max_valid_bins : int or None, optional
+        Maximum number of valid bins to process. If specified, truncates bins
+        beyond this limit (e.g. for catalogs with completeness cutoffs).
 
     Returns
     -------
@@ -127,6 +131,11 @@ def fit_label_profile_scatter(
         raise FileNotFoundError(f"No dsigma FITS found in {dsigma_dir}")
 
     area_deg2, z_min, z_max, bin_counts = load_label_metadata(label, root_path)
+
+    # Restrict to valid complete bins if configured
+    if max_valid_bins is not None:
+        fits_files = fits_files[:max_valid_bins]
+        bin_counts = bin_counts[:max_valid_bins]
 
     # Adjust bin_counts length to match available dsigma fits files if needed
     if len(bin_counts) > len(fits_files):
@@ -582,12 +591,20 @@ MASS_DEF = "200m"
 FIXED_F_MIS = 0.25
 FIXED_SIGMA_R = 100.0  # kpc/h
 
+# Upstream bin filtering: maximum valid complete bins to process per label.
+# redm_r16_4bin has a completeness cutoff (lambda >= 20) and only populates the top 2 bins.
+# Incomplete tail bins are discarded upstream so downstream only displays valid bins.
+LABEL_MAX_VALID_BINS: dict[str, int] = {
+    "redm_r16_4bin": 2,
+}
+
 OUTPUT_PLOT_DIR = project_root / "output/plots_for_agents"
 
 # %% [Stage 1: Process and fit all configured labels]
 all_summaries = {}
 for lbl in LABELS:
     try:
+        max_b = LABEL_MAX_VALID_BINS.get(lbl, None)
         tbl_summary, _ = fit_label_profile_scatter(
             label=lbl,
             version=VERSION,
@@ -596,6 +613,7 @@ for lbl in LABELS:
             mass_def=MASS_DEF,
             f_mis=FIXED_F_MIS,
             sigma_r=FIXED_SIGMA_R,
+            max_valid_bins=max_b,
         )
         all_summaries[lbl] = tbl_summary
     except Exception as e:
