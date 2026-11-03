@@ -16,14 +16,19 @@ if not (root_path / "pyproject.toml").exists():
 if str(root_path) not in sys.path:
     sys.path.insert(0, str(root_path))
 
+import scipy.integrate as integrate
+import scipy.interpolate as interp
 import scipy.optimize as optimize
 from astropy.table import Table
 from colossus.cosmology import cosmology
+from colossus.halo import mass_so
+from colossus.lss import mass_function
 
 from hsc_wl.profile_scatter import (
     build_profile_scatter_model,
     compute_derived_quantities_and_errors,
     compute_stacked_profile_dsigma,
+    compute_vectorized_nfw_profiles,
     fit_profile_scatter_map,
     load_dsigma_profile,
 )
@@ -120,7 +125,7 @@ def fit_scatter_fixed_nuisance(
         neg_log_lik,
         x0=[0.35],
         method="L-BFGS-B",
-        bounds=[(0.05, 1.50)],
+        bounds=[(0.02, 1.50)],
         options={"ftol": 1e-8, "maxiter": 100},
     )
     s_best = float(res.x[0])
@@ -256,13 +261,145 @@ def execute_e2e_recovery_test(
     }
 
 
+def sample_halos_from_hmf(
+    v_survey: float,
+    z_lens: float,
+    m_min: float = 12.0,
+    m_max: float = 15.8,
+    mass_def: str = "200m",
+    model: str = "tinker08",
+    seed: int = 42,
+) -> np.ndarray:
+    """Sample dark matter halo catalog in a cosmological volume using inverse CDF transform."""
+    m_grid = np.linspace(m_min, m_max, 500)
+    dndm_grid = np.array(
+        [
+            mass_function.massFunction(
+                10**m, z_lens, mdef=mass_def, model=model, q_out="dndlnM"
+            )
+            * np.log(10)
+            for m in m_grid
+        ]
+    )
+    cum_n = integrate.cumulative_trapezoid(dndm_grid, m_grid, initial=0.0)
+    total_n = cum_n[-1]
+    inv_cdf = interp.InterpolatedUnivariateSpline(cum_n / total_n, m_grid)
+
+    rng = np.random.default_rng(seed)
+    n_expected = total_n * v_survey
+    n_sampled = rng.poisson(n_expected)
+    u = rng.uniform(0.0, 1.0, n_sampled)
+    return inv_cdf(u)
+
+
+def run_mc_halo_recovery_grid(
+    scatters_to_test: list[float],
+    m_halos: np.ndarray,
+    n_top: int,
+    model_state: dict[str, Any],
+    cov_inv_col: np.ndarray,
+    seed: int = 42,
+) -> list[dict[str, float]]:
+    """Simulate halo selection with scatter, stack WL profiles, and recover scatter."""
+    rng = np.random.default_rng(seed)
+    n_total = len(m_halos)
+
+    c_lookup = interp.InterpolatedUnivariateSpline(
+        model_state["m_dense"], model_state["c_base_dense"]
+    )
+    b_lookup = interp.InterpolatedUnivariateSpline(
+        model_state["m_dense"], model_state["b_base_dense"]
+    )
+
+    results = []
+    for s_true in scatters_to_test:
+        # 1. Add log-normal scatter to halo masses to simulate proxy (richness)
+        mu = m_halos + rng.normal(0.0, s_true, n_total)
+
+        # 2. Rank by proxy and select top N halos
+        top_idx = np.argsort(mu)[-n_top:]
+        m_top = m_halos[top_idx]
+
+        # 3. Compute individual NFW and 2-halo profiles and stack them
+        c_top = np.clip(c_lookup(m_top), 1.0, 20.0)
+        b_top = b_lookup(m_top)
+        r200m_top = np.array(
+            [mass_so.M_to_R(10**m, model_state["z_lens"], "200m") for m in m_top]
+        )
+
+        _, ds_grid = compute_vectorized_nfw_profiles(
+            r200m_dense=r200m_top,
+            c_arr=c_top,
+            rho_m=model_state["rho_m"],
+            rp_dense=model_state["rp_dense"],
+            rp_kpc_h=model_state["rp_kpc_h"],
+        )
+        ds_stacked = np.mean(ds_grid, axis=0) + np.mean(b_top) * model_state["ds_xi"]
+
+        # 4. Invert scatter using the pipeline forward model
+        fit_fix = fit_scatter_fixed_nuisance(
+            model_state=model_state,
+            ds_obs_col=ds_stacked,
+            cov_inv_col=cov_inv_col,
+            bin_index=0,
+            alpha_c_fixed=1.0,
+            alpha_b_fixed=1.0,
+            f_mis=0.0,
+            sigma_r=0.0,
+        )
+        fit_free = fit_profile_scatter_map(
+            model_state=model_state,
+            ds_obs_colossus=ds_stacked,
+            cov_inv_colossus=cov_inv_col,
+            bin_index=0,
+            f_mis=0.0,
+            sigma_r=0.0,
+        )
+
+        # 5. Also compute continuous theoretical noiseless recovery for comparison
+        ds_theo = compute_stacked_profile_dsigma(
+            scatter=s_true,
+            alpha_c=1.0,
+            alpha_b=1.0,
+            f_mis=0.0,
+            sigma_R=0.0,
+            bin_index=0,
+            model_state=model_state,
+        )
+        fit_theo = fit_scatter_fixed_nuisance(
+            model_state=model_state,
+            ds_obs_col=ds_theo,
+            cov_inv_col=cov_inv_col,
+            bin_index=0,
+            alpha_c_fixed=1.0,
+            alpha_b_fixed=1.0,
+            f_mis=0.0,
+            sigma_r=0.0,
+        )
+
+        results.append(
+            {
+                "s_true": s_true,
+                "s_theo": fit_theo["scatter"],
+                "s_mc_fixed": fit_fix["scatter"],
+                "s_mc_free": fit_free["scatter"],
+                "ac_mc_free": fit_free["alpha_c"],
+                "ab_mc_free": fit_free["alpha_b"],
+                "mean_logm_true": float(np.mean(m_top)),
+                "mean_logm_fit": fit_fix["mean_logm"],
+            }
+        )
+    return results
+
+
 def plot_e2e_recovery_summary(
     recovery_data: dict[str, Any],
+    grid_results: list[dict[str, float]],
     rp_mpc: np.ndarray,
     ds_phys_err: np.ndarray,
     out_plot_path: Path,
 ) -> None:
-    """Create three-panel diagnostic plot summarizing the e2e scatter recovery."""
+    """Create four-panel diagnostic plot summarizing the e2e scatter recovery."""
     true_s = recovery_data["true_scatter"]
     ds_true = recovery_data["ds_phys_true"]
     mock_phys = recovery_data["mock_phys_profiles"]
@@ -274,7 +411,7 @@ def plot_e2e_recovery_summary(
     logm_fixed = np.array([r["mean_logm"] for r in fixed_res])
     logm_free = np.array([r["mean_logm"] for r in free_res])
 
-    fig, axes = plt.subplots(1, 3, figsize=(15.0, 4.6))
+    fig, axes = plt.subplots(1, 4, figsize=(19.0, 4.4))
 
     # Panel 1: Profiles
     ax = axes[0]
@@ -284,7 +421,7 @@ def plot_e2e_recovery_summary(
         np.percentile(mock_phys, 84, axis=0),
         color="lightgray",
         alpha=0.6,
-        label=r"Mock $1\sigma$ Envelopes",
+        label=r"Mock $1\sigma$ Envelope",
     )
     ax.errorbar(
         rp_mpc,
@@ -310,7 +447,7 @@ def plot_e2e_recovery_summary(
     ax.set_ylabel(r"$\Delta\Sigma\ [\mathrm{M_\odot/pc^2}]$")
     ax.set_title("Weak Lensing Profiles", fontweight="normal")
     ax.grid(True, which="both", linestyle=":", alpha=0.35)
-    ax.legend(fontsize=8.5)
+    ax.legend(fontsize=8.0)
 
     # Panel 2: Recovered Scatter Distributions
     ax = axes[1]
@@ -344,7 +481,7 @@ def plot_e2e_recovery_summary(
     ax.set_ylabel("Posterior Density")
     ax.set_title("Scatter Recovery Distribution", fontweight="normal")
     ax.grid(True, linestyle=":", alpha=0.35)
-    ax.legend(fontsize=8.0)
+    ax.legend(fontsize=7.8)
 
     # Panel 3: Scatter vs Mean Mass Degeneracy
     ax = axes[2]
@@ -381,7 +518,45 @@ def plot_e2e_recovery_summary(
     ax.set_ylabel(r"$\langle \log_{10} M_{\rm 200m} \rangle$")
     ax.set_title(r"$\sigma$ vs. Effective Mean Mass", fontweight="normal")
     ax.grid(True, linestyle=":", alpha=0.35)
-    ax.legend(fontsize=8.0)
+    ax.legend(fontsize=7.8)
+
+    # Panel 4: Full Range Scan (0.1 - 0.8)
+    ax = axes[3]
+    g_true = [g["s_true"] for g in grid_results]
+    g_theo = [g["s_theo"] for g in grid_results]
+    g_mc_fix = [g["s_mc_fixed"] for g in grid_results]
+    g_mc_free = [g["s_mc_free"] for g in grid_results]
+
+    ax.plot([0.05, 0.85], [0.05, 0.85], "k--", linewidth=1.2, label="1:1 Truth")
+    ax.plot(
+        g_true,
+        g_theo,
+        "-",
+        color="crimson",
+        linewidth=1.8,
+        label="Noiseless Theoretical Limit",
+    )
+    ax.plot(
+        g_true,
+        g_mc_fix,
+        "o-",
+        color="forestgreen",
+        markersize=5,
+        label="HMF Top 1k (Fixed alpha)",
+    )
+    ax.plot(
+        g_true,
+        g_mc_free,
+        "s--",
+        color="royalblue",
+        markersize=5,
+        label="HMF Top 1k (Free alpha)",
+    )
+    ax.set_xlabel(r"True Scatter $\sigma_{\rm true}$")
+    ax.set_ylabel(r"Recovered Scatter $\hat{\sigma}$")
+    ax.set_title("Recovery Dynamic Range (0.1 - 0.8)", fontweight="normal")
+    ax.grid(True, linestyle=":", alpha=0.35)
+    ax.legend(fontsize=7.5)
 
     plt.tight_layout()
     out_plot_path.parent.mkdir(parents=True, exist_ok=True)
@@ -410,6 +585,10 @@ LENS_BIN_COUNTS = [3000]
 LENS_AREA_DEG2 = 439.4937
 Z_MIN = 0.19
 Z_MAX = 0.52
+
+# Grid of scatters to benchmark dynamic range
+SCATTERS_GRID = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80]
+N_TOP_HALOS = 1000
 
 # Base reference FITS file for realistic radii, lens redshift, and covariance
 REF_FITS_PATH = (
@@ -488,10 +667,58 @@ print(
 )
 print("=" * 70 + "\n")
 
-# %% [Stage 2: Plot Diagnostic Summary]
+# %% [Stage 2: Monte Carlo Halo Sampling and 0.1-0.8 Dynamic Range Benchmark]
+
+logging.info("Sampling cosmological halos from HMF across survey volume...")
+sampled_m_halos = sample_halos_from_hmf(
+    v_survey=e2e_model_state["v_survey"],
+    z_lens=z_lens_ref,
+    m_min=12.0,
+    m_max=15.8,
+    mass_def=MASS_DEF,
+    model="tinker08",
+    seed=RANDOM_SEED,
+)
+logging.info(f"Sampled {len(sampled_m_halos)} dark matter halos in survey volume.")
+
+logging.info("Building Top 1k model state for Monte Carlo halo recovery...")
+top1k_model_state = build_profile_scatter_model(
+    rp_kpc_h=rp_kpc_h_ref,
+    z_lens=z_lens_ref,
+    bin_counts=[N_TOP_HALOS],
+    area_sq_deg=LENS_AREA_DEG2,
+    z_min=Z_MIN,
+    z_max=Z_MAX,
+    cosmology_name=COSMOLOGY_NAME,
+    mass_def=MASS_DEF,
+)
+
+print("=" * 75)
+print(f"DYNAMIC RANGE BENCHMARK (0.1 - 0.8) - Top {N_TOP_HALOS} HMF Halo Selection")
+print("=" * 75)
+grid_benchmarks = run_mc_halo_recovery_grid(
+    scatters_to_test=SCATTERS_GRID,
+    m_halos=sampled_m_halos,
+    n_top=N_TOP_HALOS,
+    model_state=top1k_model_state,
+    cov_inv_col=cov_inv_colossus,
+    seed=RANDOM_SEED,
+)
+
+for row in grid_benchmarks:
+    print(
+        f"True sigma: {row['s_true']:.2f} | "
+        f"Theo Noiseless: {row['s_theo']:.4f} | "
+        f"Top 1k (Fixed alpha): {row['s_mc_fixed']:.3f} (diff = {row['s_mc_fixed'] - row['s_true']:+.3f}) | "
+        f"Top 1k (Free alpha): {row['s_mc_free']:.3f} (ac={row['ac_mc_free']:.2f}, ab={row['ab_mc_free']:.2f})"
+    )
+print("=" * 75 + "\n")
+
+# %% [Stage 3: Plot Diagnostic Summary]
 
 plot_e2e_recovery_summary(
     recovery_data=recovery_results,
+    grid_results=grid_benchmarks,
     rp_mpc=rp_mpc_ref,
     ds_phys_err=ds_phys_err_ref,
     out_plot_path=OUTPUT_PLOT_PATH,
