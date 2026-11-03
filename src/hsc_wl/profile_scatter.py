@@ -423,7 +423,7 @@ def build_profile_scatter_model(
     th_splines = build_abundance_matching_splines(cum_n_obs, hmf_spline, scatter_grid)
 
     # Dense mass grid and dense projected radial grid
-    m_dense = np.linspace(12.5, 15.5, 60)
+    m_dense = np.linspace(12.0, 15.6, 140)
     dlogm = m_dense[1] - m_dense[0]
     dndlnm_dense = hmf_spline(m_dense)
     c_base_dense = c_spline(m_dense)
