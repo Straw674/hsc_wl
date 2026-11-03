@@ -91,12 +91,8 @@ def format_comparison_table(summaries: dict[str, Table]) -> str:
     for lbl, tbl in summaries.items():
         for row in tbl:
             b_suffix = f" (bin {row['bin_id']})" if len(tbl) > 1 else ""
-            mean_c_err = (
-                row["mean_c_err"] if "mean_c_err" in row.colnames else None
-            )
-            mean_b_err = (
-                row["mean_b_err"] if "mean_b_err" in row.colnames else None
-            )
+            mean_c_err = row["mean_c_err"] if "mean_c_err" in row.colnames else None
+            mean_b_err = row["mean_b_err"] if "mean_b_err" in row.colnames else None
             mean_logm_err = (
                 row["mean_logm_err"] if "mean_logm_err" in row.colnames else None
             )
@@ -146,6 +142,11 @@ def plot_profile_parameter_comparison(
         catalog_names.append(name)
 
         logm_arr = np.array([float(r["mean_logm"]) for r in tbl])
+        logm_err_arr = (
+            np.array([_clean_err(r["mean_logm_err"]) for r in tbl])
+            if "mean_logm_err" in tbl.colnames
+            else None
+        )
         sc_arr = np.array([float(r["scatter"]) for r in tbl])
         sc_err_arr = np.array([_clean_err(r["scatter_err"]) for r in tbl])
         ac_arr = np.array([float(r["alpha_c"]) for r in tbl])
@@ -198,6 +199,7 @@ def plot_profile_parameter_comparison(
         h = ax_mass_scatter.errorbar(
             logm_arr,
             sc_arr,
+            xerr=logm_err_arr,
             yerr=sc_err_arr,
             fmt=m,
             color=c,
@@ -214,6 +216,7 @@ def plot_profile_parameter_comparison(
         ax_mass_conc.errorbar(
             logm_arr,
             ac_arr,
+            xerr=logm_err_arr,
             yerr=ac_err_arr,
             fmt=m,
             color=c,
@@ -228,6 +231,7 @@ def plot_profile_parameter_comparison(
         ax_mass_bias.errorbar(
             logm_arr,
             ab_arr,
+            xerr=logm_err_arr,
             yerr=ab_err_arr,
             fmt=m,
             color=c,
@@ -242,6 +246,7 @@ def plot_profile_parameter_comparison(
         ax_mass_chi2.errorbar(
             logm_arr,
             chi2_arr,
+            xerr=logm_err_arr,
             fmt=m,
             color=c,
             ecolor=c,
