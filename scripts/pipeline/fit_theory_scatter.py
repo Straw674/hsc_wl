@@ -30,6 +30,7 @@ from hsc_wl.profile_scatter import (  # noqa: E402
     fit_profile_scatter_map,
     load_dsigma_profile,
 )
+from hsc_wl.visual import get_complete_bin_indices  # noqa: E402
 from initial import *  # noqa: F401, F403
 
 # %% Local Functions
@@ -71,6 +72,9 @@ def load_label_metadata(label: str, root_path: Path):
         lenses_tbl = Table.read(lenses_path)
         if "bin_id" in lenses_tbl.colnames and nbins != "1bin":
             unique_bins = sorted(np.unique(lenses_tbl["bin_id"]))
+            complete_indices = get_complete_bin_indices(lenses_path.parent)
+            if complete_indices is not None:
+                unique_bins = [b for b in unique_bins if b in complete_indices]
             bin_counts = [int(np.sum(lenses_tbl["bin_id"] == b)) for b in unique_bins]
         else:
             bin_counts = [len(lenses_tbl)]
@@ -129,6 +133,14 @@ def fit_label_profile_scatter(
     )
     if not fits_files:
         raise FileNotFoundError(f"No dsigma FITS found in {dsigma_dir}")
+
+    complete_indices = get_complete_bin_indices(dsigma_dir)
+    if complete_indices is not None:
+        fits_files = [
+            f
+            for f in fits_files
+            if int(f.stem.replace("hsc_hsc_bin", "")) in complete_indices
+        ]
 
     area_deg2, z_min, z_max, bin_counts = load_label_metadata(label, root_path)
 
@@ -575,12 +587,12 @@ def plot_profile_fit_decomposition(
 # "rz_diff_lum_1bin", "rz_diff_1bin", "rz_diff_4bin", "rz_diff_lum_4bin",
 # "camira_1bin", "camira_4bin", "redm_s16a_1bin", etc.
 LABELS = [
-    "redm_r16_4bin",
-    "camira_4bin",
-    "rz_diff_4bin",
-    "rz_diff_preset_4bin",
-    "rz_diff_single_box_4bin",
-    "wh24_4bin",
+    "redm_r16_1bin",
+    "camira_1bin",
+    "rz_diff_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_single_box_1bin",
+    "wh24_1bin",
 ]
 
 VERSION = "Y3"  # "Y1" or "Y3"
@@ -592,10 +604,12 @@ FIXED_F_MIS = 0.25
 FIXED_SIGMA_R = 100.0  # kpc/h
 
 # Upstream bin filtering: maximum valid complete bins to process per label.
-# redm_r16_4bin has a completeness cutoff (lambda >= 20) and only populates the top 2 bins.
+# - redm_r16_4bin has a completeness cutoff (lambda >= 20) and only populates the top 2 bins.
+# - camira_4bin has a richness cut (N_mem >= 10) and only populates the top 3 bins.
 # Incomplete tail bins are discarded upstream so downstream only displays valid bins.
 LABEL_MAX_VALID_BINS: dict[str, int] = {
     "redm_r16_4bin": 2,
+    "camira_4bin": 3,
 }
 
 OUTPUT_PLOT_DIR = project_root / "output/plots_for_agents"

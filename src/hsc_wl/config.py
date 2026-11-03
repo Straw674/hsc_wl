@@ -737,6 +737,30 @@ def _make_wl_config(
     )
 
 
+def _get_4bin_config(cat_id: str) -> BinningConfig:
+    """Return catalog-specific 4-bin configuration, truncating incomplete tail bins.
+
+    Catalogs with intrinsic completeness cuts cannot populate all 4 bins:
+    - redMaPPer R16 (lambda >= 20) only has enough clusters for the first 2 bins.
+    - CAMIRA (N_mem >= 10) only has enough clusters for the first 3 bins.
+    """
+    if cat_id.startswith("redm_r16"):
+        return BinningConfig(
+            mode="top_counts",
+            top_counts=(53, 196),
+            edges_richness=(6.0, 10.0, 20.0, 35.0, 120.0),
+            edges_mass=(10.63, 10.8, 11.0, 11.2, 11.6),
+        )
+    if cat_id.startswith("camira"):
+        return BinningConfig(
+            mode="top_counts",
+            top_counts=(53, 196, 660),
+            edges_richness=(6.0, 10.0, 20.0, 35.0, 120.0),
+            edges_mass=(10.63, 10.8, 11.0, 11.2, 11.6),
+        )
+    return _DEFAULT_BINNING_4BIN
+
+
 RUN_REGISTRY: dict[str, WLConfig] = {}
 
 # Programmatically generate paired 4bin and 1bin configurations
@@ -744,7 +768,7 @@ for cat_id, lens_cfg in LENS_REGISTRY.items():
     RUN_REGISTRY[f"{cat_id}_4bin"] = _make_wl_config(
         f"{cat_id}_4bin",
         lens_cfg,
-        _DEFAULT_BINNING_4BIN,
+        _get_4bin_config(cat_id),
         f"output/{cat_id}/4bin",
     )
     RUN_REGISTRY[f"{cat_id}_1bin"] = _make_wl_config(

@@ -19,9 +19,18 @@ def get_complete_bin_indices(base_dir: Path | str) -> list[int] | None:
     """
     base_dir = Path(base_dir)
     prep_dir = None
-    for candidate in [base_dir.parent / "prepare", base_dir.parent.parent / "prepare"]:
-        if candidate.exists():
+    candidates = [
+        base_dir,
+        base_dir / "prepare",
+        base_dir.parent / "prepare",
+        base_dir.parent.parent / "prepare",
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.name == "prepare":
             prep_dir = candidate
+            break
+        if candidate.exists() and (candidate / "prepare").exists():
+            prep_dir = candidate / "prepare"
             break
     if prep_dir is None:
         return None

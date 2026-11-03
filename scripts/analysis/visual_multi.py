@@ -86,10 +86,9 @@ def load_comparison_data(configs_to_compare, root_path, display_names=None):
     max_bins = max(len(tables) for tables in loaded_tables)
     if min_bins != max_bins:
         print(
-            f"Warning: Configurations have differing complete bin counts ({min_bins} vs {max_bins}). "
-            f"Comparing first {min_bins} common complete bins."
+            f"Note: Configurations have differing complete bin counts (min={min_bins}, max={max_bins}). "
+            f"Retaining all complete bins per configuration (up to {max_bins} bins)."
         )
-        loaded_tables = [tables[:min_bins] for tables in loaded_tables]
 
     return present_labels, loaded_tables, label_time_texts
 
@@ -276,12 +275,10 @@ def plot_ratio_comparison(
     for ratio_index, (label_name, current_tables) in enumerate(
         zip(present_labels[1:], loaded_tables[1:])
     ):
-        if len(current_tables) != len(reference_tables):
-            raise ValueError("All labels must have the same number of lens bins.")
-
+        n_common = min(len(current_tables), len(reference_tables))
         ratio_tables = [
-            _build_ratio_table(current_table, reference_table)
-            for current_table, reference_table in zip(current_tables, reference_tables)
+            _build_ratio_table(current_tables[b], reference_tables[b])
+            for b in range(n_common)
         ]
 
         config_index = ratio_index + 1
@@ -392,11 +389,6 @@ def calculate_comparison_statistics(present_labels, loaded_tables):
 # as well as ideal theoretical zero-scatter upper limits ("ideal_mdpl2", "ideal_colossus").
 # If an ideal catalog is placed first, the ratio plot directly shows DeltaSigma_obs / DeltaSigma_ideal.
 
-CONFIGS_TO_COMPARE = [
-    "ideal_mdpl2_1bin",
-    "wh24_1bin",
-    "wh20_1bin",
-]
 
 # CONFIGS_TO_COMPARE = [
 #     "ideal_mdpl2_4bin",
@@ -410,11 +402,10 @@ CONFIGS_TO_COMPARE = [
     "ideal_mdpl2_1bin",
     "redm_r16_1bin",
     "camira_1bin",
-    "yang21_richness_1bin",
     "rz_diff_1bin",
-    # "rz_diff_mag_2_p_5_1bin",
-    # "rz_diff_mag_3_p_0_1bin",
-    "rz_diff_two_box_red_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_single_box_1bin",
+    "wh24_1bin",
 ]
 
 # CONFIGS_TO_COMPARE = [
@@ -659,7 +650,7 @@ MAIN_USE_SPLINE = False
 MAIN_REFERENCE_LINE_Y = 0.0
 
 if loaded_tables:
-    n_bins = len(loaded_tables[0])
+    n_bins = max(len(tables) for tables in loaded_tables)
     fig, axes = plot_main_comparison(
         present_labels=present_labels,
         loaded_tables=loaded_tables,
@@ -687,7 +678,7 @@ RATIO_USE_SPLINE = False
 RATIO_REFERENCE_LINE_Y = 1.0
 
 if loaded_tables:
-    n_bins = len(loaded_tables[0])
+    n_bins = max(len(tables) for tables in loaded_tables)
     ratio_result = plot_ratio_comparison(
         present_labels=present_labels,
         loaded_tables=loaded_tables,

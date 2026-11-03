@@ -322,12 +322,12 @@ def plot_profile_parameter_comparison(
 # %% Global Configuration
 
 LABELS = [
-    "redm_r16_4bin",
-    "camira_4bin",
-    "rz_diff_4bin",
-    "rz_diff_preset_4bin",
-    "rz_diff_single_box_4bin",
-    "wh24_4bin",
+    "redm_r16_1bin",
+    "camira_1bin",
+    "rz_diff_1bin",
+    "rz_diff_preset_1bin",
+    "rz_diff_single_box_1bin",
+    "wh24_1bin",
 ]
 
 VERSION = "Y3"
@@ -347,7 +347,7 @@ DISPLAY_NAMES = {
     "wh24_1bin": "Wen & Han (2024)",
 }
 
-OUTPUT_FIG = project_root / "output/plots_for_agents/compare_theory_scatter_4bin.png"
+OUTPUT_FIG = project_root / "output/plots_for_agents/compare_theory_scatter_1bin.png"
 
 # %% [Stage 1: Load summaries and display table]
 summaries = load_profile_summaries(LABELS, version=VERSION, root_path=project_root)
