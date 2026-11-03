@@ -83,10 +83,9 @@ def format_comparison_table(summaries: dict[str, Table]) -> str:
     """Format a clean markdown table summarizing parameters across all catalogs."""
     header = (
         "| Catalog Label | Scatter $\\sigma$ | $\\alpha_c$ | $\\langle c \\rangle$ "
-        "| $\\alpha_b$ | $\\langle b \\rangle$ | $f_{\\rm mis}$ "
-        "| $\\sigma_R\\ [\\mathrm{kpc}/h]$ | $\\langle \\log M \\rangle$ | $\\chi^2/\\nu$ |"
+        "| $\\alpha_b$ | $\\langle b \\rangle$ | $\\langle \\log M \\rangle$ | $\\chi^2/\\nu$ |"
     )
-    separator = "|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|"
+    separator = "|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|"
     rows = [header, separator]
 
     for lbl, tbl in summaries.items():
@@ -99,8 +98,6 @@ def format_comparison_table(summaries: dict[str, Table]) -> str:
                 f"| {float(row['mean_c']):.1f} "
                 f"| {_fmt_val_err(row['alpha_b'], row['alpha_b_err'], '.2f', '.2f')} "
                 f"| {float(row['mean_b']):.2f} "
-                f"| {_fmt_val_err(row['f_mis'], row['f_mis_err'], '.2f', '.2f')} "
-                f"| {_fmt_val_err(row['sigma_R'], row['sigma_R_err'], '.1f', '.1f')} "
                 f"| {float(row['mean_logm']):.3f} "
                 f"| {float(row['chi2_reduced']):.3f} |"
             )
@@ -123,13 +120,11 @@ def plot_profile_parameter_comparison(
     markers = ["o", "s", "^", "D", "v", "P", "X", "*", "<", ">"]
     colors = plt.cm.tab10(np.linspace(0, 1, max(n_samples, 10)))
 
-    fig, axes = plt.subplots(2, 3, figsize=(15, 9.8))
-    ax_mass_conc = axes[0, 0]
-    ax_mass_bias = axes[0, 1]
-    ax_mis_plane = axes[0, 2]
-    ax_conc_fmis = axes[1, 0]
-    ax_conc_sigmar = axes[1, 1]
-    ax_mass_chi2 = axes[1, 2]
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 9.2))
+    ax_mass_scatter = axes[0, 0]
+    ax_mass_conc = axes[0, 1]
+    ax_mass_bias = axes[1, 0]
+    ax_mass_chi2 = axes[1, 1]
 
     handles = []
     catalog_names = []
@@ -142,21 +137,19 @@ def plot_profile_parameter_comparison(
         catalog_names.append(name)
 
         logm = float(row["mean_logm"])
+        scatter = float(row["scatter"])
+        scatter_err = _clean_err(row["scatter_err"])
         alpha_c = float(row["alpha_c"])
         alpha_c_err = _clean_err(row["alpha_c_err"])
         alpha_b = float(row["alpha_b"])
         alpha_b_err = _clean_err(row["alpha_b_err"])
-        f_mis = float(row["f_mis"])
-        f_mis_err = _clean_err(row["f_mis_err"])
-        sigma_r = float(row["sigma_R"])
-        sigma_r_err = _clean_err(row["sigma_R_err"])
         chi2_red = float(row["chi2_reduced"])
 
-        # 1. Mass - Concentration
-        h = ax_mass_conc.errorbar(
+        # 1. Mass - Scatter
+        h = ax_mass_scatter.errorbar(
             logm,
-            alpha_c,
-            yerr=alpha_c_err,
+            scatter,
+            yerr=scatter_err,
             fmt=m,
             color=c,
             ecolor=c,
@@ -167,7 +160,20 @@ def plot_profile_parameter_comparison(
         )
         handles.append(h)
 
-        # 2. Mass - Bias
+        # 2. Mass - Concentration
+        ax_mass_conc.errorbar(
+            logm,
+            alpha_c,
+            yerr=alpha_c_err,
+            fmt=m,
+            color=c,
+            ecolor=c,
+            capsize=3,
+            elinewidth=1.2,
+            markersize=7,
+        )
+
+        # 3. Mass - Bias
         ax_mass_bias.errorbar(
             logm,
             alpha_b,
@@ -180,49 +186,7 @@ def plot_profile_parameter_comparison(
             markersize=7,
         )
 
-        # 3. Miscentering Parameters (f_mis vs sigma_R)
-        ax_mis_plane.errorbar(
-            f_mis,
-            sigma_r,
-            xerr=f_mis_err,
-            yerr=sigma_r_err,
-            fmt=m,
-            color=c,
-            ecolor=c,
-            capsize=3,
-            elinewidth=1.2,
-            markersize=7,
-        )
-
-        # 4. Concentration vs Miscentering Fraction (f_mis vs alpha_c)
-        ax_conc_fmis.errorbar(
-            f_mis,
-            alpha_c,
-            xerr=f_mis_err,
-            yerr=alpha_c_err,
-            fmt=m,
-            color=c,
-            ecolor=c,
-            capsize=3,
-            elinewidth=1.2,
-            markersize=7,
-        )
-
-        # 5. Concentration vs Miscentering Radius (sigma_R vs alpha_c)
-        ax_conc_sigmar.errorbar(
-            sigma_r,
-            alpha_c,
-            xerr=sigma_r_err,
-            yerr=alpha_c_err,
-            fmt=m,
-            color=c,
-            ecolor=c,
-            capsize=3,
-            elinewidth=1.2,
-            markersize=7,
-        )
-
-        # 6. Mass - Reduced Chi2
+        # 4. Mass - Reduced Chi2
         ax_mass_chi2.errorbar(
             logm,
             chi2_red,
@@ -235,7 +199,15 @@ def plot_profile_parameter_comparison(
         )
 
     # Reference lines and styling
-    # Panel 1: Mass - Concentration
+    # Panel 1: Mass - Scatter
+    ax_mass_scatter.set_xlabel(
+        r"$\langle \log M_{200m} \rangle\ [M_\odot/h]$", fontweight="normal"
+    )
+    ax_mass_scatter.set_ylabel(r"Scatter $\sigma_{\ln M}$", fontweight="normal")
+    ax_mass_scatter.set_title("Mass – Scatter", fontweight="normal")
+    ax_mass_scatter.grid(True, linestyle=":", alpha=0.5)
+
+    # Panel 2: Mass - Concentration
     ax_mass_conc.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
     ax_mass_conc.set_xlabel(
         r"$\langle \log M_{200m} \rangle\ [M_\odot/h]$", fontweight="normal"
@@ -244,7 +216,7 @@ def plot_profile_parameter_comparison(
     ax_mass_conc.set_title("Mass – Concentration", fontweight="normal")
     ax_mass_conc.grid(True, linestyle=":", alpha=0.5)
 
-    # Panel 2: Mass - Bias
+    # Panel 3: Mass - Bias
     ax_mass_bias.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
     ax_mass_bias.set_xlabel(
         r"$\langle \log M_{200m} \rangle\ [M_\odot/h]$", fontweight="normal"
@@ -253,27 +225,7 @@ def plot_profile_parameter_comparison(
     ax_mass_bias.set_title("Mass – Bias", fontweight="normal")
     ax_mass_bias.grid(True, linestyle=":", alpha=0.5)
 
-    # Panel 3: Miscentering parameters
-    ax_mis_plane.set_xlabel(r"Miscentering Fraction $f_{\rm mis}$", fontweight="normal")
-    ax_mis_plane.set_ylabel(r"$\sigma_R\ [\mathrm{kpc}/h]$", fontweight="normal")
-    ax_mis_plane.set_title("Miscentering Parameters", fontweight="normal")
-    ax_mis_plane.grid(True, linestyle=":", alpha=0.5)
-
-    # Panel 4: Concentration - f_mis
-    ax_conc_fmis.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
-    ax_conc_fmis.set_xlabel(r"Miscentering Fraction $f_{\rm mis}$", fontweight="normal")
-    ax_conc_fmis.set_ylabel(r"$\alpha_c = c / c_{\rm Diemer19}$", fontweight="normal")
-    ax_conc_fmis.set_title("Concentration – Miscentering Fraction", fontweight="normal")
-    ax_conc_fmis.grid(True, linestyle=":", alpha=0.5)
-
-    # Panel 5: Concentration - sigma_R
-    ax_conc_sigmar.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
-    ax_conc_sigmar.set_xlabel(r"$\sigma_R\ [\mathrm{kpc}/h]$", fontweight="normal")
-    ax_conc_sigmar.set_ylabel(r"$\alpha_c = c / c_{\rm Diemer19}$", fontweight="normal")
-    ax_conc_sigmar.set_title("Concentration – Miscentering Radius", fontweight="normal")
-    ax_conc_sigmar.grid(True, linestyle=":", alpha=0.5)
-
-    # Panel 6: Mass - Reduced Chi2
+    # Panel 4: Mass - Reduced Chi2
     ax_mass_chi2.axhline(1.0, color="gray", linestyle="--", linewidth=1.0, alpha=0.7)
     ax_mass_chi2.set_xlabel(
         r"$\langle \log M_{200m} \rangle\ [M_\odot/h]$", fontweight="normal"
@@ -283,11 +235,9 @@ def plot_profile_parameter_comparison(
     ax_mass_chi2.grid(True, linestyle=":", alpha=0.5)
 
     data_axes = [
+        ax_mass_scatter,
         ax_mass_conc,
         ax_mass_bias,
-        ax_mis_plane,
-        ax_conc_fmis,
-        ax_conc_sigmar,
         ax_mass_chi2,
     ]
     for ax in data_axes:

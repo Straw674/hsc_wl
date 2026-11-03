@@ -87,8 +87,8 @@ def fit_label_profile_scatter(
     root_path: Path,
     cosmology_name: str = "planck18",
     mass_def: str = "200m",
-    f_mis_prior: tuple[float, float] | None = (0.25, 0.10),
-    sigma_r_prior: tuple[float, float] | None = (100.0, 40.0),
+    f_mis: float = 0.25,
+    sigma_r: float = 100.0,
 ) -> tuple[Table, dict]:
     """Fit all bins of a given run label with flexible profile scatter model.
 
@@ -104,10 +104,10 @@ def fit_label_profile_scatter(
         Colossus cosmology.
     mass_def : str
         Halo mass definition.
-    f_mis_prior : tuple of float or None
-        Gaussian prior (mean, std) on f_mis.
-    sigma_r_prior : tuple of float or None
-        Gaussian prior (mean, std) on sigma_R in kpc/h.
+    f_mis : float, default=0.25
+        Fixed miscentered cluster fraction.
+    sigma_r : float, default=100.0
+        Fixed miscentering scale sigma_R in kpc/h.
 
     Returns
     -------
@@ -172,8 +172,8 @@ def fit_label_profile_scatter(
             ds_obs_colossus=ds_obs_colossus,
             cov_inv_colossus=cov_inv_colossus,
             bin_index=b_idx,
-            f_mis_prior=f_mis_prior,
-            sigma_r_prior=sigma_r_prior,
+            f_mis=f_mis,
+            sigma_r=sigma_r,
         )
 
         # Compute best fit components for visualization and storage
@@ -205,9 +205,7 @@ def fit_label_profile_scatter(
             f"Bin {b_idx}: "
             f"Scatter={p_scatter:.3f} +/- {fit_res['scatter_err']:.3f}, "
             f"alpha_c={p_ac:.3f} +/- {fit_res['alpha_c_err']:.3f}, "
-            f"alpha_b={p_ab:.3f} +/- {fit_res['alpha_b_err']:.3f}, "
-            f"f_mis={p_fmis:.3f} +/- {fit_res['f_mis_err']:.3f}, "
-            f"sigma_R={p_sigmar:.1f} +/- {fit_res['sigma_R_err']:.1f} kpc/h | "
+            f"alpha_b={p_ab:.3f} +/- {fit_res['alpha_b_err']:.3f} | "
             f"<logM>={fit_res['mean_logm']:.3f}, <c>={fit_res['mean_c']:.2f}, <b>={fit_res['mean_b']:.2f} | "
             f"Chi2/dof={fit_res['chi2_reduced']:.3f} (Chi2={fit_res['chi2']:.2f}, dof={fit_res['n_dof']})"
         )
@@ -396,8 +394,6 @@ def plot_bin_column(
         rf"$\sigma = {_format_fit_val_err(row['scatter'], row['scatter_err'], '.3f', '.3f')}$",
         rf"$\alpha_c = {_format_fit_val_err(row['alpha_c'], row['alpha_c_err'], '.2f', '.2f')}$ ($\langle c \rangle = {row['mean_c']:.1f}$)",
         rf"$\alpha_b = {_format_fit_val_err(row['alpha_b'], row['alpha_b_err'], '.2f', '.2f')}$ ($\langle b \rangle = {row['mean_b']:.2f}$)",
-        rf"$f_{{\rm mis}} = {_format_fit_val_err(row['f_mis'], row['f_mis_err'], '.2f', '.2f')}$",
-        rf"$\sigma_R = {_format_fit_val_err(row['sigma_R'], row['sigma_R_err'], '.1f', '.1f')}\ \mathrm{{kpc}}/h$",
         rf"$\chi^2/\nu = {row['chi2_reduced']:.3f}\ (\chi^2={row['chi2']:.1f})$",
         rf"$\langle \log M_{{200m}} \rangle = {row['mean_logm']:.3f}$",
     ]
@@ -588,10 +584,9 @@ VERSION = "Y3"  # "Y1" or "Y3"
 COSMOLOGY_NAME = "planck18"
 MASS_DEF = "200m"
 
-# Miscentering priors: (mean, std) based on optical cluster centering literature
-# Keeps miscentering parameters bounded to physical ranges while allowing finder-specific variations
-F_MIS_PRIOR = (0.25, 0.10)
-SIGMA_R_PRIOR = (100.0, 40.0)  # kpc/h
+# Fixed miscentering parameters based on optical cluster centering literature
+FIXED_F_MIS = 0.25
+FIXED_SIGMA_R = 100.0  # kpc/h
 
 OUTPUT_PLOT_DIR = project_root / "output/plots_for_agents"
 
@@ -605,8 +600,8 @@ for lbl in LABELS:
             root_path=project_root,
             cosmology_name=COSMOLOGY_NAME,
             mass_def=MASS_DEF,
-            f_mis_prior=F_MIS_PRIOR,
-            sigma_r_prior=SIGMA_R_PRIOR,
+            f_mis=FIXED_F_MIS,
+            sigma_r=FIXED_SIGMA_R,
         )
         all_summaries[lbl] = tbl_summary
     except Exception as e:

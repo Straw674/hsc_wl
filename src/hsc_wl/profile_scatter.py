@@ -518,10 +518,10 @@ def fit_profile_scatter_map(
     ds_obs_colossus: np.ndarray,
     cov_inv_colossus: np.ndarray,
     bin_index: int,
-    f_mis_prior: tuple[float, float] | None = (0.25, 0.10),
-    sigma_r_prior: tuple[float, float] | None = (100.0, 40.0),
+    f_mis: float = 0.25,
+    sigma_r: float = 100.0,
 ) -> dict[str, Any]:
-    """Run multi-start MAP optimization with miscentering priors and calculate uncertainties.
+    """Run multi-start MAP optimization of scatter, alpha_c, alpha_b with fixed miscentering.
 
     Parameters
     ----------
@@ -533,10 +533,10 @@ def fit_profile_scatter_map(
         Inverse covariance matrix in Colossus units.
     bin_index : int
         Index of the bin being fitted.
-    f_mis_prior : tuple of float or None, default=(0.25, 0.10)
-        Gaussian prior (mean, std) on miscentered cluster fraction f_mis.
-    sigma_r_prior : tuple of float or None, default=(100.0, 40.0)
-        Gaussian prior (mean, std) on miscentering scale sigma_R in kpc/h.
+    f_mis : float, default=0.25
+        Fixed miscentered cluster fraction.
+    sigma_r : float, default=100.0
+        Fixed miscentering scale sigma_R in kpc/h.
 
     Returns
     -------
@@ -544,19 +544,17 @@ def fit_profile_scatter_map(
         Fitted parameters, 1-sigma errors, derived physical quantities, and diagnostics.
     """
     n_data = len(ds_obs_colossus)
-    n_params = 5
+    n_params = 3
     n_dof = n_data - n_params
 
     bounds = [
         (0.05, 1.5),  # scatter
-        (0.2, 5.0),  # alpha_c (broad bounds, no prior)
-        (0.1, 5.0),  # alpha_b (broad bounds, no prior)
-        (0.01, 0.90),  # f_mis
-        (10.0, 500.0),  # sigma_R
+        (0.2, 5.0),  # alpha_c
+        (0.1, 5.0),  # alpha_b
     ]
 
-    def neg_log_posterior(theta: np.ndarray) -> float:
-        scatter, alpha_c, alpha_b, f_mis, sigma_r = theta
+    def neg_log_likelihood(theta: np.ndarray) -> float:
+        scatter, alpha_c, alpha_b = theta
         try:
             model = compute_stacked_profile_dsigma(
                 scatter=scatter,
@@ -568,25 +566,15 @@ def fit_profile_scatter_map(
                 model_state=model_state,
             )
             residual = ds_obs_colossus - model
-            chi2_data = float(residual @ cov_inv_colossus @ residual)
-
-            chi2_prior = 0.0
-            if f_mis_prior is not None:
-                mu_f, sig_f = f_mis_prior
-                chi2_prior += ((f_mis - mu_f) / sig_f) ** 2
-            if sigma_r_prior is not None:
-                mu_r, sig_r = sigma_r_prior
-                chi2_prior += ((sigma_r - mu_r) / sig_r) ** 2
-
-            return 0.5 * (chi2_data + chi2_prior)
+            return 0.5 * float(residual @ cov_inv_colossus @ residual)
         except Exception:
             return 1e30
 
     starting_points = [
-        [0.35, 1.0, 1.0, 0.25, 100.0],
-        [0.30, 1.2, 0.8, 0.30, 120.0],
-        [0.40, 0.9, 0.7, 0.20, 80.0],
-        [0.25, 1.1, 1.1, 0.35, 110.0],
+        [0.35, 1.0, 1.0],
+        [0.30, 1.2, 0.8],
+        [0.40, 0.9, 0.7],
+        [0.25, 1.1, 1.1],
     ]
 
     best_result = None
@@ -595,7 +583,7 @@ def fit_profile_scatter_map(
     for x0 in starting_points:
         try:
             res = optimize.minimize(
-                neg_log_posterior,
+                neg_log_likelihood,
                 x0,
                 method="L-BFGS-B",
                 bounds=bounds,
@@ -616,13 +604,10 @@ def fit_profile_scatter_map(
             "alpha_c_err": np.nan,
             "alpha_b": np.nan,
             "alpha_b_err": np.nan,
-            "f_mis": np.nan,
-            "f_mis_err": np.nan,
-            "sigma_R": np.nan,
-            "sigma_R_err": np.nan,
+            "f_mis": f_mis,
+            "sigma_R": sigma_r,
             "chi2": np.nan,
             "chi2_reduced": np.nan,
-            "chi2_prior": np.nan,
             "n_dof": n_dof,
             "mean_logm": np.nan,
             "mean_c": np.nan,
@@ -631,14 +616,15 @@ def fit_profile_scatter_map(
         }
 
     p_best = best_result.x
+    scatter_best, ac_best, ab_best = p_best
 
-    # Compute pure data chi2 and prior penalty
+    # Compute pure data chi2
     model_best = compute_stacked_profile_dsigma(
-        scatter=p_best[0],
-        alpha_c=p_best[1],
-        alpha_b=p_best[2],
-        f_mis=p_best[3],
-        sigma_R=p_best[4],
+        scatter=scatter_best,
+        alpha_c=ac_best,
+        alpha_b=ab_best,
+        f_mis=f_mis,
+        sigma_R=sigma_r,
         bin_index=bin_index,
         model_state=model_state,
     )
@@ -646,25 +632,19 @@ def fit_profile_scatter_map(
     chi2 = float(res_best @ cov_inv_colossus @ res_best)
     chi2_red = chi2 / n_dof if n_dof > 0 else np.nan
 
-    chi2_prior = 0.0
-    if f_mis_prior is not None:
-        chi2_prior += float(((p_best[3] - f_mis_prior[0]) / f_mis_prior[1]) ** 2)
-    if sigma_r_prior is not None:
-        chi2_prior += float(((p_best[4] - sigma_r_prior[0]) / sigma_r_prior[1]) ** 2)
-
-    # Calculate parameter errors via numerical Hessian of posterior
+    # Calculate parameter errors via numerical Hessian of negative log-likelihood
     try:
-        hess = compute_numerical_hessian(neg_log_posterior, p_best)
+        hess = compute_numerical_hessian(neg_log_likelihood, p_best)
         cov_params = np.linalg.pinv(hess)
         diag = np.diag(cov_params)
         errors = np.where(diag > 0, np.sqrt(diag), np.nan)
     except Exception as e:
         logger.warning("Hessian inversion failed: %s", e)
-        errors = np.full(5, np.nan)
+        errors = np.full(3, np.nan)
 
     # Compute derived physical quantities <logM>, <c>, <b>
     weights = compute_mass_weights(
-        scatter=p_best[0],
+        scatter=scatter_best,
         bin_index=bin_index,
         th_splines=model_state["th_splines"],
         m_dense=model_state["m_dense"],
@@ -672,23 +652,20 @@ def fit_profile_scatter_map(
         dlogm=model_state["dlogm"],
     )
     mean_logm = float(np.sum(model_state["m_dense"] * weights))
-    mean_c = float(p_best[1] * np.sum(model_state["c_base_dense"] * weights))
-    mean_b = float(p_best[2] * np.sum(model_state["b_base_dense"] * weights))
+    mean_c = float(ac_best * np.sum(model_state["c_base_dense"] * weights))
+    mean_b = float(ab_best * np.sum(model_state["b_base_dense"] * weights))
 
     return {
-        "scatter": float(p_best[0]),
+        "scatter": float(scatter_best),
         "scatter_err": float(errors[0]),
-        "alpha_c": float(p_best[1]),
+        "alpha_c": float(ac_best),
         "alpha_c_err": float(errors[1]),
-        "alpha_b": float(p_best[2]),
+        "alpha_b": float(ab_best),
         "alpha_b_err": float(errors[2]),
-        "f_mis": float(p_best[3]),
-        "f_mis_err": float(errors[3]),
-        "sigma_R": float(p_best[4]),
-        "sigma_R_err": float(errors[4]),
+        "f_mis": float(f_mis),
+        "sigma_R": float(sigma_r),
         "chi2": float(chi2),
         "chi2_reduced": float(chi2_red),
-        "chi2_prior": float(chi2_prior),
         "n_dof": int(n_dof),
         "mean_logm": mean_logm,
         "mean_c": mean_c,
