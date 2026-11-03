@@ -183,7 +183,7 @@ def fit_label_profile_scatter(
         p_fmis = fit_res["f_mis"]
         p_sigmar = fit_res["sigma_R"]
 
-        ds_tot_col, ds_1h_c_col, ds_1h_m_col, ds_2h_col = (
+        ds_tot_col, ds_1h_col, ds_1h_cen_col, ds_2h_col = (
             compute_stacked_profile_dsigma(
                 scatter=p_scatter,
                 alpha_c=p_ac,
@@ -197,8 +197,8 @@ def fit_label_profile_scatter(
         )
 
         ds_tot_phys = ds_tot_col / factor
-        ds_1h_c_phys = ds_1h_c_col / factor
-        ds_1h_m_phys = ds_1h_m_col / factor
+        ds_1h_phys = ds_1h_col / factor
+        ds_1h_cen_phys = ds_1h_cen_col / factor
         ds_2h_phys = ds_2h_col / factor
 
         print(
@@ -224,8 +224,8 @@ def fit_label_profile_scatter(
             "dsig_err_jk": ds_err,
             "dsig_cov_jk": cov_data,
             "dsigma_mod": ds_tot_phys,
-            "dsigma_1h_cen": ds_1h_c_phys,
-            "dsigma_1h_mis": ds_1h_m_phys,
+            "dsigma_1h": ds_1h_phys,
+            "dsigma_1h_cen": ds_1h_cen_phys,
             "dsigma_2h": ds_2h_phys,
             "r200m": r200m_val,
             "z_lens": z_lens_ref,
@@ -293,8 +293,8 @@ def plot_bin_column(
     ds_data = row["dsigma"]
     ds_err = row["dsig_err_jk"]
     ds_mod = row["dsigma_mod"]
+    ds_1h = row["dsigma_1h"]
     ds_1h_cen = row["dsigma_1h_cen"]
-    ds_1h_mis = row["dsigma_1h_mis"]
     ds_2h = row["dsigma_2h"]
 
     has_r200m = (
@@ -335,19 +335,21 @@ def plot_bin_column(
     )
     ax_log.plot(
         rp_mpc,
-        ds_1h_cen,
+        ds_1h,
         "--",
         color="blue",
-        linewidth=1.3,
+        linewidth=1.4,
+        label="1-halo",
         zorder=2,
     )
     if row["f_mis"] > 0.0:
         ax_log.plot(
             rp_mpc,
-            ds_1h_mis,
-            "--",
-            color="orange",
+            ds_1h_cen,
+            "-.",
+            color="deepskyblue",
             linewidth=1.3,
+            label="1-halo (Centered)",
             zorder=2,
         )
     ax_log.plot(
@@ -356,6 +358,7 @@ def plot_bin_column(
         ":",
         color="green",
         linewidth=1.4,
+        label="2-halo Term",
         zorder=2,
     )
 
@@ -429,8 +432,8 @@ def plot_bin_column(
     rds_data = rp_mpc * ds_data
     rds_err = rp_mpc * ds_err
     rds_mod = rp_mpc * ds_mod
+    rds_1h = rp_mpc * ds_1h
     rds_1h_cen = rp_mpc * ds_1h_cen
-    rds_1h_mis = rp_mpc * ds_1h_mis
     rds_2h = rp_mpc * ds_2h
 
     ax_lin.errorbar(
@@ -447,21 +450,19 @@ def plot_bin_column(
     ax_lin.plot(rp_mpc, rds_mod, "-", color="red", linewidth=1.8, zorder=4)
     ax_lin.plot(
         rp_mpc,
-        rds_1h_cen,
+        rds_1h,
         "--",
         color="blue",
-        linewidth=1.3,
-        label="1-halo (Centered)",
+        linewidth=1.4,
         zorder=2,
     )
     if row["f_mis"] > 0.0:
         ax_lin.plot(
             rp_mpc,
-            rds_1h_mis,
-            "--",
-            color="orange",
+            rds_1h_cen,
+            "-.",
+            color="deepskyblue",
             linewidth=1.3,
-            label="1-halo (Miscentered)",
             zorder=2,
         )
     ax_lin.plot(
@@ -470,7 +471,6 @@ def plot_bin_column(
         ":",
         color="green",
         linewidth=1.4,
-        label="2-halo Term",
         zorder=2,
     )
 
@@ -505,13 +505,6 @@ def plot_bin_column(
     if show_ylabel:
         ax_lin.set_ylabel(r"$R_p\,\Delta\Sigma\ [10^6\,\mathrm{M_\odot / pc}]$")
     ax_lin.set_xlabel(r"$R_p\ [\mathrm{Mpc}]$")
-
-    if show_legend:
-        ax_lin.legend(
-            loc="upper right",
-            fontsize=6.8 if is_multi_bin else 8.0,
-            framealpha=0.85,
-        )
 
 
 def plot_profile_fit_decomposition(

@@ -271,7 +271,7 @@ def compute_stacked_profile_dsigma(
     model_state : dict
         Precomputed state dictionary from build_profile_scatter_model.
     return_components : bool
-        If True, return (ds_tot, ds_1h_cen, ds_1h_mis, ds_2h).
+        If True, return (ds_tot, ds_1h, ds_1h_cen, ds_2h).
 
     Returns
     -------
@@ -331,8 +331,8 @@ def compute_stacked_profile_dsigma(
     if return_components:
         return (
             ds_total,
-            (1.0 - f_mis) * ds_1h_cen,
-            f_mis * ds_1h_mis,
+            ds_1h_final,
+            ds_1h_cen,
             ds_2h,
         )
     return ds_total
