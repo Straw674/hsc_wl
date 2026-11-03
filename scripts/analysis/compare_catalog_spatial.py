@@ -1566,30 +1566,25 @@ DISPLAY_NAMES = {
     "rz_diff_six_param_match_recovery_1bin": "r-z Diff (Six Param · Match)",
 }
 
-OUTPUT_BOKEH_HTML = project_root / "output/plots_for_agents/spatial_distribution.html"
-OUTPUT_SCORECARD_PNG = (
-    project_root / "output/plots_for_agents/reference_benchmark_scorecard.png"
-)
+OUTPUT_BOKEH_HTML = project_root / "output/plots/spatial_distribution.html"
+OUTPUT_SCORECARD_PNG = project_root / "output/plots/reference_benchmark_scorecard.png"
 OUTPUT_RELEASE_TABLE_PNG = (
-    project_root / "output/plots_for_agents/reference_benchmark_release_table.png"
+    project_root / "output/plots/reference_benchmark_release_table.png"
 )
 OUTPUT_DIFF_HEATMAPS_ALL_PNG = (
-    project_root / "output/plots_for_agents/differential_advantage_all_references.png"
+    project_root / "output/plots/differential_advantage_all_references.png"
 )
 OUTPUT_STRATIFIED_SCORECARD_PNG = (
-    project_root
-    / "output/plots_for_agents/reference_benchmark_scorecard_stratified.png"
+    project_root / "output/plots/reference_benchmark_scorecard_stratified.png"
 )
 OUTPUT_STRATIFIED_RELEASE_TABLE_PNG = (
-    project_root
-    / "output/plots_for_agents/reference_benchmark_release_table_stratified.png"
+    project_root / "output/plots/reference_benchmark_release_table_stratified.png"
 )
 OUTPUT_DIFF_HEATMAPS_STRATIFIED_PNG = (
-    project_root / "output/plots_for_agents/differential_advantage_stratified.png"
+    project_root / "output/plots/differential_advantage_stratified.png"
 )
 OUTPUT_STRATIFIED_DELTA_PNG = (
-    project_root
-    / "output/plots_for_agents/reference_benchmark_stratified_vs_raw_delta.png"
+    project_root / "output/plots/reference_benchmark_stratified_vs_raw_delta.png"
 )
 # %% [Stage 1: Load Lens and External Catalogs]
 

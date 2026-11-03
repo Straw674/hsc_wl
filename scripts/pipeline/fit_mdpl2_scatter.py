@@ -174,7 +174,7 @@ def visualize_scatter_summaries(
     summaries: dict[str, Table], version: str, root_path: Path
 ) -> None:
     """Generate and save standard jianbing visualization for each summary."""
-    plot_dir = root_path / "output/plots_for_agents"
+    plot_dir = root_path / "output/plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
     for lbl, summary in summaries.items():
         fig = visual.sum_plot_topn(summary, label=lbl, cov_type="jk", show_bin=True)

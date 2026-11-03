@@ -626,8 +626,8 @@ MARKER_SIZE = 4.0
 CAPSIZE = 0.0
 ERRORBAR_LINEWIDTH = 0.8
 
-OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_multi_main.png"
-OUTPUT_RATIO_FIG = project_root / "output/plots_for_agents/visual_multi_ratio.png"
+OUTPUT_MAIN_FIG = project_root / "output/plots/visual_multi_main.png"
+OUTPUT_RATIO_FIG = project_root / "output/plots/visual_multi_ratio.png"
 
 
 # %% [Stage 1: Load comparison data]

@@ -215,7 +215,7 @@ DSIGMA_FITS = (
     / f"hsc_hsc_bin{BIN_INDEX}.fits"
 )
 
-OUTPUT_FIG = project_root / "output/plots_for_agents/explore_colossus.png"
+OUTPUT_FIG = project_root / "output/plots/explore_colossus.png"
 
 
 # %% [Stage 1: Load data and setup cosmology]

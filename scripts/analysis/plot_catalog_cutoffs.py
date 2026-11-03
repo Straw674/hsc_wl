@@ -601,7 +601,7 @@ def plot_catalog_cutoffs_visualization(df: pd.DataFrame, output_png: Path) -> No
 # %% Global Configuration
 
 REDSHIFT_RANGE = (0.19, 0.52)
-OUTPUT_PLOT_PATH = project_root / "output/plots_for_agents/catalog_cutoffs_topn.png"
+OUTPUT_PLOT_PATH = project_root / "output/plots/catalog_cutoffs_topn.png"
 
 # %% [Stage 1: Load Mask and Compute Field Areas]
 

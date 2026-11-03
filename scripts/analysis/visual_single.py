@@ -79,9 +79,9 @@ MARKER_SIZE = 4.0
 CAPSIZE = 0.0
 ERRORBAR_LINEWIDTH = 0.8
 
-OUTPUT_MAIN_FIG = project_root / "output/plots_for_agents/visual_single_main.png"
-OUTPUT_RAW_FIG = project_root / "output/plots_for_agents/visual_single_raw.png"
-OUTPUT_RANDOM_FIG = project_root / "output/plots_for_agents/visual_single_random.png"
+OUTPUT_MAIN_FIG = project_root / "output/plots/visual_single_main.png"
+OUTPUT_RAW_FIG = project_root / "output/plots/visual_single_raw.png"
+OUTPUT_RANDOM_FIG = project_root / "output/plots/visual_single_random.png"
 
 
 # [Stage 1: Load data and validate columns]

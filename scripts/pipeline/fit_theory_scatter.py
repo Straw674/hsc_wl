@@ -613,7 +613,7 @@ LABEL_MAX_VALID_BINS: dict[str, int] = {
     "camira_4bin": 3,
 }
 
-OUTPUT_PLOT_DIR = project_root / "output/plots_for_agents"
+OUTPUT_PLOT_DIR = project_root / "output/plots"
 
 # %% [Stage 1: Process and fit all configured labels]
 all_summaries = {}

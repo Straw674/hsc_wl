@@ -358,9 +358,7 @@ WL_PROXY_PATH = CF_OUTPUT_ROOT / "wl_mass_proxy.parquet"
 
 TOP_N_CLUSTERS = 1020
 REFERENCE_KEY = "rz_diff_1bin"
-OUTPUT_COMPARISON_PNG = (
-    project_root / "output/plots_for_agents/compare_rz_diff_wl_profiles.png"
-)
+OUTPUT_COMPARISON_PNG = project_root / "output/plots/compare_rz_diff_wl_profiles.png"
 
 VARIANT_SPECS = {
     "rz_diff_preset_1bin": {

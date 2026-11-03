@@ -302,7 +302,7 @@ def prepare_masks(root, wcs, shape):
 # %%
 # Global Configuration
 
-OUTPUT_DIR = project_root / "output" / "plots_for_agents"
+OUTPUT_DIR = project_root / "output" / "plots"
 SHAPE_FULL = (360, 720)
 COLOR_PALETTE = ["#1f77b4", "#2b8cbe", "#2ca02c", "#d62728", "#9467bd", "#ff7f0e"]
 

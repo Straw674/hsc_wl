@@ -594,7 +594,7 @@ N_TOP_HALOS = 1000
 REF_FITS_PATH = (
     root_path / "output/redm_pdr3_5band_free_s16a/1bin/dsigma/hsc_hsc_bin0.fits"
 )
-OUTPUT_PLOT_PATH = root_path / "output/plots_for_agents/test_scatter_recovery_e2e.png"
+OUTPUT_PLOT_PATH = root_path / "output/plots/test_scatter_recovery_e2e.png"
 
 # %% [Stage 1: Build Model State and Run End-to-End Recovery]
 
