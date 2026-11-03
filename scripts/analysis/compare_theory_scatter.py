@@ -327,6 +327,7 @@ LABELS = [
     "rz_diff_1bin",
     "rz_diff_preset_1bin",
     "rz_diff_single_box_1bin",
+    "rz_diff_two_box_red_match_recovery_1bin",
     "wh24_1bin",
 ]
 
@@ -344,6 +345,7 @@ DISPLAY_NAMES = {
     "rz_diff_1bin": "rz_diff (Baseline)",
     "rz_diff_preset_1bin": "rz_diff (Preset)",
     "rz_diff_single_box_1bin": "rz_diff (Single Box)",
+    "rz_diff_two_box_red_match_recovery_1bin": "rz_diff (Two Box Red · Match)",
     "wh24_1bin": "Wen & Han (2024)",
 }
 

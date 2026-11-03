@@ -592,6 +592,7 @@ LABELS = [
     "rz_diff_1bin",
     "rz_diff_preset_1bin",
     "rz_diff_single_box_1bin",
+    "rz_diff_two_box_red_match_recovery_1bin",
     "wh24_1bin",
 ]
 
